@@ -34,11 +34,17 @@ export const attendanceApi = {
     return response.data as Attendance;
   },
 
-  getByClass: async (classId: string, date: string): Promise<Attendance[]> => {
-    const response = await apiClient.get<ApiResponse<Attendance[]>>(`/api/attendance/class/${classId}`, {
+  getByClass: async (classId: string, date: string): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>(`/api/attendance/class/${classId}`, {
       params: { date },
     });
-    return response.data as Attendance[];
+    // Backend returns { class, date, students: [{ student, attendance }] }
+    return response.data;
+  },
+
+  getClassDates: async (classId: string): Promise<string[]> => {
+    const response = await apiClient.get<ApiResponse<string[]>>(`/api/attendance/class/${classId}/dates`);
+    return response.data as string[];
   },
 
   update: async (id: string, data: UpdateAttendanceRequest): Promise<Attendance> => {

@@ -1,5 +1,5 @@
 // User and Auth Types
-export type UserRole = 'REGISTRAR' | 'OWNER' | 'TEACHER';
+export type UserRole = "REGISTRAR" | "OWNER" | "TEACHER";
 
 export interface User {
   id: string;
@@ -8,6 +8,10 @@ export interface User {
   role: UserRole;
   createdAt: string;
   updatedAt: string;
+  teacherClasses?: Array<{
+    id: string;
+    name: string;
+  }>;
 }
 
 export interface LoginRequest {
@@ -27,8 +31,8 @@ export interface AuthResponse {
 }
 
 // Student Types
-export type ClassStatus = 'new' | 'assigned';
-export type PaymentStatus = 'pending' | 'confirmed';
+export type ClassStatus = "new" | "assigned";
+export type PaymentStatus = "pending" | "confirmed";
 
 export interface Student {
   id: string;
@@ -91,6 +95,8 @@ export interface CreateStudentRequest {
   previousSchool?: string;
   previousClass?: string;
   transferReason?: string;
+  classId?: string;
+  assignClassReason?: string;
 }
 
 export interface UpdateStudentRequest {
@@ -147,9 +153,12 @@ export interface Class {
   id: string;
   name: string;
   description?: string;
-  academicYear?: string;
+  academicYear?: string | AcademicYear; // Legacy string or AcademicYear object when included
+  academicYearId?: string;
+  gradeId?: string;
   headTeacherId?: string;
   headTeacher?: User;
+  grade?: Grade;
   createdAt: string;
   updatedAt: string;
 }
@@ -157,15 +166,19 @@ export interface Class {
 export interface CreateClassRequest {
   name: string;
   description?: string;
-  academicYear?: string;
+  academicYear?: string; // Legacy support
+  academicYearId?: string;
+  gradeId?: string;
   headTeacherId?: string;
 }
 
 export interface UpdateClassRequest {
   name?: string;
   description?: string;
-  academicYear?: string;
-  headTeacherId?: string;
+  academicYear?: string; // Legacy support
+  academicYearId?: string;
+  gradeId?: string;
+  headTeacherId?: string | null;
 }
 
 // Subject Types
@@ -192,7 +205,7 @@ export interface UpdateSubjectRequest {
 }
 
 // Attendance Types
-export type AttendanceStatus = 'present' | 'absent' | 'late';
+export type AttendanceStatus = "present" | "absent" | "late";
 
 export interface Attendance {
   id: string;
@@ -233,16 +246,24 @@ export interface UpdateAttendanceRequest {
 export interface Term {
   id: string;
   name: string;
+  status?: "OPEN" | "CLOSED";
+  academicYearId?: string;
+  academicYear?: AcademicYear;
+  startDate?: string;
+  endDate?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateTermRequest {
   name: string;
+  academicYearId: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 // SubExam Types
-export type ExamType = 'quiz' | 'assignment' | 'mid_exam' | 'general_test';
+export type ExamType = "quiz" | "assignment" | "mid_exam" | "general_test";
 
 export interface SubExam {
   id: string;
@@ -465,8 +486,110 @@ export interface StudentClass {
   startDate: string;
   endDate?: string;
   reason: string;
+  promotionStatus?: "PROMOTED" | "REPEATED" | "GRADUATED";
   class?: Class;
   createdAt: string;
   updatedAt: string;
 }
 
+// Grade Types
+export interface Grade {
+  id: string;
+  name: string;
+  order: number;
+  isHighest: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateGradeRequest {
+  name: string;
+  order: number;
+  isHighest?: boolean;
+}
+
+export interface UpdateGradeRequest {
+  name?: string;
+  order?: number;
+  isHighest?: boolean;
+}
+
+// AcademicYear Types
+export type AcademicYearStatus = "ACTIVE" | "CLOSED";
+
+export interface AcademicYear {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate?: string;
+  status: AcademicYearStatus;
+  createdAt: string;
+  updatedAt: string;
+  classes?: Class[];
+}
+
+export interface CreateAcademicYearRequest {
+  name: string;
+  startDate: string;
+  endDate?: string;
+}
+
+export interface UpdateAcademicYearRequest {
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+// Promotion Types
+export interface PromotionPreviewStudent {
+  studentId: string;
+  firstName: string;
+  lastName: string;
+  currentClassId: string;
+  currentClassName: string;
+  currentGradeId: string | null;
+  currentGradeName: string | null;
+  overallAverage: number;
+  outcome: "PASS" | "REPEAT" | "GRADUATE";
+  nextGradeId: string | null;
+  nextGradeName: string | null;
+  nextClassName: string | null;
+}
+
+export interface PromotionPreview {
+  canPromote: boolean;
+  term2Status: string;
+  activeAcademicYear: {
+    id: string;
+    name: string;
+  } | null;
+  students: PromotionPreviewStudent[];
+  summary: {
+    total: number;
+    passing: number;
+    repeating: number;
+    graduating: number;
+  };
+}
+
+export interface PromotionResult {
+  message: string;
+  promoted: number;
+  repeated: number;
+  graduated: number;
+}
+
+// Settings Types
+export interface SystemSettings {
+  id: string;
+  key: string;
+  value: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateSettingRequest {
+  value: string;
+  description?: string;
+}

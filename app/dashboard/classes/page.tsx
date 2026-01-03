@@ -1,21 +1,26 @@
 'use client';
 
 import { useClasses, useDeleteClass } from '@/lib/hooks/use-classes';
+import { useGrades } from '@/lib/hooks/use-grades';
+import { useAcademicYears } from '@/lib/hooks/use-academicYears';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Class } from '@/lib/types';
-import { Plus, GraduationCap } from 'lucide-react';
+import { Plus, GraduationCap, Users } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { Badge } from '@/components/ui/badge';
 
 export default function ClassesPage() {
   const { hasRole } = useAuthStore();
   const { data, isLoading, error, refetch } = useClasses();
+  const { data: gradesData } = useGrades();
+  const { data: academicYearsData } = useAcademicYears();
   const deleteClass = useDeleteClass();
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; class: Class | null }>({
     open: false,
@@ -38,13 +43,55 @@ export default function ClassesPage() {
   }
 
   const classes = Array.isArray(data?.data) ? data.data : [];
+  const grades = Array.isArray(gradesData?.data) ? gradesData.data : [];
+  const academicYears = Array.isArray(academicYearsData?.data) ? academicYearsData.data : [];
+
+  // Group classes by grade and academic year
+  const classesByGradeAndYear = useMemo(() => {
+    const grouped: Record<string, Record<string, Class[]>> = {};
+    classes.forEach((cls) => {
+      if (cls.gradeId) {
+        if (!grouped[cls.gradeId]) {
+          grouped[cls.gradeId] = {};
+        }
+        const academicYearId = cls.academicYearId || 'unknown';
+        if (!grouped[cls.gradeId][academicYearId]) {
+          grouped[cls.gradeId][academicYearId] = [];
+        }
+        grouped[cls.gradeId][academicYearId].push(cls);
+      } else {
+        // Classes without grade go to a special group
+        if (!grouped['no-grade']) {
+          grouped['no-grade'] = {};
+        }
+        const academicYearId = cls.academicYearId || 'unknown';
+        if (!grouped['no-grade'][academicYearId]) {
+          grouped['no-grade'][academicYearId] = [];
+        }
+        grouped['no-grade'][academicYearId].push(cls);
+      }
+    });
+    return grouped;
+  }, [classes]);
+
+  const getGradeName = (gradeId: string): string => {
+    if (gradeId === 'no-grade') return 'Unassigned';
+    const grade = grades.find((g) => g.id === gradeId);
+    return grade?.name || gradeId;
+  };
+
+  const getAcademicYearName = (academicYearId: string): string => {
+    if (academicYearId === 'unknown') return 'Unknown';
+    const year = academicYears.find((y) => y.id === academicYearId);
+    return year?.name || academicYearId;
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-page-title">Classes</h1>
-          <p className="text-body text-muted-foreground mt-1">
+          <h1 className="text-xl font-semibold">Classes</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Manage classes and their subjects
           </p>
         </div>
@@ -61,7 +108,7 @@ export default function ClassesPage() {
       {classes.length === 0 ? (
         <EmptyState
           title="No classes found"
-          description="Get started by creating a new class"
+          description="Get started by creating a new class. You can also manage classes from the Grades page."
           action={
             hasRole(['OWNER', 'REGISTRAR'])
               ? {
@@ -72,30 +119,55 @@ export default function ClassesPage() {
           }
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {classes.map((cls) => (
-            <Card key={cls.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3">
-                    <GraduationCap className="h-5 w-5 text-muted-foreground mt-1" />
-                    <div>
-                      <Link
-                        href={`/dashboard/classes/${cls.id}`}
-                        className="font-semibold hover:underline"
-                      >
-                        {cls.name}
-                      </Link>
-                      {cls.description && (
-                        <p className="text-sm text-muted-foreground mt-1">{cls.description}</p>
-                      )}
-                      {cls.academicYear && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {cls.academicYear}
+        <div className="space-y-6">
+          {Object.entries(classesByGradeAndYear).map(([gradeId, yearGroups]) => (
+            <Card key={gradeId} className="border shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5" />
+                  {getGradeName(gradeId)}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {Object.entries(yearGroups).map(([academicYearId, yearClasses]) => (
+                    <div key={academicYearId} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                          {getAcademicYearName(academicYearId)}
                         </p>
-                      )}
+                        <Badge variant="secondary" className="text-xs">
+                          {yearClasses.length} {yearClasses.length === 1 ? 'class' : 'classes'}
+                        </Badge>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 pl-2">
+                        {yearClasses.map((cls) => (
+                          <Card key={cls.id} className="hover:shadow-md transition-shadow">
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-start gap-2 flex-1">
+                                  <Users className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <Link
+                                      href={`/dashboard/classes/${cls.id}`}
+                                      className="font-semibold hover:underline text-sm block truncate"
+                                    >
+                                      {cls.name}
+                                    </Link>
+                                    {cls.description && (
+                                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                        {cls.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>

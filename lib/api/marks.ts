@@ -25,6 +25,14 @@ export const marksApi = {
     return response.data as Mark;
   },
 
+  recordBulk: async (subExamId: string, marksData: Array<{ studentId: string; score: number; notes?: string }>): Promise<any> => {
+    const response = await apiClient.post<ApiResponse<any>>(
+      `/api/marks/record/bulk/subexam/${subExamId}`,
+      { marksData }
+    );
+    return response.data;
+  },
+
   getAll: async (params?: PaginationParams & {
     studentId?: string;
     classId?: string;
@@ -46,8 +54,9 @@ export const marksApi = {
     return response.data as Mark[];
   },
 
-  getByClassAndTerm: async (classId: string, termId: string): Promise<Mark[]> => {
-    const response = await apiClient.get<ApiResponse<Mark[]>>(`/api/marks/class/${classId}/term/${termId}`);
+  getByClassAndTerm: async (classId: string, termId: string, subjectId?: string): Promise<Mark[]> => {
+    const params = subjectId ? { subjectId } : {};
+    const response = await apiClient.get<ApiResponse<Mark[]>>(`/api/marks/class/${classId}/term/${termId}`, { params });
     return response.data as Mark[];
   },
 

@@ -16,5 +16,13 @@ export const termsApi = {
     const response = await apiClient.post<ApiResponse<Term>>('/api/terms', data);
     return response.data as Term;
   },
+
+  // Get terms by academic year
+  getByAcademicYear: async (academicYearId: string): Promise<Term[]> => {
+    const response = await apiClient.get<ApiResponse<Term[]>>('/api/terms', {
+      params: { academicYearId },
+    });
+    return response.data as Term[];
+  },
 };
 

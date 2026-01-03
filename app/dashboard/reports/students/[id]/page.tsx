@@ -26,8 +26,8 @@ export default function StudentReportPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-page-title">Student Report</h1>
-        <p className="text-body text-muted-foreground mt-1">
+        <h1 className="text-xl font-semibold">Student Report</h1>
+        <p className="text-sm text-muted-foreground mt-1">
           {formatFullName(report.student.firstName, report.student.lastName)}
         </p>
       </div>

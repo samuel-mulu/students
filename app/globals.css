@@ -36,6 +36,13 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Source color palette */
+  --color-lama-sky: #C3EBFA;
+  --color-lama-sky-light: #EDF9FD;
+  --color-lama-purple: #CFCEFF;
+  --color-lama-purple-light: #F1F0FF;
+  --color-lama-yellow: #FAE27C;
+  --color-lama-yellow-light: #FEFCE8;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -54,7 +61,7 @@
   --card-foreground: oklch(0.15 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.15 0 0);
-  --primary: oklch(0.45 0.2 250); /* Single accent color - blue */
+  --primary: #60A5FA; /* bg-blue-400 equivalent */
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.96 0 0); /* Light gray for secondary actions */
   --secondary-foreground: oklch(0.15 0 0);
@@ -125,14 +132,14 @@
   }
 }
 
-/* Typography scale - consistent sizing */
+/* Typography scale - matching source patterns */
 @layer utilities {
   .text-page-title {
     @apply text-xl font-semibold;
   }
   
   .text-section-title {
-    @apply text-base font-medium;
+    @apply text-xs text-gray-400 font-medium;
   }
   
   .text-body {

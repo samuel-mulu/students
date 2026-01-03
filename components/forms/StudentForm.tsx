@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Student, CreateStudentRequest, UpdateStudentRequest } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useClasses } from '@/lib/hooks/use-classes';
 
 const studentSchema = z.object({
   // Personal
@@ -49,6 +51,9 @@ const studentSchema = z.object({
   previousSchool: z.string().optional(),
   previousClass: z.string().optional(),
   transferReason: z.string().optional(),
+  // Class assignment (optional, only for new students)
+  classId: z.string().optional(),
+  assignClassReason: z.string().optional(),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -61,12 +66,50 @@ interface StudentFormProps {
 }
 
 export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentFormProps) {
+  const { data: classesData } = useClasses();
+  const classes = Array.isArray(classesData?.data) ? classesData.data : [];
+  const isCreating = !student;
+  const [activeTab, setActiveTab] = useState('personal');
+
+  // Map field names to their tab values
+  const fieldToTabMap: Record<string, string> = {
+    firstName: 'personal',
+    lastName: 'personal',
+    dateOfBirth: 'personal',
+    gender: 'personal',
+    email: 'personal',
+    phone: 'personal',
+    nationality: 'personal',
+    religion: 'personal',
+    parentName: 'parent',
+    parentRelation: 'parent',
+    parentPhone: 'parent',
+    parentEmail: 'parent',
+    emergencyName: 'parent',
+    emergencyRelation: 'parent',
+    emergencyPhone: 'parent',
+    address: 'address',
+    city: 'address',
+    state: 'address',
+    zipCode: 'address',
+    country: 'address',
+    bloodGroup: 'other',
+    allergies: 'other',
+    medicalConditions: 'other',
+    previousSchool: 'other',
+    previousClass: 'other',
+    transferReason: 'other',
+    classId: 'class',
+    assignClassReason: 'class',
+  };
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
     watch,
+    trigger,
   } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
     defaultValues: student
@@ -101,7 +144,55 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
       : undefined,
   });
 
+  // Navigate to tab with first error and scroll to it
+  useEffect(() => {
+    const errorFields = Object.keys(errors);
+    if (errorFields.length > 0) {
+      const firstErrorField = errorFields[0];
+      const tabForError = fieldToTabMap[firstErrorField];
+      
+      if (tabForError) {
+        setActiveTab(tabForError);
+        
+        // Scroll to the error field after a short delay to allow tab switch
+        setTimeout(() => {
+          const errorElement = document.getElementById(firstErrorField);
+          if (errorElement) {
+            errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            errorElement.focus();
+          }
+        }, 100);
+      }
+    }
+  }, [errors]);
+
   const handleFormSubmit = async (data: StudentFormData) => {
+    // Trigger validation for all fields
+    const isValid = await trigger();
+    
+    if (!isValid) {
+      // Find first error and navigate to its tab
+      const errorFields = Object.keys(errors);
+      if (errorFields.length > 0) {
+        const firstErrorField = errorFields[0];
+        const tabForError = fieldToTabMap[firstErrorField];
+        
+        if (tabForError) {
+          setActiveTab(tabForError);
+          
+          // Scroll to the error field
+          setTimeout(() => {
+            const errorElement = document.getElementById(firstErrorField);
+            if (errorElement) {
+              errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              errorElement.focus();
+            }
+          }, 100);
+        }
+      }
+      return;
+    }
+
     // Clean up empty strings to undefined
     const cleaned = Object.fromEntries(
       Object.entries(data).map(([key, value]) => [key, value === '' ? undefined : value])
@@ -111,12 +202,13 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-      <Tabs defaultValue="personal" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className={`grid w-full ${isCreating ? 'grid-cols-5' : 'grid-cols-4'}`}>
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="parent">Parent</TabsTrigger>
           <TabsTrigger value="address">Address</TabsTrigger>
           <TabsTrigger value="other">Other</TabsTrigger>
+          {isCreating && <TabsTrigger value="class">Class</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="personal" className="space-y-4">
@@ -163,16 +255,27 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" {...register('email')} />
+              <Input 
+                id="email" 
+                type="email" 
+                {...register('email')}
+                aria-invalid={errors.email ? 'true' : 'false'}
+                className={errors.email ? 'border-destructive' : ''}
+              />
               {errors.email && (
-                <p className="text-sm text-destructive">{errors.email.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.email.message}</p>
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
-              <Input id="phone" {...register('phone')} />
+              <Input 
+                id="phone" 
+                {...register('phone')}
+                aria-invalid={errors.phone ? 'true' : 'false'}
+                className={errors.phone ? 'border-destructive' : ''}
+              />
               {errors.phone && (
-                <p className="text-sm text-destructive">{errors.phone.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.phone.message}</p>
               )}
             </div>
             <div className="space-y-2">
@@ -190,18 +293,27 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="parentName">Parent/Guardian Name *</Label>
-              <Input id="parentName" {...register('parentName')} />
+              <Input 
+                id="parentName" 
+                {...register('parentName')}
+                aria-invalid={errors.parentName ? 'true' : 'false'}
+                className={errors.parentName ? 'border-destructive' : ''}
+              />
               {errors.parentName && (
-                <p className="text-sm text-destructive">{errors.parentName.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.parentName.message}</p>
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="parentRelation">Relation *</Label>
               <Select
                 value={watch('parentRelation')}
-                onValueChange={(value) => setValue('parentRelation', value)}
+                onValueChange={(value) => setValue('parentRelation', value, { shouldValidate: true })}
               >
-                <SelectTrigger>
+                <SelectTrigger
+                  id="parentRelation"
+                  aria-invalid={errors.parentRelation ? 'true' : 'false'}
+                  className={errors.parentRelation ? 'border-destructive' : ''}
+                >
                   <SelectValue placeholder="Select relation" />
                 </SelectTrigger>
                 <SelectContent>
@@ -212,42 +324,68 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
                 </SelectContent>
               </Select>
               {errors.parentRelation && (
-                <p className="text-sm text-destructive">{errors.parentRelation.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.parentRelation.message}</p>
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="parentPhone">Parent Phone *</Label>
-              <Input id="parentPhone" {...register('parentPhone')} />
+              <Input 
+                id="parentPhone" 
+                {...register('parentPhone')}
+                aria-invalid={errors.parentPhone ? 'true' : 'false'}
+                className={errors.parentPhone ? 'border-destructive' : ''}
+              />
               {errors.parentPhone && (
-                <p className="text-sm text-destructive">{errors.parentPhone.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.parentPhone.message}</p>
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="parentEmail">Parent Email</Label>
-              <Input id="parentEmail" type="email" {...register('parentEmail')} />
+              <Input 
+                id="parentEmail" 
+                type="email" 
+                {...register('parentEmail')}
+                aria-invalid={errors.parentEmail ? 'true' : 'false'}
+                className={errors.parentEmail ? 'border-destructive' : ''}
+              />
               {errors.parentEmail && (
-                <p className="text-sm text-destructive">{errors.parentEmail.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.parentEmail.message}</p>
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="emergencyName">Emergency Contact Name *</Label>
-              <Input id="emergencyName" {...register('emergencyName')} />
+              <Input 
+                id="emergencyName" 
+                {...register('emergencyName')}
+                aria-invalid={errors.emergencyName ? 'true' : 'false'}
+                className={errors.emergencyName ? 'border-destructive' : ''}
+              />
               {errors.emergencyName && (
-                <p className="text-sm text-destructive">{errors.emergencyName.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.emergencyName.message}</p>
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="emergencyRelation">Emergency Relation *</Label>
-              <Input id="emergencyRelation" {...register('emergencyRelation')} />
+              <Input 
+                id="emergencyRelation" 
+                {...register('emergencyRelation')}
+                aria-invalid={errors.emergencyRelation ? 'true' : 'false'}
+                className={errors.emergencyRelation ? 'border-destructive' : ''}
+              />
               {errors.emergencyRelation && (
-                <p className="text-sm text-destructive">{errors.emergencyRelation.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.emergencyRelation.message}</p>
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="emergencyPhone">Emergency Phone *</Label>
-              <Input id="emergencyPhone" {...register('emergencyPhone')} />
+              <Input 
+                id="emergencyPhone" 
+                {...register('emergencyPhone')}
+                aria-invalid={errors.emergencyPhone ? 'true' : 'false'}
+                className={errors.emergencyPhone ? 'border-destructive' : ''}
+              />
               {errors.emergencyPhone && (
-                <p className="text-sm text-destructive">{errors.emergencyPhone.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.emergencyPhone.message}</p>
               )}
             </div>
           </div>
@@ -257,16 +395,26 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
           <div className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2 space-y-2">
               <Label htmlFor="address">Address *</Label>
-              <Input id="address" {...register('address')} />
+              <Input 
+                id="address" 
+                {...register('address')}
+                aria-invalid={errors.address ? 'true' : 'false'}
+                className={errors.address ? 'border-destructive' : ''}
+              />
               {errors.address && (
-                <p className="text-sm text-destructive">{errors.address.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.address.message}</p>
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="city">City *</Label>
-              <Input id="city" {...register('city')} />
+              <Input 
+                id="city" 
+                {...register('city')}
+                aria-invalid={errors.city ? 'true' : 'false'}
+                className={errors.city ? 'border-destructive' : ''}
+              />
               {errors.city && (
-                <p className="text-sm text-destructive">{errors.city.message}</p>
+                <p className="text-sm text-destructive font-medium">{errors.city.message}</p>
               )}
             </div>
             <div className="space-y-2">
@@ -312,6 +460,55 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
             </div>
           </div>
         </TabsContent>
+
+        {isCreating && (
+          <TabsContent value="class" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="classId">Assign to Class (Optional)</Label>
+                <Select
+                  value={watch('classId') || undefined}
+                  onValueChange={(value) => setValue('classId', value || undefined, { shouldValidate: true })}
+                >
+                  <SelectTrigger
+                    id="classId"
+                    aria-invalid={errors.classId ? 'true' : 'false'}
+                    className={errors.classId ? 'border-destructive' : ''}
+                  >
+                    <SelectValue placeholder="Select a class (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map((cls) => (
+                      <SelectItem key={cls.id} value={cls.id}>
+                        {cls.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.classId && (
+                  <p className="text-sm text-destructive font-medium">{errors.classId.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  You can assign the student to a class now or do it later
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="assignClassReason">Assignment Reason (Optional)</Label>
+                <Input
+                  id="assignClassReason"
+                  {...register('assignClassReason')}
+                  placeholder="e.g., Initial assignment"
+                  disabled={!watch('classId')}
+                  aria-invalid={errors.assignClassReason ? 'true' : 'false'}
+                  className={errors.assignClassReason ? 'border-destructive' : ''}
+                />
+                {errors.assignClassReason && (
+                  <p className="text-sm text-destructive font-medium">{errors.assignClassReason.message}</p>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
 
       <div className="flex justify-end gap-2">

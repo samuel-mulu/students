@@ -5,6 +5,7 @@ import { useCreateStudent } from '@/lib/hooks/use-students';
 import { StudentForm } from '@/components/forms/StudentForm';
 import { CreateStudentRequest } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BackButton } from '@/components/shared/BackButton';
 
 export default function NewStudentPage() {
   const router = useRouter();
@@ -17,11 +18,14 @@ export default function NewStudentPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <BackButton href="/dashboard/students" />
       <div>
-        <h1 className="text-page-title">Add New Student</h1>
-        <p className="text-body text-muted-foreground mt-1">
+          <h1 className="text-xl font-semibold">Add New Student</h1>
+          <p className="text-sm text-muted-foreground mt-1">
           Enter student information to create a new record
         </p>
+        </div>
       </div>
 
       <Card>

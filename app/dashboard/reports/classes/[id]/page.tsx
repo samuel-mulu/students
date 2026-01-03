@@ -25,8 +25,8 @@ export default function ClassReportPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-page-title">Class Report</h1>
-        <p className="text-body text-muted-foreground mt-1">{report.class.name}</p>
+        <h1 className="text-xl font-semibold">Class Report</h1>
+        <p className="text-sm text-muted-foreground mt-1">{report.class.name}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

@@ -5,6 +5,7 @@ import {
   BulkAttendanceRequest,
   UpdateAttendanceRequest,
 } from '@/lib/types';
+import { toast } from 'sonner';
 
 export function useAttendance(params?: {
   studentId?: string;
@@ -33,15 +34,45 @@ export function useAttendanceByClass(classId: string, date: string) {
   });
 }
 
+export function useClassAttendanceDates(classId: string) {
+  return useQuery({
+    queryKey: ['attendance', 'class', classId, 'dates'],
+    queryFn: async () => {
+      const dates = await attendanceApi.getClassDates(classId);
+      return { data: dates };
+    },
+    enabled: !!classId,
+  });
+}
+
 export function useBulkAttendance() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (data: BulkAttendanceRequest) => attendanceApi.createBulk(data),
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
       queryClient.invalidateQueries({
         queryKey: ['attendance', 'class', variables.classId, variables.date],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['attendance', 'class', variables.classId, 'dates'],
+      });
+      const count = variables.attendanceData.length;
+      toast.success("Attendance Recorded", {
+        description: `Attendance for ${count} student${count > 1 ? 's' : ''} has been recorded.`,
+        duration: 3000,
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.errorMessage || 
+                          error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message ||
+                          "Failed to record attendance. Please try again.";
+      toast.error("Record Attendance Failed", {
+        description: errorMessage,
+        duration: 5000,
       });
     },
   });
@@ -53,8 +84,30 @@ export function useUpdateAttendance() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateAttendanceRequest }) =>
       attendanceApi.update(id, data),
-    onSuccess: () => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      // Invalidate specific class and date queries
+      queryClient.invalidateQueries({
+        queryKey: ['attendance', 'class'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['attendance', 'class', 'dates'],
+      });
+      toast.success("Attendance Updated", {
+        description: "Attendance record has been successfully updated.",
+        duration: 3000,
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.errorMessage || 
+                          error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message ||
+                          "Failed to update attendance. Please try again.";
+      toast.error("Update Attendance Failed", {
+        description: errorMessage,
+        duration: 5000,
+      });
     },
   });
 }

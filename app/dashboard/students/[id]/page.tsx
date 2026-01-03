@@ -1,17 +1,27 @@
 'use client';
 
-import { use } from 'react';
-import { useStudent } from '@/lib/hooks/use-students';
+import { use, useState } from 'react';
+import { useStudent, useAssignClass, useTransferClass } from '@/lib/hooks/use-students';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { formatDate, formatFullName } from '@/lib/utils/format';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AssignClassDialog } from '@/components/forms/AssignClassDialog';
+import { TransferClassDialog } from '@/components/forms/TransferClassDialog';
+import { useAuthStore } from '@/lib/store/auth-store';
+import { BackButton } from '@/components/shared/BackButton';
 
 export default function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { hasRole } = useAuthStore();
   const { data, isLoading, error } = useStudent(id);
+  const [assignDialog, setAssignDialog] = useState(false);
+  const [transferDialog, setTransferDialog] = useState(false);
+  const assignClass = useAssignClass();
+  const transferClass = useTransferClass();
 
   if (isLoading) {
     return <LoadingState rows={5} columns={2} />;
@@ -23,20 +33,55 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
   const student = data.data;
 
+  const handleAssignClass = async (classId: string, reason: string) => {
+    await assignClass.mutateAsync({
+      id: student.id,
+      data: { classId, reason },
+    });
+    setAssignDialog(false);
+  };
+
+  const handleTransferClass = async (newClassId: string, reason: string) => {
+    await transferClass.mutateAsync({
+      id: student.id,
+      data: { newClassId, reason },
+    });
+    setTransferDialog(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-page-title">{formatFullName(student.firstName, student.lastName)}</h1>
-          <p className="text-body text-muted-foreground mt-1">Student Details</p>
+        <div className="flex items-center gap-4">
+          <BackButton href="/dashboard/students" />
+          <div>
+            <h1 className="text-xl font-semibold">{formatFullName(student.firstName, student.lastName)}</h1>
+            <p className="text-sm text-muted-foreground mt-1">Student Details</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Badge variant={student.classStatus === 'assigned' ? 'default' : 'secondary'}>
-            {student.classStatus}
-          </Badge>
-          <Badge variant={student.paymentStatus === 'confirmed' ? 'default' : 'secondary'}>
-            {student.paymentStatus}
-          </Badge>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-2">
+            <Badge variant={student.classStatus === 'assigned' ? 'default' : 'secondary'}>
+              {student.classStatus}
+            </Badge>
+            <Badge variant={student.paymentStatus === 'confirmed' ? 'default' : 'secondary'}>
+              {student.paymentStatus}
+            </Badge>
+          </div>
+          {hasRole(['OWNER', 'REGISTRAR']) && (
+            <div className="flex gap-2">
+              {student.classStatus === 'new' && (
+                <Button variant="outline" onClick={() => setAssignDialog(true)}>
+                  Assign Class
+                </Button>
+              )}
+              {student.classStatus === 'assigned' && hasRole(['OWNER']) && (
+                <Button variant="outline" onClick={() => setTransferDialog(true)}>
+                  Transfer Class
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -208,6 +253,22 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AssignClassDialog
+        open={assignDialog}
+        onOpenChange={setAssignDialog}
+        student={student}
+        onConfirm={handleAssignClass}
+        isLoading={assignClass.isPending}
+      />
+
+      <TransferClassDialog
+        open={transferDialog}
+        onOpenChange={setTransferDialog}
+        student={student}
+        onConfirm={handleTransferClass}
+        isLoading={transferClass.isPending}
+      />
     </div>
   );
 }

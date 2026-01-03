@@ -9,10 +9,23 @@ import {
   ApiResponse,
 } from '@/lib/types';
 
+// Backend returns { classes: Class[], pagination: {...} }
+interface ClassesBackendResponse {
+  classes: Class[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 export const classesApi = {
   getAll: async (): Promise<Class[]> => {
-    const response = await apiClient.get<ApiResponse<Class[]>>('/api/classes');
-    return response.data as Class[];
+    const response = await apiClient.get<ApiResponse<ClassesBackendResponse>>('/api/classes');
+    // Response interceptor extracts data, backend returns { classes, pagination }
+    const result = response.data as ClassesBackendResponse;
+    return result.classes || [];
   },
 
   getById: async (id: string): Promise<Class> => {
@@ -52,6 +65,24 @@ export const classesApi = {
 
   deleteSubject: async (subjectId: string): Promise<void> => {
     await apiClient.delete(`/api/classes/subjects/${subjectId}`);
+  },
+
+  // Get classes by grade
+  getByGrade: async (gradeId: string): Promise<Class[]> => {
+    const response = await apiClient.get<ApiResponse<ClassesBackendResponse>>('/api/classes', {
+      params: { gradeId },
+    });
+    const result = response.data as ClassesBackendResponse;
+    return result.classes || [];
+  },
+
+  // Get classes by grade and academic year
+  getByGradeAndYear: async (gradeId: string, academicYearId: string): Promise<Class[]> => {
+    const response = await apiClient.get<ApiResponse<ClassesBackendResponse>>('/api/classes', {
+      params: { gradeId, academicYearId },
+    });
+    const result = response.data as ClassesBackendResponse;
+    return result.classes || [];
   },
 };
 

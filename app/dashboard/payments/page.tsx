@@ -71,8 +71,8 @@ export default function PaymentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-page-title">Payments</h1>
-          <p className="text-body text-muted-foreground mt-1">
+          <h1 className="text-xl font-semibold">Payments</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Manage student payments and receipts
           </p>
         </div>

@@ -43,8 +43,8 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-page-title">Payment Details</h1>
-          <p className="text-body text-muted-foreground mt-1">
+          <h1 className="text-xl font-semibold">Payment Details</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             {formatMonthYear(payment.month, payment.year)}
           </p>
         </div>
