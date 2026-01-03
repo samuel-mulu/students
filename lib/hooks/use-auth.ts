@@ -159,3 +159,4 @@ export function useAuth() {
     isLoggingOut: logoutMutation.isPending,
   };
 }
+

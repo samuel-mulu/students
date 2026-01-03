@@ -3,24 +3,25 @@ import { SubExam, CreateSubExamRequest, UpdateSubExamRequest, ApiResponse } from
 
 export const subexamsApi = {
   create: async (data: CreateSubExamRequest): Promise<SubExam> => {
-    const response = await apiClient.post<ApiResponse<SubExam>>('/api/subexams', data);
-    return response.data as SubExam;
+    const response = await apiClient.post<SubExam>('/api/subexams', data);
+    return response.data;
   },
 
   getBySubjectAndTerm: async (subjectId: string, termId: string): Promise<SubExam[]> => {
-    const response = await apiClient.get<ApiResponse<SubExam[]>>(
+    const response = await apiClient.get<SubExam[]>(
       `/api/subexams/subject/${subjectId}/term/${termId}`
     );
-    return response.data as SubExam[];
+    return response.data;
   },
 
   update: async (id: string, data: UpdateSubExamRequest): Promise<SubExam> => {
-    const response = await apiClient.patch<ApiResponse<SubExam>>(`/api/subexams/${id}`, data);
-    return response.data as SubExam;
+    const response = await apiClient.patch<SubExam>(`/api/subexams/${id}`, data);
+    return response.data;
   },
 
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/subexams/${id}`);
   },
 };
+
 

@@ -5,8 +5,7 @@ import {
   UpdateStudentRequest,
   AssignClassRequest,
   TransferClassRequest,
-  PaginationParams,
-  ApiResponse,
+  PaginationParams
 } from '@/lib/types';
 
 // Backend returns { students: Student[], pagination: {...} }
@@ -26,38 +25,39 @@ export const studentsApi = {
     paymentStatus?: 'pending' | 'confirmed';
     classId?: string;
   }): Promise<StudentsBackendResponse> => {
-    const response = await apiClient.get<ApiResponse<StudentsBackendResponse>>('/api/students', { params });
+    const response = await apiClient.get<StudentsBackendResponse>('/api/students', { params });
     // Response interceptor extracts data, backend returns { students, pagination }
-    return response.data as StudentsBackendResponse;
+    return response.data;
   },
 
   getById: async (id: string): Promise<Student> => {
-    const response = await apiClient.get<ApiResponse<Student>>(`/api/students/${id}`);
-    return response.data as Student;
+    const response = await apiClient.get<Student>(`/api/students/${id}`);
+    return response.data;
   },
 
   create: async (data: CreateStudentRequest): Promise<Student> => {
-    const response = await apiClient.post<ApiResponse<Student>>('/api/students', data);
-    return response.data as Student;
+    const response = await apiClient.post<Student>('/api/students', data);
+    return response.data;
   },
 
   update: async (id: string, data: UpdateStudentRequest): Promise<Student> => {
-    const response = await apiClient.patch<ApiResponse<Student>>(`/api/students/${id}`, data);
-    return response.data as Student;
+    const response = await apiClient.patch<Student>(`/api/students/${id}`, data);
+    return response.data;
   },
 
   assignClass: async (id: string, data: AssignClassRequest): Promise<Student> => {
-    const response = await apiClient.post<ApiResponse<Student>>(`/api/students/${id}/assign-class`, data);
-    return response.data as Student;
+    const response = await apiClient.post<Student>(`/api/students/${id}/assign-class`, data);
+    return response.data;
   },
 
   transfer: async (id: string, data: TransferClassRequest): Promise<Student> => {
-    const response = await apiClient.post<ApiResponse<Student>>(`/api/students/${id}/transfer`, data);
-    return response.data as Student;
+    const response = await apiClient.post<Student>(`/api/students/${id}/transfer`, data);
+    return response.data;
   },
 
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/students/${id}`);
   },
 };
+
 

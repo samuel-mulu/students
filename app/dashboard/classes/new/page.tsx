@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCreateClass } from '@/lib/hooks/use-classes';
 import { ClassForm } from '@/components/forms/ClassForm';
-import { CreateClassRequest } from '@/lib/types';
+import { CreateClassRequest, UpdateClassRequest } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BackButton } from '@/components/shared/BackButton';
 
@@ -11,8 +11,9 @@ export default function NewClassPage() {
   const router = useRouter();
   const createClass = useCreateClass();
 
-  const handleSubmit = async (data: CreateClassRequest) => {
-    const result = await createClass.mutateAsync(data);
+  const handleSubmit = async (data: CreateClassRequest | UpdateClassRequest) => {
+    // For new class, all fields are required, so we can safely cast
+    const result = await createClass.mutateAsync(data as CreateClassRequest);
     router.push(`/dashboard/classes/${result.id}`);
   };
 

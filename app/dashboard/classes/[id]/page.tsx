@@ -183,7 +183,9 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
                 <div className="flex-1">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Academic Year</p>
-                  <p className="text-base font-semibold text-gray-900 mt-1">{cls.academicYear}</p>
+                  <p className="text-base font-semibold text-gray-900 mt-1">
+                    {typeof cls.academicYear === 'string' ? cls.academicYear : cls.academicYear.name}
+                  </p>
                 </div>
               </div>
             )}

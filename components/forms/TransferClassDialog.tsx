@@ -50,8 +50,11 @@ export function TransferClassDialog({
   const { data: classesData } = useClasses();
   const classes = classesData?.data || [];
   
-  // Get current class from student's classHistory
-  const currentClass = student?.classHistory?.find((ch) => !ch.endDate)?.class;
+  // Get current class from student's classHistory (if available)
+  const currentClass = 
+    student && 'classHistory' in student && Array.isArray(student.classHistory)
+      ? (student.classHistory as any[]).find((ch: any) => !ch.endDate)?.class
+      : undefined;
 
   const {
     register,
@@ -124,4 +127,5 @@ export function TransferClassDialog({
     </Dialog>
   );
 }
+
 

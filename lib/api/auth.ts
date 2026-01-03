@@ -10,13 +10,13 @@ interface LoginResponse {
 
 export const authApi = {
   login: async (data: LoginRequest): Promise<LoginResponse> => {
-    const response = await apiClient.post<ApiResponse<LoginResponse>>('/api/auth/login', data);
+    const response = await apiClient.post<LoginResponse>('/api/auth/login', data);
     // Response interceptor already extracts data, but login returns { user, token }
-    return response.data as LoginResponse;
+    return response.data;
   },
 
   register: async (data: RegisterRequest): Promise<{ user: User }> => {
-    const response = await apiClient.post<ApiResponse<{ user: User }>>('/api/auth/register', data);
+    const response = await apiClient.post<{ user: User }>('/api/auth/register', data);
     return response.data as { user: User };
   },
 
@@ -25,9 +25,10 @@ export const authApi = {
   },
 
   getMe: async (): Promise<{ user: User }> => {
-    const response = await apiClient.get<ApiResponse<User>>('/api/auth/me');
+    const response = await apiClient.get<User>('/api/auth/me');
     // Backend returns user directly in data field
-    return { user: response.data as User };
+    return { user: response.data};
   },
 };
+
 

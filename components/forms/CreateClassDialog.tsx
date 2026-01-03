@@ -1,16 +1,14 @@
 'use client';
 
-import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ClassForm } from './ClassForm';
-import { CreateClassRequest } from '@/lib/types';
+import { CreateClassRequest, UpdateClassRequest } from '@/lib/types';
 import { useCreateClass } from '@/lib/hooks/use-classes';
 
 interface CreateClassDialogProps {
@@ -23,8 +21,8 @@ interface CreateClassDialogProps {
 export function CreateClassDialog({ open, onOpenChange, gradeId, academicYearId }: CreateClassDialogProps) {
   const createClass = useCreateClass();
 
-  const handleSubmit = async (data: CreateClassRequest) => {
-    await createClass.mutateAsync(data);
+  const handleSubmit = async (data: CreateClassRequest | UpdateClassRequest) => {
+    await createClass.mutateAsync(data as CreateClassRequest);
     onOpenChange(false);
   };
 
@@ -48,4 +46,3 @@ export function CreateClassDialog({ open, onOpenChange, gradeId, academicYearId 
     </Dialog>
   );
 }
-

@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCreateStudent } from '@/lib/hooks/use-students';
 import { StudentForm } from '@/components/forms/StudentForm';
-import { CreateStudentRequest } from '@/lib/types';
+import { CreateStudentRequest, UpdateStudentRequest } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BackButton } from '@/components/shared/BackButton';
 
@@ -11,8 +11,9 @@ export default function NewStudentPage() {
   const router = useRouter();
   const createStudent = useCreateStudent();
 
-  const handleSubmit = async (data: CreateStudentRequest) => {
-    const result = await createStudent.mutateAsync(data);
+  const handleSubmit = async (data: CreateStudentRequest | UpdateStudentRequest) => {
+    // For new student, all required fields are present, so we can safely cast
+    const result = await createStudent.mutateAsync(data as CreateStudentRequest);
     router.push(`/dashboard/students/${result.id}`);
   };
 
