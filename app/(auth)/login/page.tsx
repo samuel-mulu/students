@@ -33,10 +33,11 @@ export default function LoginPage() {
   useEffect(() => {
     console.log('LoginPage: State Check', { isAuthenticated, isLoggingIn, user: !!user });
     if (isAuthenticated && !isLoggingIn) {
-      console.log("LoginPage: Authenticated, redirecting to dashboard...");
-      router.push("/dashboard");
+      console.log("LoginPage: Authenticated, forcing fresh navigation to dashboard...");
+      // Using window.location.href is more robust for the initial cross-origin jump in production
+      window.location.href = "/dashboard";
     }
-  }, [isAuthenticated, isLoggingIn, router, user]);
+  }, [isAuthenticated, isLoggingIn, user]);
 
   const onSubmit = async (data: LoginFormData) => {
     // Error handling is done in use-auth hook with toast notifications
