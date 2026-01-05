@@ -110,15 +110,17 @@ apiClient.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 401) {
-      if (typeof window !== "undefined") {
-        toast.error("Session Expired", {
-          description: "Please log in again",
-          duration: 3000,
-        });
-        window.location.href = "/login";
-      }
-    }
+    // Don't auto-redirect on 401 - let the dashboard layout handle it
+    // This prevents redirect loops when the auth query fails
+    // if (error.response?.status === 401) {
+    //   if (typeof window !== "undefined") {
+    //     toast.error("Session Expired", {
+    //       description: "Please log in again",
+    //       duration: 3000,
+    //     });
+    //     window.location.href = "/login";
+    //   }
+    // }
 
     error.message = errorMessage;
 

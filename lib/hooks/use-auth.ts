@@ -15,7 +15,7 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  // Get current usersss
+  // Get current user
   const { data, isLoading, error } = useQuery({
     queryKey: ["auth", "me"],
     queryFn: async () => {
@@ -23,8 +23,10 @@ export function useAuth() {
       setUser(response.user);
       return response.user;
     },
-    enabled: isAuthenticated,
+    enabled: !!user, // Only fetch if we have a user (avoids unnecessary calls on login page)
     retry: false,
+    refetchOnWindowFocus: false, // Prevent aggressive refetching that causes loops
+    staleTime: Infinity, // User data doesn't change often, rely on manual invalidation
   });
 
   // Login mutation
