@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authApi } from "@/lib/api/auth";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { LoginRequest, RegisterRequest } from "@/lib/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -41,11 +41,18 @@ export function useAuth() {
       });
 
       // Redirect based on role
+
       const role = response.user.role;
+      console.log("Login successful, role:", role);
+      
       if (role === "OWNER" || role === "REGISTRAR") {
         router.push("/dashboard");
       } else if (role === "TEACHER") {
         router.push("/dashboard/attendance");
+      } else {
+        // Fallback for unknown roles or if role is missing but login succeeded
+        console.warn("Unknown role encountered:", role);
+        router.push("/dashboard");
       }
     },
     onError: (error: any) => {
