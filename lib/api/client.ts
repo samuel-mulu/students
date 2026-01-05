@@ -48,21 +48,6 @@ export const apiClient: AxiosInstance = axios.create({
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Get token from our Zustand store
-    if (typeof window !== "undefined") {
-      try {
-        const authStorage = localStorage.getItem("auth-storage");
-        if (authStorage) {
-          const authData = JSON.parse(authStorage);
-          const token = authData.state?.token;
-          if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-          }
-        }
-      } catch (error) {
-        console.error("Error reading token from storage:", error);
-      }
-    }
     return config;
   },
   (error) => Promise.reject(error)

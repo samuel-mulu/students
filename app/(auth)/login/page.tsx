@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -29,14 +28,6 @@ export default function LoginPage() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
-
-  useEffect(() => {
-    console.log('LoginPage: State Check', { isAuthenticated, isLoggingIn, user: !!user });
-    if (isAuthenticated && !isLoggingIn) {
-      console.log("LoginPage: Authenticated, redirecting to dashboard...");
-      router.push("/dashboard");
-    }
-  }, [isAuthenticated, isLoggingIn, router, user]);
 
   const onSubmit = async (data: LoginFormData) => {
     // Error handling is done in use-auth hook with toast notifications

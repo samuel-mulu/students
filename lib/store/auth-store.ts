@@ -4,9 +4,8 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 interface AuthState {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
-  setUser: (user: User | null, token?: string | null) => void;
+  setUser: (user: User | null) => void;
   logout: () => void;
   hasRole: (role: UserRole | UserRole[]) => boolean;
   _hasHydrated: boolean;
@@ -17,7 +16,6 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
-      token: null,
       isAuthenticated: false,
       _hasHydrated: false,
       setHasHydrated: (state) => {
@@ -25,14 +23,8 @@ export const useAuthStore = create<AuthState>()(
           _hasHydrated: state,
         });
       },
-      setUser: (user, token) => {
-        if (token !== undefined) {
-          set({ user, token, isAuthenticated: !!user });
-        } else {
-          set({ user, isAuthenticated: !!user });
-        }
-      },
-      logout: () => set({ user: null, token: null, isAuthenticated: false }),
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
+      logout: () => set({ user: null, isAuthenticated: false }),
       hasRole: (role) => {
         const { user } = get();
         if (!user) return false;

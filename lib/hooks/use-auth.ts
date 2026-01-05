@@ -15,10 +15,6 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  if (typeof window !== "undefined") {
-    // console.log("useAuth: State Check", { user, isAuthenticated, hasData: !!data });
-  }
-
   // Get current user
   const { data, isLoading, error } = useQuery({
     queryKey: ["auth", "me"],
@@ -39,8 +35,8 @@ export function useAuth() {
   const loginMutation = useMutation({
     mutationFn: (data: LoginRequest) => authApi.login(data),
     onSuccess: (response) => {
-      // Backend returns { user, token } - we only need user for state
-      setUser(response.user, response.token);
+      // Backend returns { user }
+      setUser(response.user);
       queryClient.setQueryData(["auth", "me"], response.user);
 
       toast.success("Login Successful", {
@@ -97,7 +93,7 @@ export function useAuth() {
   const registerMutation = useMutation({
     mutationFn: (data: RegisterRequest) => authApi.register(data),
     onSuccess: (response: any) => {
-      setUser(response.user, response.token);
+      setUser(response.user);
       queryClient.setQueryData(["auth", "me"], response.user);
 
       toast.success("Registration Successful", {
