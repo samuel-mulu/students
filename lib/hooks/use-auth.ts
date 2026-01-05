@@ -15,7 +15,11 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  // Always fetch current user on app load (fix)
+  if (typeof window !== "undefined") {
+    // console.log("useAuth: State Check", { user, isAuthenticated, hasData: !!data });
+  }
+
+  // Get current user
   const { data, isLoading, error } = useQuery({
     queryKey: ["auth", "me"],
     queryFn: async () => {
@@ -23,7 +27,7 @@ export function useAuth() {
       setUser(response.user);
       return response.user;
     },
-    enabled: true, // <-- always enabled to fetch user info
+    enabled: !!user,
     retry: false,
     refetchOnWindowFocus: false,
     staleTime: Infinity,
@@ -35,6 +39,7 @@ export function useAuth() {
   const loginMutation = useMutation({
     mutationFn: (data: LoginRequest) => authApi.login(data),
     onSuccess: (response) => {
+      // Backend returns { user, token } - we only need user for state
       setUser(response.user, response.token);
       queryClient.setQueryData(["auth", "me"], response.user);
 
@@ -42,16 +47,9 @@ export function useAuth() {
         description: `Welcome back, ${response.user.name}!`,
         duration: 3000,
       });
-
-      // Redirect based on role
-      const role = response.user.role;
-      if (role === "OWNER" || role === "REGISTRAR") {
-        router.push("/dashboard");
-      } else if (role === "TEACHER") {
-        router.push("/dashboard/attendance");
-      }
     },
     onError: (error: any) => {
+      // Extract specific error messages for login
       const errorMessage =
         error.errorMessage ||
         error.response?.data?.error ||
@@ -59,6 +57,7 @@ export function useAuth() {
         error.message ||
         "Login failed. Please check your credentials.";
 
+      // Show specific error messages
       if (
         errorMessage.toLowerCase().includes("password") ||
         errorMessage.toLowerCase().includes("incorrect")
@@ -97,10 +96,9 @@ export function useAuth() {
         description: `Welcome, ${response.user.name}!`,
         duration: 3000,
       });
-
-      router.push("/dashboard");
     },
     onError: (error: any) => {
+      // Error toast is handled by API client interceptor, but we can add specific handling here
       const errorMessage =
         error.errorMessage ||
         error.response?.data?.error ||
@@ -141,6 +139,7 @@ export function useAuth() {
       router.push("/login");
     },
     onError: (error: any) => {
+      // Even if logout fails, clear local state
       storeLogout();
       queryClient.clear();
       router.push("/login");
