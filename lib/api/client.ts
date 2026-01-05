@@ -20,8 +20,8 @@ const getApiUrl = (): string => {
 
 const API_URL = getApiUrl();
 
-// Validate API URL format (only in browser)
-if (typeof window !== "undefined" && API_URL) {
+// Validate API URL format (only in browser and only for absolute URLs)
+if (typeof window !== "undefined" && API_URL && API_URL.startsWith('http')) {
   try {
     new URL(API_URL);
   } catch (error) {
