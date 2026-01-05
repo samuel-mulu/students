@@ -15,7 +15,9 @@ export default function DashboardLayout({
   const router = useRouter();
 
   useEffect(() => {
+    console.log('DashboardLayout: Auth Check', { _hasHydrated, isAuthenticated, user: !!user });
     if (_hasHydrated && (!isAuthenticated || !user)) {
+      console.log('DashboardLayout: Not authenticated, redirecting to login...');
       router.push('/login');
     }
   }, [_hasHydrated, isAuthenticated, user, router]);

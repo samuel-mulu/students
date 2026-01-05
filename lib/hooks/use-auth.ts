@@ -47,6 +47,14 @@ export function useAuth() {
         description: `Welcome back, ${response.user.name}!`,
         duration: 3000,
       });
+
+      // Redirect based on role
+      const role = response.user.role;
+      if (role === "OWNER" || role === "REGISTRAR") {
+        router.push("/dashboard");
+      } else if (role === "TEACHER") {
+        router.push("/dashboard/attendance");
+      }
     },
     onError: (error: any) => {
       // Extract specific error messages for login
@@ -96,6 +104,8 @@ export function useAuth() {
         description: `Welcome, ${response.user.name}!`,
         duration: 3000,
       });
+
+      router.push("/dashboard");
     },
     onError: (error: any) => {
       // Error toast is handled by API client interceptor, but we can add specific handling here

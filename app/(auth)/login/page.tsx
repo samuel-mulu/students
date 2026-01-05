@@ -31,12 +31,12 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
+    console.log('LoginPage: State Check', { isAuthenticated, isLoggingIn, user: !!user });
     if (isAuthenticated && !isLoggingIn) {
-      // Use full page navigation for the initial jump to the dashboard
-      // This is more robust in production environments
-      window.location.href = "/dashboard";
+      console.log("LoginPage: Authenticated, redirecting to dashboard...");
+      router.push("/dashboard");
     }
-  }, [isAuthenticated, isLoggingIn]);
+  }, [isAuthenticated, isLoggingIn, router, user]);
 
   const onSubmit = async (data: LoginFormData) => {
     // Error handling is done in use-auth hook with toast notifications
