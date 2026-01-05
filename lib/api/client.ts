@@ -1,3 +1,4 @@
+import { ApiError } from "@/lib/types";
 import axios, {
   AxiosError,
   AxiosInstance,
@@ -6,31 +7,32 @@ import axios, {
 import { toast } from "sonner";
 
 const getApiUrl = (): string => {
-  // In production use environment variable, else localhost fallback
-  const url =
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:4000";
-
-  // Remove trailing slash if any (important!)
-  return url.replace(/\/$/, "");
+ 
+  if (process.env.NODE_ENV === "production") {
+    return "";
+  }
+  
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+  return apiUrl.replace(/\/$/, "");
 };
 
 const API_URL = getApiUrl();
 
-// Validate API URL format (only in browser)
-if (typeof window !== "undefined" && API_URL.startsWith("http")) {
+// Validate API URL format (only in browser and only for absolute URLs)
+if (typeof window !== "undefined" && API_URL && API_URL.startsWith('http')) {
   try {
     new URL(API_URL);
-  } catch {
+  } catch (error) {
     console.error(
-      `Invalid API URL format: ${API_URL}. Please check NEXT_PUBLIC_API_URL environment variable.`
+      `Invalid API URL format: ${API_URL}. Please check your NEXT_PUBLIC_API_URL environment variable.`
     );
   }
 }
 
+// Create axios instance
 export const apiClient: AxiosInstance = axios.create({
-  baseURL: API_URL, // NO trailing /api here!
-  withCredentials: true, // for cookie-based auth
+  baseURL: API_URL,
+  withCredentials: true, // For cookie-based auth
   headers: {
     "Content-Type": "application/json",
   },
@@ -38,13 +40,14 @@ export const apiClient: AxiosInstance = axios.create({
 });
 
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => config,
+  (config: InternalAxiosRequestConfig) => {
+    return config;
+  },
   (error) => Promise.reject(error)
 );
 
 apiClient.interceptors.response.use(
   (response) => {
-    // If API uses { success, data, message } wrapper, unwrap it here
     if (
       response.data &&
       typeof response.data === "object" &&
@@ -57,20 +60,17 @@ apiClient.interceptors.response.use(
       };
       return {
         ...response,
-        data:
-          apiResponse.data !== undefined
-            ? apiResponse.data
-            : response.data,
+        data: apiResponse.data !== undefined ? apiResponse.data : response.data,
       };
     }
     return response;
   },
-  (error: AxiosError) => {
+  (error: AxiosError<ApiError>) => {
     let errorMessage = "An error occurred";
     let errorDetails: any = null;
 
     if (error.response?.data) {
-      const backendError = error.response.data as any;
+      const backendError = error.response.data as ApiError;
 
       errorMessage =
         backendError.error ||
@@ -103,7 +103,17 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Do NOT auto redirect on 401 here, let UI handle it
+    // Don't auto-redirect on 401 - let the dashboard layout handle it
+    // This prevents redirect loops when the auth query fails
+    // if (error.response?.status === 401) {
+    //   if (typeof window !== "undefined") {
+    //     toast.error("Session Expired", {
+    //       description: "Please log in again",
+    //       duration: 3000,
+    //     });
+    //     window.location.href = "/login";
+    //   }
+    // }
 
     error.message = errorMessage;
 
