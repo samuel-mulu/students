@@ -48,7 +48,13 @@ export function useAuth() {
         duration: 3000,
       });
 
-      // Redirection is now handled by the LoginPage useEffect to avoid race conditions
+      // Redirect based on role
+      const role = response.user.role;
+      if (role === "OWNER" || role === "REGISTRAR") {
+        router.push("/dashboard");
+      } else if (role === "TEACHER") {
+        router.push("/dashboard/attendance");
+      }
     },
     onError: (error: any) => {
       // Extract specific error messages for login
@@ -99,7 +105,7 @@ export function useAuth() {
         duration: 3000,
       });
 
-      // Redirection is now handled by the LoginPage useEffect
+      router.push("/dashboard");
     },
     onError: (error: any) => {
       // Error toast is handled by API client interceptor, but we can add specific handling here
