@@ -41,18 +41,11 @@ export function useAuth() {
       });
 
       // Redirect based on role
-
       const role = response.user.role;
-      console.log("Login successful, role:", role);
-      
       if (role === "OWNER" || role === "REGISTRAR") {
         router.push("/dashboard");
       } else if (role === "TEACHER") {
         router.push("/dashboard/attendance");
-      } else {
-        // Fallback for unknown roles or if role is missing but login succeeded
-        console.warn("Unknown role encountered:", role);
-        router.push("/dashboard");
       }
     },
     onError: (error: any) => {

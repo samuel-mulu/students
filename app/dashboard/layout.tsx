@@ -2,6 +2,7 @@
 
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
+import { useHydration } from '@/lib/hooks/use-hydration';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -11,18 +12,18 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, user, _hasHydrated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
+  const hasHydrated = useHydration();
   const router = useRouter();
 
   useEffect(() => {
-    // Only check auth after store has hydrated
-    if (_hasHydrated && (!isAuthenticated || !user)) {
+    if (hasHydrated && (!isAuthenticated || !user)) {
       router.push('/login');
     }
-  }, [_hasHydrated, isAuthenticated, user, router]);
+  }, [hasHydrated, isAuthenticated, user, router]);
 
-  // Wait for hydration before rendering to prevent flash of content or premature redirect
-  if (!_hasHydrated) {
+  // Wait for hydration before rendering
+  if (!hasHydrated) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-sm text-muted-foreground">Loading...</div>
