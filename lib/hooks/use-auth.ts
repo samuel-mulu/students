@@ -15,7 +15,7 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  // Get current user
+  // Get current usersss
   const { data, isLoading, error } = useQuery({
     queryKey: ["auth", "me"],
     queryFn: async () => {
