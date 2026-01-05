@@ -7,19 +7,13 @@ import axios, {
 import { toast } from "sonner";
 
 const getApiUrl = (): string => {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-  if (!apiUrl) {
-    const message =
-      "Environment variable NEXT_PUBLIC_API_URL is not set! " +
-      "Please create a .env.local file with NEXT_PUBLIC_API_URL or set it in your deployment environment.";
-    if (typeof window !== "undefined") {
-      console.error(message);
-    }
-    throw new Error(message);
+  // In development, we might still want the direct URL if not using a local proxy,
+  // but for production unified domain, we MUST use the relative '/api' path.
+  if (process.env.NODE_ENV === "production") {
+    return "/api";
   }
-
-  // Remove trailing slash if present
+  
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
   return apiUrl.replace(/\/$/, "");
 };
 
