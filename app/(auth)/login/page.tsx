@@ -19,7 +19,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const { login, isLoggingIn, isAuthenticated } = useAuth();
+  const { login, isLoggingIn, isAuthenticated, user } = useAuth();
   const router = useRouter();
 
   const {
@@ -31,11 +31,12 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
+    console.log('LoginPage: State Check', { isAuthenticated, isLoggingIn, user: !!user });
     if (isAuthenticated && !isLoggingIn) {
       console.log("LoginPage: Authenticated, redirecting to dashboard...");
       router.push("/dashboard");
     }
-  }, [isAuthenticated, isLoggingIn, router]);
+  }, [isAuthenticated, isLoggingIn, router, user]);
 
   const onSubmit = async (data: LoginFormData) => {
     // Error handling is done in use-auth hook with toast notifications
