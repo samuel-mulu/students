@@ -15,6 +15,10 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
+  if (typeof window !== "undefined") {
+    // console.log("useAuth: State Check", { user, isAuthenticated, hasData: !!data });
+  }
+
   // Get current user
   const { data, isLoading, error } = useQuery({
     queryKey: ["auth", "me"],
@@ -23,18 +27,20 @@ export function useAuth() {
       setUser(response.user);
       return response.user;
     },
-    enabled: !!user, // Only fetch if we have a user (avoids unnecessary calls on login page)
+    enabled: !!user,
     retry: false,
-    refetchOnWindowFocus: false, // Prevent aggressive refetching that causes loops
-    staleTime: Infinity, // User data doesn't change often, rely on manual invalidation
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
   });
+
+  const isAuth = !!user || !!data;
 
   // Login mutation
   const loginMutation = useMutation({
     mutationFn: (data: LoginRequest) => authApi.login(data),
     onSuccess: (response) => {
       // Backend returns { user, token } - we only need user for state
-      setUser(response.user);
+      setUser(response.user, response.token);
       queryClient.setQueryData(["auth", "me"], response.user);
 
       toast.success("Login Successful", {
@@ -90,8 +96,8 @@ export function useAuth() {
   // Register mutation
   const registerMutation = useMutation({
     mutationFn: (data: RegisterRequest) => authApi.register(data),
-    onSuccess: (response) => {
-      setUser(response.user);
+    onSuccess: (response: any) => {
+      setUser(response.user, response.token);
       queryClient.setQueryData(["auth", "me"], response.user);
 
       toast.success("Registration Successful", {
@@ -160,7 +166,7 @@ export function useAuth() {
     user: data || user,
     isLoading,
     error,
-    isAuthenticated: !!user || !!data,
+    isAuthenticated: isAuth,
     login: loginMutation.mutate,
     register: registerMutation.mutate,
     logout: () => logoutMutation.mutate(),
