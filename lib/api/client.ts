@@ -7,10 +7,11 @@ import axios, {
 import { toast } from "sonner";
 
 const getApiUrl = (): string => {
-  // In development, we might still want the direct URL if not using a local proxy,
-  // but for production unified domain, we MUST use the relative '/api' path.
+  // In production, we use Next.js rewrites to proxy /api requests.
+  // Since our API calls (e.g., apiClient.get('/api/auth/me')) already include the '/api' prefix,
+  // we set the baseURL to an empty string so they resolve correctly on the same domain.
   if (process.env.NODE_ENV === "production") {
-    return "/api";
+    return "";
   }
   
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
