@@ -15,6 +15,9 @@ export function usePayments(params?: {
       const payments = await paymentsApi.getAll(params);
       return { data: payments };
     },
+    // Only fetch if we have at least one filter or want all payments
+    // This prevents unnecessary requests
+    enabled: true, // Always enabled, params are optional
   });
 }
 

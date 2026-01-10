@@ -33,25 +33,25 @@ const menuItems: MenuItem[] = [
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
-    roles: ["OWNER", "REGISTRAR", "TEACHER"],
+    roles: ["OWNER", "TEACHER"],
   },
   {
     label: "Students",
     href: "/dashboard/students",
     icon: Users,
-    roles: ["OWNER", "REGISTRAR"],
+    roles: ["OWNER"],
   },
   {
     label: "Classes",
     href: "/dashboard/classes",
     icon: GraduationCap,
-    roles: ["REGISTRAR"], // Removed OWNER
+    roles: ["OWNER"],
   },
   {
     label: "Grades",
     href: "/dashboard/grades",
     icon: GraduationCap,
-    roles: ["OWNER", "REGISTRAR"],
+    roles: ["OWNER"],
   },
   {
     label: "Attendance",
@@ -75,7 +75,7 @@ const menuItems: MenuItem[] = [
     label: "Reports",
     href: "/dashboard/reports",
     icon: BarChart3,
-    roles: ["OWNER", "REGISTRAR"],
+    roles: ["OWNER"],
   },
   {
     label: "Users & Teachers",
@@ -87,19 +87,19 @@ const menuItems: MenuItem[] = [
     label: "Academic Years",
     href: "/dashboard/academic-years",
     icon: School,
-    roles: ["OWNER", "REGISTRAR"],
+    roles: ["OWNER"],
   },
   {
     label: "Promotion",
     href: "/dashboard/promotion",
     icon: ArrowUpCircle,
-    roles: ["OWNER", "REGISTRAR"],
+    roles: ["OWNER"],
   },
   {
     label: "Settings",
     href: "/dashboard/settings",
     icon: Settings,
-    roles: ["OWNER", "REGISTRAR"],
+    roles: ["OWNER"],
   },
 ];
 
@@ -111,10 +111,12 @@ export function Sidebar() {
   // Wait for user to be available
   if (!user) {
     return (
-      <div className={cn(
-        "border-r bg-sidebar h-screen sticky top-0 transition-all duration-300",
-        isCollapsed ? "w-16" : "w-64"
-      )}>
+      <div
+        className={cn(
+          "border-r bg-sidebar h-screen sticky top-0 transition-all duration-300",
+          isCollapsed ? "w-16" : "w-64"
+        )}
+      >
         <div className="p-6 border-b">
           <h1 className={cn("text-lg font-semibold", isCollapsed && "hidden")}>
             School System
@@ -128,12 +130,19 @@ export function Sidebar() {
   const visibleItems = menuItems.filter((item) => hasRole(item.roles));
 
   return (
-    <div className={cn(
-      "border-r bg-sidebar h-screen sticky top-0 transition-all duration-300 flex flex-col",
-      isCollapsed ? "w-16" : "w-64"
-    )}>
+    <div
+      className={cn(
+        "border-r bg-sidebar h-screen sticky top-0 transition-all duration-300 flex flex-col",
+        isCollapsed ? "w-16" : "w-64"
+      )}
+    >
       <div className="p-6 border-b flex items-center justify-between">
-        <h1 className={cn("text-lg font-semibold transition-opacity", isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100")}>
+        <h1
+          className={cn(
+            "text-lg font-semibold transition-opacity",
+            isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+          )}
+        >
           School System
         </h1>
         <button
@@ -171,7 +180,12 @@ export function Sidebar() {
               title={isCollapsed ? item.label : undefined}
             >
               <Icon className="h-5 w-5 shrink-0" />
-              <span className={cn("transition-opacity", isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100")}>
+              <span
+                className={cn(
+                  "transition-opacity",
+                  isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+                )}
+              >
                 {item.label}
               </span>
             </Link>

@@ -46,6 +46,7 @@ export default function GradesPage() {
   const deleteClass = useDeleteClass();
 
   const [expandedGrades, setExpandedGrades] = useState<Set<string>>(new Set());
+  const [expandedAcademicYears, setExpandedAcademicYears] = useState<Set<string>>(new Set());
   const [createClassDialog, setCreateClassDialog] = useState<{
     open: boolean;
     gradeId?: string;
@@ -118,6 +119,24 @@ export default function GradesPage() {
     });
   };
 
+  const toggleAcademicYearExpansion = (gradeId: string, academicYearId: string) => {
+    const key = `${gradeId}-${academicYearId}`;
+    setExpandedAcademicYears((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  const isAcademicYearExpanded = (gradeId: string, academicYearId: string) => {
+    const key = `${gradeId}-${academicYearId}`;
+    return expandedAcademicYears.has(key);
+  };
+
   const handleDeleteClass = async () => {
     if (deleteClassDialog.class) {
       await deleteClass.mutateAsync(deleteClassDialog.class.id);
@@ -129,6 +148,25 @@ export default function GradesPage() {
     if (academicYearId === 'unknown') return 'Unknown';
     const year = academicYears.find((y) => y.id === academicYearId);
     return year?.name || academicYearId;
+  };
+
+  // Get sorted academic years by startDate (newest first)
+  const getSortedAcademicYears = (gradeClasses: Record<string, Class[]>) => {
+    return Object.entries(gradeClasses).sort(([yearId1], [yearId2]) => {
+      if (yearId1 === 'unknown') return 1;
+      if (yearId2 === 'unknown') return -1;
+      
+      const year1 = academicYears.find((y) => y.id === yearId1);
+      const year2 = academicYears.find((y) => y.id === yearId2);
+      
+      if (!year1) return 1;
+      if (!year2) return -1;
+      
+      // Sort by startDate descending (newest first)
+      const date1 = new Date(year1.startDate).getTime();
+      const date2 = new Date(year2.startDate).getTime();
+      return date2 - date1;
+    });
   };
 
   const handleOpenCreate = () => {
@@ -265,58 +303,80 @@ export default function GradesPage() {
 
                         {isExpanded && (
                           <div className="mt-3 space-y-4">
-                            {Object.entries(gradeClasses).map(([academicYearId, yearClasses]) => (
-                              <div key={academicYearId} className="space-y-2">
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                  {getAcademicYearName(academicYearId)}
-                                </p>
-                                <div className="space-y-1 pl-2">
-                                  {yearClasses.map((cls) => (
-                                    <div
-                                      key={cls.id}
-                                      className="flex items-center justify-between p-2 rounded-md bg-slate-50 hover:bg-slate-100 transition-colors"
-                                    >
-                                      <div className="flex items-center gap-2 flex-1">
-                                        <Users className="h-3 w-3 text-muted-foreground" />
-                                        <Link
-                                          href={`/dashboard/classes/${cls.id}`}
-                                          className="text-sm font-medium hover:underline"
-                                        >
-                                          {cls.name}
-                                        </Link>
-                                        {cls.description && (
-                                          <span className="text-xs text-muted-foreground truncate">
-                                            - {cls.description}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {hasRole(["OWNER", "REGISTRAR"]) && (
-                                        <div className="flex gap-1">
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 w-6 p-0"
-                                            asChild
-                                          >
-                                            <Link href={`/dashboard/classes/${cls.id}`}>
-                                              <Eye className="h-3 w-3" />
-                                            </Link>
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                                            onClick={() => setDeleteClassDialog({ open: true, class: cls })}
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
+                            {getSortedAcademicYears(gradeClasses).map(([academicYearId, yearClasses]) => {
+                              const isYearExpanded = isAcademicYearExpanded(grade.id, academicYearId);
+                              const totalClasses = yearClasses.length;
+                              
+                              return (
+                                <div key={academicYearId} className="space-y-2">
+                                  <button
+                                    onClick={() => toggleAcademicYearExpansion(grade.id, academicYearId)}
+                                    className="flex items-center justify-between w-full text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors"
+                                  >
+                                    <span>{getAcademicYearName(academicYearId)}</span>
+                                    <div className="flex items-center gap-2">
+                                      {isYearExpanded && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          {totalClasses} {totalClasses === 1 ? 'class' : 'classes'}
+                                        </Badge>
+                                      )}
+                                      {isYearExpanded ? (
+                                        <ChevronUp className="h-3 w-3" />
+                                      ) : (
+                                        <ChevronDown className="h-3 w-3" />
                                       )}
                                     </div>
-                                  ))}
+                                  </button>
+                                  {isYearExpanded && (
+                                    <div className="space-y-1 pl-2">
+                                      {yearClasses.map((cls) => (
+                                        <div
+                                          key={cls.id}
+                                          className="flex items-center justify-between p-2 rounded-md bg-slate-50 hover:bg-slate-100 transition-colors"
+                                        >
+                                          <div className="flex items-center gap-2 flex-1">
+                                            <Users className="h-3 w-3 text-muted-foreground" />
+                                            <Link
+                                              href={`/dashboard/classes/${cls.id}`}
+                                              className="text-sm font-medium hover:underline"
+                                            >
+                                              {cls.name}
+                                            </Link>
+                                            {cls.description && (
+                                              <span className="text-xs text-muted-foreground truncate">
+                                                - {cls.description}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {hasRole(["OWNER", "REGISTRAR"]) && (
+                                            <div className="flex gap-1">
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 w-6 p-0"
+                                                asChild
+                                              >
+                                                <Link href={`/dashboard/classes/${cls.id}`}>
+                                                  <Eye className="h-3 w-3" />
+                                                </Link>
+                                              </Button>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                                onClick={() => setDeleteClassDialog({ open: true, class: cls })}
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </Button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>

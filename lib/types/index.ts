@@ -369,11 +369,37 @@ export interface RosterEntry {
   rank: number;
 }
 
+// PaymentType Types
+export interface PaymentType {
+  id: string;
+  name: string;
+  amount: number;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePaymentTypeRequest {
+  name: string;
+  amount: number;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface UpdatePaymentTypeRequest {
+  name?: string;
+  amount?: number;
+  description?: string;
+  isActive?: boolean;
+}
+
 // Payment Types
 export interface Payment {
   id: string;
   studentId: string;
   amount: number;
+  paymentTypeId?: string;
   month: string;
   year: number;
   status: PaymentStatus;
@@ -381,6 +407,7 @@ export interface Payment {
   paymentMethod?: string;
   notes?: string;
   student?: Student;
+  paymentType?: PaymentType;
   receipt?: Receipt;
   createdAt: string;
   updatedAt: string;
@@ -388,11 +415,12 @@ export interface Payment {
 
 export interface CreatePaymentRequest {
   studentId: string;
-  amount: number;
+  paymentTypeId: string; // Required: payment type ID instead of amount
   month: string;
   year: number;
   paymentMethod?: string;
   notes?: string;
+  amount?: number; // Optional for backward compatibility
 }
 
 export interface ConfirmPaymentRequest {

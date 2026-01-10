@@ -20,6 +20,12 @@ import {
   useActivateAcademicYear,
   useCloseAcademicYear,
 } from "@/lib/hooks/use-academicYears";
+import {
+  usePaymentTypes,
+  useCreatePaymentType,
+  useUpdatePaymentType,
+  useDeletePaymentType,
+} from "@/lib/hooks/use-payment-types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -43,6 +49,7 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
+  DollarSign,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -57,7 +64,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Grade, AcademicYear } from "@/lib/types";
+import { Grade, AcademicYear, PaymentType } from "@/lib/types";
+import { formatCurrency } from "@/lib/utils/format";
 
 export default function SettingsPage() {
   const { hasRole } = useAuthStore();
@@ -148,6 +156,43 @@ export default function SettingsPage() {
     endDate: "",
   });
 
+  // Payment Types
+  const {
+    data: paymentTypesData,
+    isLoading: paymentTypesLoading,
+    error: paymentTypesError,
+    refetch: refetchPaymentTypes,
+  } = usePaymentTypes();
+  const createPaymentType = useCreatePaymentType();
+  const updatePaymentType = useUpdatePaymentType();
+  const deletePaymentType = useDeletePaymentType();
+
+  // Payment Type Dialog State
+  const [paymentTypeDialog, setPaymentTypeDialog] = useState<{
+    open: boolean;
+    paymentType: PaymentType | null;
+    mode: "create" | "edit";
+  }>({
+    open: false,
+    paymentType: null,
+    mode: "create",
+  });
+
+  const [paymentTypeFormData, setPaymentTypeFormData] = useState({
+    name: "",
+    amount: 0,
+    description: "",
+    isActive: true,
+  });
+
+  const [deletePaymentTypeDialog, setDeletePaymentTypeDialog] = useState<{
+    open: boolean;
+    paymentType: PaymentType | null;
+  }>({
+    open: false,
+    paymentType: null,
+  });
+
   // Update threshold when data loads
   useEffect(() => {
     if (thresholdData?.data) {
@@ -232,6 +277,41 @@ export default function SettingsPage() {
     await closeAcademicYear.mutateAsync(id);
   };
 
+  // Payment Type Handlers
+  const handleOpenCreatePaymentType = () => {
+    setPaymentTypeFormData({ name: "", amount: 0, description: "", isActive: true });
+    setPaymentTypeDialog({ open: true, paymentType: null, mode: "create" });
+  };
+
+  const handleOpenEditPaymentType = (paymentType: PaymentType) => {
+    setPaymentTypeFormData({
+      name: paymentType.name,
+      amount: paymentType.amount,
+      description: paymentType.description || "",
+      isActive: paymentType.isActive,
+    });
+    setPaymentTypeDialog({ open: true, paymentType, mode: "edit" });
+  };
+
+  const handleSubmitPaymentType = async () => {
+    if (paymentTypeDialog.mode === "create") {
+      await createPaymentType.mutateAsync(paymentTypeFormData);
+    } else if (paymentTypeDialog.paymentType) {
+      await updatePaymentType.mutateAsync({
+        id: paymentTypeDialog.paymentType.id,
+        data: paymentTypeFormData,
+      });
+    }
+    setPaymentTypeDialog({ open: false, paymentType: null, mode: "create" });
+  };
+
+  const handleDeletePaymentTypeConfirm = async () => {
+    if (deletePaymentTypeDialog.paymentType) {
+      await deletePaymentType.mutateAsync(deletePaymentTypeDialog.paymentType.id);
+      setDeletePaymentTypeDialog({ open: false, paymentType: null });
+    }
+  };
+
   // System Settings Handler
   const handleSaveThreshold = async () => {
     const numValue = parseFloat(threshold);
@@ -262,6 +342,7 @@ export default function SettingsPage() {
     ? academicYearsData.data
     : [];
   const activeYear = activeYearData?.data;
+  const paymentTypes = Array.isArray(paymentTypesData?.data) ? paymentTypesData.data : [];
 
   return (
     <div className="space-y-6">
@@ -275,7 +356,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="system">
             <Sliders className="mr-2 h-4 w-4" />
             System
@@ -287,6 +368,10 @@ export default function SettingsPage() {
           <TabsTrigger value="academic-years">
             <Calendar className="mr-2 h-4 w-4" />
             Academic Years
+          </TabsTrigger>
+          <TabsTrigger value="payment-types">
+            <DollarSign className="mr-2 h-4 w-4" />
+            Payment Types
           </TabsTrigger>
         </TabsList>
 
@@ -557,6 +642,103 @@ export default function SettingsPage() {
             </div>
           )}
         </TabsContent>
+
+        {/* Payment Types Tab */}
+        <TabsContent value="payment-types" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Payment Types</h2>
+              <p className="text-sm text-muted-foreground">
+                Manage payment types with fixed amounts for student payments
+              </p>
+            </div>
+            {hasRole(["OWNER"]) && (
+              <Button onClick={handleOpenCreatePaymentType}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Payment Type
+              </Button>
+            )}
+          </div>
+
+          {paymentTypesLoading ? (
+            <LoadingState rows={5} columns={3} />
+          ) : paymentTypesError ? (
+            <ErrorState
+              message="Failed to load payment types"
+              onRetry={() => refetchPaymentTypes()}
+            />
+          ) : paymentTypes.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center py-8">
+                  <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No payment types found</p>
+                  {hasRole(["OWNER"]) && (
+                    <Button onClick={handleOpenCreatePaymentType} className="mt-4">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create First Payment Type
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {paymentTypes.map((paymentType) => (
+                <Card
+                  key={paymentType.id}
+                  className={`hover:shadow-md transition-shadow ${
+                    !paymentType.isActive ? "opacity-60" : ""
+                  }`}
+                >
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-5 w-5" />
+                        {paymentType.name}
+                      </div>
+                      {!paymentType.isActive && (
+                        <Badge variant="secondary">Inactive</Badge>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-lg">
+                        {formatCurrency(paymentType.amount)}
+                      </p>
+                      {paymentType.description && (
+                        <p className="text-sm text-muted-foreground">
+                          {paymentType.description}
+                        </p>
+                      )}
+                      {hasRole(["OWNER"]) && (
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenEditPaymentType(paymentType)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setDeletePaymentTypeDialog({ open: true, paymentType })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* Grade Dialog */}
@@ -727,6 +909,104 @@ export default function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Payment Type Dialog */}
+      <Dialog
+        open={paymentTypeDialog.open}
+        onOpenChange={(open) => setPaymentTypeDialog({ ...paymentTypeDialog, open })}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {paymentTypeDialog.mode === "create" ? "Create Payment Type" : "Edit Payment Type"}
+            </DialogTitle>
+            <DialogDescription>
+              {paymentTypeDialog.mode === "create"
+                ? "Add a new payment type with fixed amount"
+                : "Update payment type information"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="payment-type-name">Name *</Label>
+              <Input
+                id="payment-type-name"
+                value={paymentTypeFormData.name}
+                onChange={(e) =>
+                  setPaymentTypeFormData({ ...paymentTypeFormData, name: e.target.value })
+                }
+                placeholder="e.g., Tuition Fee"
+              />
+            </div>
+            <div>
+              <Label htmlFor="payment-type-amount">Amount *</Label>
+              <Input
+                id="payment-type-amount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={paymentTypeFormData.amount}
+                onChange={(e) =>
+                  setPaymentTypeFormData({
+                    ...paymentTypeFormData,
+                    amount: parseFloat(e.target.value) || 0,
+                  })
+                }
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <Label htmlFor="payment-type-description">Description (Optional)</Label>
+              <Input
+                id="payment-type-description"
+                value={paymentTypeFormData.description}
+                onChange={(e) =>
+                  setPaymentTypeFormData({ ...paymentTypeFormData, description: e.target.value })
+                }
+                placeholder="Optional description"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="payment-type-isActive"
+                checked={paymentTypeFormData.isActive}
+                onCheckedChange={(checked) =>
+                  setPaymentTypeFormData({
+                    ...paymentTypeFormData,
+                    isActive: checked as boolean,
+                  })
+                }
+              />
+              <Label htmlFor="payment-type-isActive">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPaymentTypeDialog({ ...paymentTypeDialog, open: false })}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitPaymentType}
+              disabled={createPaymentType.isPending || updatePaymentType.isPending}
+            >
+              {paymentTypeDialog.mode === "create" ? "Create" : "Update"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Payment Type Dialog */}
+      <ConfirmDialog
+        open={deletePaymentTypeDialog.open}
+        onOpenChange={(open) =>
+          setDeletePaymentTypeDialog({ ...deletePaymentTypeDialog, open })
+        }
+        onConfirm={handleDeletePaymentTypeConfirm}
+        title="Delete Payment Type"
+        description={`Are you sure you want to delete "${deletePaymentTypeDialog.paymentType?.name}"? This action cannot be undone.`}
+      />
     </div>
   );
 }
