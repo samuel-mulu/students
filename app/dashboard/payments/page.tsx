@@ -105,7 +105,7 @@ export default function PaymentsPage() {
     if (!selectedAcademicYear) return [];
     return generateMonthsFromAcademicYear(
       selectedAcademicYear.startDate,
-      selectedAcademicYear.endDate
+      selectedAcademicYear.endDate ?? null
     );
   }, [selectedAcademicYear]);
 

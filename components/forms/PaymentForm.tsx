@@ -15,10 +15,12 @@ import {
 } from '@/components/ui/select';
 import { CreatePaymentRequest } from '@/lib/types';
 import { useStudents } from '@/lib/hooks/use-students';
+import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
+import { formatCurrency } from '@/lib/utils/format';
 
 const paymentSchema = z.object({
   studentId: z.string().min(1, 'Student is required'),
-  amount: z.number().min(0.01, 'Amount must be greater than 0'),
+  paymentTypeId: z.string().uuid('Payment type is required'),
   month: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
   year: z.number().min(2000).max(2100),
   paymentMethod: z.string().optional(),
@@ -36,6 +38,10 @@ interface PaymentFormProps {
 export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps) {
   const { data: studentsData } = useStudents();
   const students = studentsData?.data || [];
+  const { data: paymentTypesData, isLoading: paymentTypesLoading } = usePaymentTypes();
+  const paymentTypes = Array.isArray(paymentTypesData?.data) 
+    ? paymentTypesData.data.filter(pt => pt.isActive) 
+    : [];
 
   const {
     register,
@@ -51,8 +57,15 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
     },
   });
 
+  const selectedPaymentTypeId = watch('paymentTypeId');
+  const selectedPaymentType = paymentTypes.find(pt => pt.id === selectedPaymentTypeId);
+
+  const handleFormSubmit = async (data: PaymentFormData) => {
+    await onSubmit(data as CreatePaymentRequest);
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="studentId">Student *</Label>
         <Select
@@ -74,19 +87,42 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
           <p className="text-sm text-destructive">{errors.studentId.message}</p>
         )}
       </div>
+      <div className="space-y-2">
+        <Label htmlFor="paymentType">Payment Type *</Label>
+        <Select
+          value={watch('paymentTypeId')}
+          onValueChange={(value) => setValue('paymentTypeId', value)}
+          disabled={paymentTypesLoading}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder={paymentTypesLoading ? "Loading..." : "Select payment type"} />
+          </SelectTrigger>
+          <SelectContent>
+            {paymentTypes.length === 0 ? (
+              <SelectItem value="" disabled>
+                No payment types available
+              </SelectItem>
+            ) : (
+              paymentTypes.map((paymentType) => (
+                <SelectItem key={paymentType.id} value={paymentType.id}>
+                  {paymentType.name} - {formatCurrency(paymentType.amount)}
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+        {errors.paymentTypeId && (
+          <p className="text-sm text-destructive">{errors.paymentTypeId.message}</p>
+        )}
+        {selectedPaymentType && (
+          <p className="text-sm text-muted-foreground">
+            Amount: <span className="font-semibold">{formatCurrency(selectedPaymentType.amount)}</span>
+            {selectedPaymentType.description && ` - ${selectedPaymentType.description}`}
+          </p>
+        )}
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="amount">Amount *</Label>
-          <Input
-            id="amount"
-            type="number"
-            step="0.01"
-            {...register('amount', { valueAsNumber: true })}
-          />
-          {errors.amount && (
-            <p className="text-sm text-destructive">{errors.amount.message}</p>
-          )}
-        </div>
         <div className="space-y-2">
           <Label htmlFor="month">Month *</Label>
           <Input
