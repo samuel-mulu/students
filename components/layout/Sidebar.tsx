@@ -42,12 +42,6 @@ const menuItems: MenuItem[] = [
     roles: ["OWNER"],
   },
   {
-    label: "Classes",
-    href: "/dashboard/classes",
-    icon: GraduationCap,
-    roles: ["OWNER"],
-  },
-  {
     label: "Grades",
     href: "/dashboard/grades",
     icon: GraduationCap,

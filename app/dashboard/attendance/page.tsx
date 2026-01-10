@@ -53,14 +53,18 @@ import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
+import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
 
 export default function AttendancePage() {
   const router = useRouter();
   const { hasRole } = useAuthStore();
+  const { data: activeYearData } = useActiveAcademicYear();
   
   // Role-based access control
   const canMarkAttendance = hasRole(["TEACHER"]);
   const canViewAttendance = hasRole(["TEACHER", "OWNER"]);
+  const isTeacher = hasRole(["TEACHER"]);
+  const activeYear = activeYearData?.data;
   
   // If user doesn't have permission to view, show error
   if (!canViewAttendance) {
@@ -79,7 +83,17 @@ export default function AttendancePage() {
     );
   }
   const { data: classesData } = useClasses();
-  const classes = Array.isArray(classesData?.data) ? classesData.data : [];
+  const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
+  
+  // Filter classes for teachers: show all classes from active academic year (not just assigned)
+  const classes = useMemo(() => {
+    if (isTeacher && activeYear) {
+      return allClasses.filter((cls) => cls.academicYearId === activeYear.id);
+    }
+    // For owners, show all classes
+    return allClasses;
+  }, [isTeacher, activeYear, allClasses]);
+  
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
@@ -349,11 +363,21 @@ export default function AttendancePage() {
                     <SelectValue placeholder="Select a class" />
                   </SelectTrigger>
                   <SelectContent>
-                    {classes.map((cls) => (
-                      <SelectItem key={cls.id} value={cls.id}>
-                        {cls.name}
-                      </SelectItem>
-                    ))}
+                    {classes.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        {isTeacher && activeYear
+                          ? `No classes found in active academic year (${activeYear.name})`
+                          : isTeacher && !activeYear
+                          ? "No active academic year found. Please contact administrator."
+                          : "No classes available"}
+                      </div>
+                    ) : (
+                      classes.map((cls) => (
+                        <SelectItem key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
