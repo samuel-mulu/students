@@ -4,12 +4,13 @@ import { use } from 'react';
 import { useClass, useClassSubjects, useCreateSubject, useDeleteSubject, useUpdateClass } from '@/lib/hooks/use-classes';
 import { useStudents } from '@/lib/hooks/use-students';
 import { useTeachers } from '@/lib/hooks/use-users';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { Plus, Trash2, Users, BookOpen, Calendar, GraduationCap, School, ChevronDown, ChevronUp, UserCog } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ type SubjectFormData = z.infer<typeof subjectSchema>;
 
 export default function ClassDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { user } = useAuthStore();
   const [subjectDialog, setSubjectDialog] = useState(false);
   const [subjectsExpanded, setSubjectsExpanded] = useState(true);
   const [page, setPage] = useState(1);
@@ -66,6 +68,20 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
   const deleteSubject = useDeleteSubject();
   const updateClass = useUpdateClass();
   const [assignTeacherDialog, setAssignTeacherDialog] = useState(false);
+
+  // Check permissions
+  const isOwner = user?.role === 'OWNER';
+  const isRegistrar = user?.role === 'REGISTRAR';
+  const isTeacher = user?.role === 'TEACHER';
+  const isHeadTeacher = useMemo(() => {
+    if (!classData?.data || !user?.id) return false;
+    return classData.data.headTeacherId === user.id;
+  }, [classData?.data, user?.id]);
+
+  // Teachers can manage subjects and teachers if they're the head teacher
+  // Owners and Registrars can always manage
+  const canManageSubjects = isOwner || isRegistrar || (isTeacher && isHeadTeacher);
+  const canManageTeacher = isOwner || isRegistrar || (isTeacher && isHeadTeacher);
 
   const {
     register,
@@ -211,24 +227,26 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                     {cls.headTeacher.name}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAssignTeacherDialog(true)}
-                  >
-                    Change
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRemoveHeadTeacher}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    disabled={updateClass.isPending}
-                  >
-                    Remove
-                  </Button>
-                </div>
+                {canManageTeacher && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAssignTeacherDialog(true)}
+                    >
+                      Change
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRemoveHeadTeacher}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      disabled={updateClass.isPending}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-start gap-3 p-4 bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
@@ -239,13 +257,15 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                   <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Head Teacher</p>
                   <p className="text-base font-semibold text-gray-500 mt-1">Not Assigned</p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAssignTeacherDialog(true)}
-                >
-                  Assign
-                </Button>
+                {canManageTeacher && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAssignTeacherDialog(true)}
+                  >
+                    Assign
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -273,14 +293,16 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                 <ChevronDown className="h-5 w-5 text-slate-600 ml-auto" />
               )}
             </button>
-            <Button 
-              onClick={() => setSubjectDialog(true)}
-              variant="outline"
-              size="sm"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Subject
-            </Button>
+            {canManageSubjects && (
+              <Button 
+                onClick={() => setSubjectDialog(true)}
+                variant="outline"
+                size="sm"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Subject
+              </Button>
+            )}
           </div>
         </CardHeader>
         {subjectsExpanded && (
@@ -291,14 +313,16 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
               <div className="text-center py-12">
                 <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <p className="text-sm text-muted-foreground">No subjects added yet</p>
-                <Button 
-                  onClick={() => setSubjectDialog(true)}
-                  variant="outline"
-                  className="mt-4"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add First Subject
-                </Button>
+                {canManageSubjects && (
+                  <Button 
+                    onClick={() => setSubjectDialog(true)}
+                    variant="outline"
+                    className="mt-4"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add First Subject
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -321,14 +345,16 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                         )}
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setDeleteDialog({ open: true, subjectId: subject.id })}
-                      className="ml-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {canManageSubjects && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteDialog({ open: true, subjectId: subject.id })}
+                        className="ml-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

@@ -69,7 +69,7 @@ const menuItems: MenuItem[] = [
     label: "Reports",
     href: "/dashboard/reports",
     icon: BarChart3,
-    roles: ["OWNER"],
+    roles: ["OWNER", "REGISTRAR"],
   },
   {
     label: "Users & Teachers",

@@ -173,8 +173,8 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
 
       <div className="space-y-2">
         <Label>Select Months *</Label>
-        <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[280px] overflow-y-auto">
-          <div className="grid grid-cols-3 gap-3">
+        <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[280px] overflow-y-auto overscroll-contain">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {monthOptions.map((month) => {
               const isSelected = selectedMonths.includes(month.value);
               const isPaid = paidMonthsMap.has(month.value) && paidMonthsMap.get(month.value)?.confirmed;

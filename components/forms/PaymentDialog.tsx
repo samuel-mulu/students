@@ -156,14 +156,15 @@ export function PaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
           <DialogTitle>Add Payment</DialogTitle>
           <DialogDescription>
             Record payment for {student.firstName} {student.lastName}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col flex-1 min-h-0">
+          <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="student">Student *</Label>
             <Input
@@ -223,8 +224,8 @@ export function PaymentDialog({
 
           <div className="space-y-2">
             <Label>Select Months *</Label>
-            <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[280px] overflow-y-auto">
-              <div className="grid grid-cols-3 gap-3">
+            <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[240px] overflow-y-auto overscroll-contain">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {monthOptions.map((month) => {
                   const isSelected = selectedMonths.includes(month.value);
                   const isPaid = paidMonthsMap.has(month.value) && paidMonthsMap.get(month.value)?.confirmed;
@@ -340,8 +341,9 @@ export function PaymentDialog({
             <Label htmlFor="notes">Notes</Label>
             <Input id="notes" {...register('notes')} placeholder="Optional notes" />
           </div>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 flex-shrink-0 border-t bg-muted/50">
             <Button
               type="button"
               variant="outline"

@@ -77,14 +77,14 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
   if (isLoading) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[700px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
             <DialogTitle>Generating Receipt</DialogTitle>
             <DialogDescription>
               Please wait while we generate your receipt...
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center justify-center py-8">
+          <div className="flex items-center justify-center py-8 px-6">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         </DialogContent>
@@ -114,15 +114,16 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
           <DialogTitle>Payment Receipt</DialogTitle>
           <DialogDescription>
             Receipt #{receipt.receiptNumber}
           </DialogDescription>
         </DialogHeader>
 
-        <div ref={printRef} className="receipt-container">
+        <div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">
+          <div ref={printRef} className="receipt-container">
           <div className="receipt-header">
             <h1 className="text-2xl font-bold">Payment Receipt</h1>
             <p className="text-sm text-muted-foreground">School Management System</p>
@@ -222,9 +223,10 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
               Thank you for your payment
             </p>
           </div>
+          </div>
         </div>
 
-        <DialogFooter className="no-print">
+        <DialogFooter className="no-print px-6 py-4 flex-shrink-0 border-t bg-muted/50">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
