@@ -81,6 +81,29 @@ export const generateMonthsFromAcademicYear = (
 };
 
 /**
+ * Generate all 12 months for a given year
+ * Returns array of objects with { value: 'YYYY-MM', label: 'Month Year' }
+ */
+export const generateAllMonths = (year?: number): Array<{ value: string; label: string }> => {
+  try {
+    const targetYear = year || new Date().getFullYear();
+    const months: Array<{ value: string; label: string }> = [];
+
+    for (let month = 0; month < 12; month++) {
+      const date = new Date(targetYear, month, 1);
+      months.push({
+        value: format(date, "yyyy-MM"),
+        label: format(date, "MMMM yyyy"),
+      });
+    }
+
+    return months;
+  } catch {
+    return [];
+  }
+};
+
+/**
  * Check if a student has a payment for a specific month
  */
 export const hasPaymentForMonth = (

@@ -19,9 +19,11 @@ interface ReceiptDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   payment: Payment | null;
+  payments?: Payment[]; // For bulk payments
+  isLoading?: boolean;
 }
 
-export function ReceiptDialog({ open, onOpenChange, payment }: ReceiptDialogProps) {
+export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading }: ReceiptDialogProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
@@ -32,6 +34,10 @@ export function ReceiptDialog({ open, onOpenChange, payment }: ReceiptDialogProp
     if (!printWindow) return;
 
     const printContent = printRef.current.innerHTML;
+    const receiptNumber = payments && payments.length > 0 
+      ? payments[0]?.receipt?.receiptNumber || 'Payment Receipt'
+      : payment?.receipt?.receiptNumber || 'Payment Receipt';
+    
     const printStyles = `
       <style>
         @media print {
@@ -53,7 +59,7 @@ export function ReceiptDialog({ open, onOpenChange, payment }: ReceiptDialogProp
     printWindow.document.write(`
       <html>
         <head>
-          <title>Receipt - ${payment?.receipt?.receiptNumber || 'Payment Receipt'}</title>
+          <title>Receipt - ${receiptNumber}</title>
           ${printStyles}
         </head>
         <body>
@@ -67,12 +73,44 @@ export function ReceiptDialog({ open, onOpenChange, payment }: ReceiptDialogProp
     printWindow.close();
   };
 
-  if (!payment || !payment.receipt) {
+  // Show loading state
+  if (isLoading) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[700px]">
+          <DialogHeader>
+            <DialogTitle>Generating Receipt</DialogTitle>
+            <DialogDescription>
+              Please wait while we generate your receipt...
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // For bulk payments, use the payments array; otherwise use single payment
+  const isBulkPayment = payments && payments.length > 1;
+  const displayPayment = payment || (payments && payments[0]);
+  
+  if (!displayPayment || !displayPayment.receipt) {
     return null;
   }
 
-  const receipt = payment.receipt;
-  const student = payment.student;
+  const receipt = displayPayment.receipt;
+  const student = displayPayment.student;
+  
+  // Calculate total amount and get all months for bulk payments
+  const totalAmount = isBulkPayment && payments
+    ? payments.reduce((sum, p) => sum + p.amount, 0)
+    : displayPayment.amount;
+  
+  const paidMonths = isBulkPayment && payments
+    ? payments.map(p => formatMonthYear(p.month, p.year)).join(', ')
+    : formatMonthYear(displayPayment.month, displayPayment.year);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -122,41 +160,58 @@ export function ReceiptDialog({ open, onOpenChange, payment }: ReceiptDialogProp
                 </>
               )}
 
-              {payment.paymentType && (
+              {displayPayment.paymentType && (
                 <div className="receipt-row">
                   <span className="font-medium text-muted-foreground">Payment Type:</span>
-                  <span className="font-semibold">{payment.paymentType.name}</span>
+                  <span className="font-semibold">{displayPayment.paymentType.name}</span>
                 </div>
               )}
 
-              <div className="receipt-row">
-                <span className="font-medium text-muted-foreground">Amount:</span>
-                <span className="font-semibold text-lg">{formatCurrency(payment.amount)}</span>
-              </div>
+              {isBulkPayment && payments && payments.length > 1 && (
+                <>
+                  <div className="receipt-row">
+                    <span className="font-medium text-muted-foreground">Number of Payments:</span>
+                    <span className="font-semibold">{payments.length} months</span>
+                  </div>
+                  <div className="receipt-row">
+                    <span className="font-medium text-muted-foreground">Paid Months:</span>
+                    <span className="font-semibold text-sm">{paidMonths}</span>
+                  </div>
+                </>
+              )}
 
               <div className="receipt-row">
-                <span className="font-medium text-muted-foreground">Payment Period:</span>
-                <span>{formatMonthYear(payment.month, payment.year)}</span>
+                <span className="font-medium text-muted-foreground">
+                  {isBulkPayment ? 'Total Amount:' : 'Amount:'}
+                </span>
+                <span className="font-semibold text-lg">{formatCurrency(totalAmount)}</span>
               </div>
 
-              {payment.paymentMethod && (
+              {!isBulkPayment && (
+                <div className="receipt-row">
+                  <span className="font-medium text-muted-foreground">Payment Period:</span>
+                  <span>{formatMonthYear(displayPayment.month, displayPayment.year)}</span>
+                </div>
+              )}
+
+              {displayPayment.paymentMethod && (
                 <div className="receipt-row">
                   <span className="font-medium text-muted-foreground">Payment Method:</span>
-                  <span className="capitalize">{payment.paymentMethod.replace('_', ' ')}</span>
+                  <span className="capitalize">{displayPayment.paymentMethod.replace('_', ' ')}</span>
                 </div>
               )}
 
-              {payment.paymentDate && (
+              {displayPayment.paymentDate && (
                 <div className="receipt-row">
                   <span className="font-medium text-muted-foreground">Payment Date:</span>
-                  <span>{formatDate(payment.paymentDate)}</span>
+                  <span>{formatDate(displayPayment.paymentDate)}</span>
                 </div>
               )}
 
-              {payment.notes && (
+              {displayPayment.notes && (
                 <div className="mt-4 pt-4 border-t">
                   <p className="font-medium text-muted-foreground mb-2">Notes:</p>
-                  <p className="text-sm">{payment.notes}</p>
+                  <p className="text-sm">{displayPayment.notes}</p>
                 </div>
               )}
             </CardContent>

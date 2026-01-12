@@ -39,7 +39,7 @@ const menuItems: MenuItem[] = [
     label: "Students",
     href: "/dashboard/students",
     icon: Users,
-    roles: ["OWNER"],
+    roles: ["OWNER", "REGISTRAR"],
   },
   {
     label: "Grades",

@@ -423,7 +423,21 @@ export interface CreatePaymentRequest {
   amount?: number; // Optional for backward compatibility
 }
 
+export interface CreateBulkPaymentRequest {
+  studentId: string;
+  paymentTypeId: string;
+  months: string[]; // Array of YYYY-MM format
+  paymentMethod?: string;
+  notes?: string;
+}
+
 export interface ConfirmPaymentRequest {
+  paymentDate?: string;
+  paymentMethod?: string;
+}
+
+export interface ConfirmBulkPaymentsRequest {
+  paymentIds: string[];
   paymentDate?: string;
   paymentMethod?: string;
 }

@@ -13,16 +13,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CreatePaymentRequest } from '@/lib/types';
+import { CreatePaymentRequest, CreateBulkPaymentRequest } from '@/lib/types';
 import { useStudents } from '@/lib/hooks/use-students';
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
-import { formatCurrency } from '@/lib/utils/format';
+import { usePayments } from '@/lib/hooks/use-payments';
+import { formatCurrency, generateAllMonths } from '@/lib/utils/format';
+import { Checkbox } from '@/components/ui/checkbox';
+import { CheckCircle2, Check, Loader2 } from 'lucide-react';
+import { useMemo } from 'react';
 
 const paymentSchema = z.object({
   studentId: z.string().min(1, 'Student is required'),
   paymentTypeId: z.string().uuid('Payment type is required'),
-  month: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
-  year: z.number().min(2000).max(2100),
+  months: z.array(z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format')).min(1, 'At least one month must be selected'),
   paymentMethod: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -30,7 +33,7 @@ const paymentSchema = z.object({
 type PaymentFormData = z.infer<typeof paymentSchema>;
 
 interface PaymentFormProps {
-  onSubmit: (data: CreatePaymentRequest) => Promise<void>;
+  onSubmit: (data: CreatePaymentRequest | CreateBulkPaymentRequest) => Promise<void>;
   onCancel?: () => void;
   isLoading?: boolean;
 }
@@ -43,6 +46,10 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
     ? paymentTypesData.data.filter(pt => pt.isActive) 
     : [];
 
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentYear = new Date().getFullYear();
+  const monthOptions = generateAllMonths(currentYear);
+
   const {
     register,
     handleSubmit,
@@ -52,17 +59,59 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
   } = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
-      year: new Date().getFullYear(),
-      month: new Date().toISOString().slice(0, 7),
+      months: [currentMonth],
+      paymentMethod: '',
+      notes: '',
     },
   });
 
+  const selectedStudentId = watch('studentId');
+  
+  // Fetch existing payments for the selected student
+  const { data: paymentsData } = usePayments(
+    selectedStudentId ? { studentId: selectedStudentId } : undefined
+  );
+  const existingPayments = Array.isArray(paymentsData?.data) ? paymentsData.data : [];
+
+  // Create a map of paid months (month value -> payment status)
+  const paidMonthsMap = useMemo(() => {
+    const map = new Map<string, { status: string; confirmed: boolean }>();
+    existingPayments.forEach((payment) => {
+      map.set(payment.month, {
+        status: payment.status,
+        confirmed: payment.status === 'confirmed',
+      });
+    });
+    return map;
+  }, [existingPayments]);
+
   const selectedPaymentTypeId = watch('paymentTypeId');
   const selectedPaymentType = paymentTypes.find(pt => pt.id === selectedPaymentTypeId);
+  const selectedMonths = watch('months') || [];
+
+  const handleMonthToggle = (monthValue: string) => {
+    // Don't allow toggling already paid (confirmed) months
+    const isPaid = paidMonthsMap.has(monthValue) && paidMonthsMap.get(monthValue)?.confirmed;
+    if (isPaid) {
+      return; // Prevent selecting already paid months
+    }
+
+    // Allow selecting pending months (to confirm them) and unpaid months
+    const currentMonths = watch('months') || [];
+    if (currentMonths.includes(monthValue)) {
+      setValue('months', currentMonths.filter(m => m !== monthValue), { shouldValidate: true });
+    } else {
+      setValue('months', [...currentMonths, monthValue], { shouldValidate: true });
+    }
+  };
 
   const handleFormSubmit = async (data: PaymentFormData) => {
-    await onSubmit(data as CreatePaymentRequest);
+    await onSubmit(data as CreateBulkPaymentRequest);
   };
+
+  const totalAmount = selectedPaymentType && selectedMonths.length > 0
+    ? selectedPaymentType.amount * selectedMonths.length
+    : 0;
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
@@ -99,9 +148,9 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
           </SelectTrigger>
           <SelectContent>
             {paymentTypes.length === 0 ? (
-              <SelectItem value="" disabled>
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">
                 No payment types available
-              </SelectItem>
+              </div>
             ) : (
               paymentTypes.map((paymentType) => (
                 <SelectItem key={paymentType.id} value={paymentType.id}>
@@ -116,43 +165,111 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
         )}
         {selectedPaymentType && (
           <p className="text-sm text-muted-foreground">
-            Amount: <span className="font-semibold">{formatCurrency(selectedPaymentType.amount)}</span>
+            Amount per Month: <span className="font-semibold">{formatCurrency(selectedPaymentType.amount)}</span>
             {selectedPaymentType.description && ` - ${selectedPaymentType.description}`}
           </p>
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="month">Month *</Label>
-          <Input
-            id="month"
-            type="month"
-            {...register('month', {
-              onChange: (e) => {
-                const [yearFromMonth] = e.target.value.split('-');
-                if (yearFromMonth) {
-                  setValue('year', parseInt(yearFromMonth));
-                }
-              },
+      <div className="space-y-2">
+        <Label>Select Months *</Label>
+        <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[280px] overflow-y-auto">
+          <div className="grid grid-cols-3 gap-3">
+            {monthOptions.map((month) => {
+              const isSelected = selectedMonths.includes(month.value);
+              const isPaid = paidMonthsMap.has(month.value) && paidMonthsMap.get(month.value)?.confirmed;
+              const isPending = paidMonthsMap.has(month.value) && !paidMonthsMap.get(month.value)?.confirmed;
+              
+                  return (
+                    <div
+                      key={month.value}
+                      className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all ${
+                        isPaid 
+                          ? 'bg-green-50 border-green-200 cursor-not-allowed' 
+                          : isPending && isSelected
+                          ? 'bg-yellow-100 border-yellow-300 hover:bg-yellow-200 cursor-pointer'
+                          : isPending
+                          ? 'bg-yellow-50 border-yellow-200 hover:border-yellow-300 cursor-pointer'
+                          : isSelected
+                          ? 'bg-blue-50 border-blue-300 hover:bg-blue-100 cursor-pointer'
+                          : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
+                      }`}
+                      onClick={() => !isPaid && handleMonthToggle(month.value)}
+                    >
+                      {isPaid ? (
+                        <CheckCircle2 className="h-6 w-6 text-green-700 flex-shrink-0" fill="currentColor" />
+                      ) : (
+                        <div className="relative h-5 w-5 flex items-center justify-center">
+                          {isSelected && isLoading ? (
+                            <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                          ) : (
+                            <>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleMonthToggle(month.value)}
+                                disabled={isPaid || isLoading}
+                                className={`h-5 w-5 rounded-sm border-2 cursor-pointer appearance-none transition-all ${
+                                  isSelected 
+                                    ? 'bg-blue-600 border-blue-600' 
+                                    : 'bg-white border-gray-300 hover:border-blue-500'
+                                } ${isPaid || isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              />
+                              {isSelected && (
+                                <Check className="absolute h-4 w-4 text-white pointer-events-none left-0.5 top-0.5" strokeWidth={3} />
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex-1 flex flex-col">
+                        <Label 
+                          className={`text-sm font-medium ${
+                            isPaid ? 'cursor-not-allowed text-gray-600' : 'cursor-pointer'
+                          }`}
+                        >
+                          {month.label}
+                        </Label>
+                        {isPaid && (
+                          <span className="text-xs text-green-600 font-semibold mt-0.5">✓ Paid</span>
+                        )}
+                        {isPending && (
+                          <span className="text-xs text-yellow-600 font-semibold mt-0.5">
+                            {isSelected ? '⏳ Will Confirm' : '⏳ Pending'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
             })}
-          />
-          {errors.month && (
-            <p className="text-sm text-destructive">{errors.month.message}</p>
-          )}
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="year">Year *</Label>
-          <Input
-            id="year"
-            type="number"
-            {...register('year', { valueAsNumber: true })}
-            readOnly
-          />
-          {errors.year && (
-            <p className="text-sm text-destructive">{errors.year.message}</p>
-          )}
+        {errors.months && (
+          <p className="text-sm text-destructive">{errors.months.message}</p>
+        )}
+        {selectedMonths.length > 0 && (
+          <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+            <CheckCircle2 className="h-4 w-4 text-blue-600" />
+            <p className="text-sm font-medium text-blue-900">
+              {selectedMonths.length} month{selectedMonths.length !== 1 ? 's' : ''} selected
+            </p>
+          </div>
+        )}
+      </div>
+
+      {selectedPaymentType && selectedMonths.length > 0 && (
+        <div className="space-y-2 p-3 bg-muted rounded-md">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium">Total Amount:</span>
+            <span className="text-lg font-bold">{formatCurrency(totalAmount)}</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {selectedPaymentType.amount} × {selectedMonths.length} month{selectedMonths.length !== 1 ? 's' : ''}
+          </p>
         </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="paymentMethod">Payment Method</Label>
           <Select
@@ -180,8 +297,8 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Creating...' : 'Create Payment'}
+        <Button type="submit" disabled={isLoading || selectedMonths.length === 0}>
+          {isLoading ? 'Creating...' : `Create Payment${selectedMonths.length > 1 ? `s (${selectedMonths.length})` : ''}`}
         </Button>
       </div>
     </form>

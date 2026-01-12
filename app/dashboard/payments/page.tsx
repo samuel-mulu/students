@@ -5,7 +5,7 @@ import { useStudents } from '@/lib/hooks/use-students';
 import { useClasses } from '@/lib/hooks/use-classes';
 import { useAcademicYears, useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
 import { useGrades } from '@/lib/hooks/use-grades';
-import { usePayments, useCreatePayment, useConfirmPayment } from '@/lib/hooks/use-payments';
+import { usePayments, useCreatePayment, useCreateBulkPayment, useConfirmPayment, useConfirmBulkPayments } from '@/lib/hooks/use-payments';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -31,8 +31,8 @@ import { ErrorState } from '@/components/shared/ErrorState';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PaymentDialog } from '@/components/forms/PaymentDialog';
 import { ReceiptDialog } from '@/components/shared/ReceiptDialog';
-import { Student, Payment, CreatePaymentRequest } from '@/lib/types';
-import { generateMonthsFromAcademicYear, hasPaymentForMonth } from '@/lib/utils/format';
+import { Student, Payment, CreatePaymentRequest, CreateBulkPaymentRequest } from '@/lib/types';
+import { generateAllMonths, hasPaymentForMonth } from '@/lib/utils/format';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { CheckCircle2, DollarSign, FileText } from 'lucide-react';
 
@@ -59,9 +59,13 @@ export default function PaymentsPage() {
   const [receiptDialog, setReceiptDialog] = useState<{
     open: boolean;
     payment: Payment | null;
+    payments?: Payment[];
+    isLoading?: boolean;
   }>({
     open: false,
     payment: null,
+    payments: undefined,
+    isLoading: false,
   });
 
   // Data hooks
@@ -100,22 +104,17 @@ export default function PaymentsPage() {
     return academicYears.find((year) => year.id === academicYearFilter) || null;
   }, [academicYears, academicYearFilter]);
 
-  // Generate months from selected academic year
+  // Generate all 12 months for current year (allow selecting future months)
   const monthOptions = useMemo(() => {
-    if (!selectedAcademicYear) return [];
-    return generateMonthsFromAcademicYear(
-      selectedAcademicYear.startDate,
-      selectedAcademicYear.endDate ?? null
-    );
-  }, [selectedAcademicYear]);
+    return generateAllMonths(new Date().getFullYear());
+  }, []);
 
   // Set default month when months are generated
   useEffect(() => {
     if (monthOptions.length > 0 && !monthFilter) {
-      // Default to current month if within academic year, otherwise first month
+      // Default to current month
       const currentMonth = new Date().toISOString().slice(0, 7);
-      const hasCurrentMonth = monthOptions.some((m) => m.value === currentMonth);
-      setMonthFilter(hasCurrentMonth ? currentMonth : monthOptions[0].value);
+      setMonthFilter(currentMonth);
     }
   }, [monthOptions, monthFilter]);
 
@@ -156,7 +155,9 @@ export default function PaymentsPage() {
   const { data: paymentsData, isLoading: paymentsLoading, refetch: refetchPayments } = usePayments();
 
   const createPayment = useCreatePayment();
+  const createBulkPayment = useCreateBulkPayment();
   const confirmPayment = useConfirmPayment();
+  const confirmBulkPayments = useConfirmBulkPayments();
 
   const students = Array.isArray(studentsData?.data) ? studentsData.data : [];
   const payments = Array.isArray(paymentsData?.data) ? paymentsData.data : [];
@@ -280,37 +281,93 @@ export default function PaymentsPage() {
     return { paid: false };
   };
 
-  const handleCreatePayment = async (data: CreatePaymentRequest) => {
+  const handleCreatePayment = async (data: CreatePaymentRequest | CreateBulkPaymentRequest) => {
     try {
-      // Create payment
-      const payment = await createPayment.mutateAsync(data);
-      // Auto-confirm the payment immediately since it's being created as paid
-      // This will automatically generate receipt in the backend
-      if (payment?.id) {
-        const confirmedPayment = await confirmPayment.mutateAsync({ 
-          id: payment.id,
-          data: {
-            paymentDate: new Date().toISOString(),
-            paymentMethod: data.paymentMethod || 'cash',
-          }
+      // Check if it's a bulk payment request (has months array)
+      if ('months' in data && Array.isArray(data.months)) {
+        // Handle bulk payment (works for both single and multiple months)
+        const bulkData = data as CreateBulkPaymentRequest;
+        const payments = await createBulkPayment.mutateAsync(bulkData);
+        
+        // Show loading state for receipt
+        setReceiptDialog({ 
+          open: true, 
+          payment: null, 
+          payments: undefined, 
+          isLoading: true 
+        });
+        
+        // Auto-confirm all payments with one shared receipt
+        const paymentIds = payments.map(p => p.id);
+        const confirmResult = await confirmBulkPayments.mutateAsync({
+          paymentIds,
+          paymentDate: new Date().toISOString(),
+          paymentMethod: bulkData.paymentMethod || 'cash',
         });
         
         // Close payment dialog
         setPaymentDialog({ open: false, student: null });
         
         // Refetch payments and students to update the UI
-        // The mutations already invalidate queries, but we refetch to ensure UI updates
         await Promise.all([refetchPayments(), refetchStudents()]);
         
-        // Show receipt dialog after payment is confirmed
-        // The confirmedPayment should already include receipt from backend
-        if (confirmedPayment?.receipt) {
-          setReceiptDialog({ open: true, payment: confirmedPayment });
+        // Show receipt dialog with all payments and shared receipt
+        if (confirmResult.receipt && confirmResult.payments.length > 0) {
+          setReceiptDialog({ 
+            open: true, 
+            payment: confirmResult.payments[0],
+            payments: confirmResult.payments.length > 1 ? confirmResult.payments : undefined,
+            isLoading: false
+          });
+        } else {
+          setReceiptDialog({ open: false, payment: null, isLoading: false });
+        }
+      } else {
+        // Handle single payment (backward compatibility for old PaymentForm)
+        const singleData = data as CreatePaymentRequest;
+        const payment = await createPayment.mutateAsync(singleData);
+        
+        // Show loading state for receipt
+        setReceiptDialog({ 
+          open: true, 
+          payment: null, 
+          payments: undefined, 
+          isLoading: true 
+        });
+        
+        // Auto-confirm the payment immediately since it's being created as paid
+        if (payment?.id) {
+          const confirmedPayment = await confirmPayment.mutateAsync({ 
+            id: payment.id,
+            data: {
+              paymentDate: new Date().toISOString(),
+              paymentMethod: singleData.paymentMethod || 'cash',
+            }
+          });
+          
+          // Close payment dialog
+          setPaymentDialog({ open: false, student: null });
+          
+          // Refetch payments and students to update the UI
+          await Promise.all([refetchPayments(), refetchStudents()]);
+          
+          // Show receipt dialog after payment is confirmed
+          if (confirmedPayment?.receipt) {
+            setReceiptDialog({ 
+              open: true, 
+              payment: confirmedPayment,
+              payments: undefined,
+              isLoading: false
+            });
+          } else {
+            setReceiptDialog({ open: false, payment: null, isLoading: false });
+          }
         }
       }
     } catch (error) {
       // Error is already handled by the mutation hooks
       console.error('Error creating/confirming payment:', error);
+      setReceiptDialog({ open: false, payment: null, isLoading: false });
     }
   };
 
@@ -419,7 +476,7 @@ export default function PaymentsPage() {
             <Select
               value={monthFilter}
               onValueChange={setMonthFilter}
-              disabled={!selectedAcademicYear || monthOptions.length === 0}
+              disabled={monthOptions.length === 0}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select month" />
@@ -510,25 +567,30 @@ export default function PaymentsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {paymentStatus.paid && paymentStatus.payment?.receipt ? (
+                        {paymentStatus.paid && paymentStatus.payment?.receipt && (
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setReceiptDialog({ open: true, payment: paymentStatus.payment! })}
+                            onClick={() => setReceiptDialog({ 
+                              open: true, 
+                              payment: paymentStatus.payment!,
+                              payments: undefined,
+                              isLoading: false
+                            })}
                             title="View Receipt"
                           >
                             <FileText className="h-4 w-4 text-green-600" />
                           </Button>
-                        ) : (
-                          monthFilter && (
-                            <Button
-                              size="sm"
-                              onClick={() => setPaymentDialog({ open: true, student })}
-                            >
-                              <DollarSign className="mr-1 h-4 w-4" />
-                              Pay
-                            </Button>
-                          )
+                        )}
+                        {monthFilter && (
+                          <Button
+                            size="sm"
+                            variant={paymentStatus.paid ? "outline" : "default"}
+                            onClick={() => setPaymentDialog({ open: true, student })}
+                          >
+                            <DollarSign className="mr-1 h-4 w-4" />
+                            Pay
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -548,13 +610,20 @@ export default function PaymentsPage() {
         academicYearEndDate={selectedAcademicYear?.endDate || null}
         defaultMonth={monthFilter}
         onSubmit={handleCreatePayment}
-        isLoading={createPayment.isPending || confirmPayment.isPending}
+        isLoading={createPayment.isPending || createBulkPayment.isPending || confirmPayment.isPending || confirmBulkPayments.isPending}
       />
 
       <ReceiptDialog
         open={receiptDialog.open}
-        onOpenChange={(open) => setReceiptDialog({ open, payment: receiptDialog.payment })}
+        onOpenChange={(open) => setReceiptDialog({ 
+          open, 
+          payment: receiptDialog.payment,
+          payments: receiptDialog.payments,
+          isLoading: false
+        })}
         payment={receiptDialog.payment}
+        payments={receiptDialog.payments}
+        isLoading={receiptDialog.isLoading}
       />
     </div>
   );

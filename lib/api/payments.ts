@@ -2,6 +2,7 @@ import apiClient from './client';
 import {
   Payment,
   CreatePaymentRequest,
+  CreateBulkPaymentRequest,
   ConfirmPaymentRequest,
   Receipt
 } from '@/lib/types';
@@ -21,6 +22,11 @@ export const paymentsApi = {
   create: async (data: CreatePaymentRequest): Promise<Payment> => {
     const response = await apiClient.post<Payment>('/api/payments', data);
     return response.data;
+  },
+
+  createBulk: async (data: CreateBulkPaymentRequest): Promise<Payment[]> => {
+    const response = await apiClient.post<{ payments: Payment[] }>('/api/payments/bulk', data);
+    return response.data.payments || [];
   },
 
   getAll: async (params?: {
@@ -50,18 +56,26 @@ export const paymentsApi = {
     return response.data;
   },
 
+  confirmBulk: async (paymentIds: string[], data?: ConfirmPaymentRequest): Promise<{ receipt: Receipt; payments: Payment[] }> => {
+    const response = await apiClient.post<{ receipt: Receipt; payments: Payment[] }>('/api/payments/bulk/confirm', {
+      paymentIds,
+      ...data,
+    });
+    return response.data;
+  },
+
   generateReceipt: async (paymentId: string): Promise<Receipt> => {
     const response = await apiClient.post<Receipt>(`/api/payments/${paymentId}/receipt`);
     return response.data;
   },
 
-  getReceiptById: async (id: string): Promise<Receipt> => {
-    const response = await apiClient.get<Receipt>(`/api/payments/receipts/${id}`);
+  getReceiptById: async (id: string): Promise<{ receipt: Receipt; payments: Payment[] }> => {
+    const response = await apiClient.get<{ receipt: Receipt; payments: Payment[] }>(`/api/payments/receipts/${id}`);
     return response.data;
   },
 
-  getReceiptByNumber: async (receiptNumber: string): Promise<Receipt> => {
-    const response = await apiClient.get<Receipt>(`/api/payments/receipts/number/${receiptNumber}`);
+  getReceiptByNumber: async (receiptNumber: string): Promise<{ receipt: Receipt; payments: Payment[] }> => {
+    const response = await apiClient.get<{ receipt: Receipt; payments: Payment[] }>(`/api/payments/receipts/number/${receiptNumber}`);
     return response.data;
   },
 

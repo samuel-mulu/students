@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { paymentsApi } from '@/lib/api/payments';
-import { CreatePaymentRequest, ConfirmPaymentRequest } from '@/lib/types';
+import { CreatePaymentRequest, CreateBulkPaymentRequest, ConfirmPaymentRequest, ConfirmBulkPaymentsRequest } from '@/lib/types';
 import { toast } from 'sonner';
 
 export function usePayments(params?: {
@@ -58,6 +58,33 @@ export function useCreatePayment() {
   });
 }
 
+export function useCreateBulkPayment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateBulkPaymentRequest) => paymentsApi.createBulk(data),
+    onSuccess: (payments) => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+      toast.success("Payments Created", {
+        description: `Successfully created ${payments.length} payment${payments.length !== 1 ? 's' : ''} totaling $${totalAmount.toFixed(2)}.`,
+        duration: 3000,
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.errorMessage || 
+                          error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message ||
+                          "Failed to create payments. Please try again.";
+      toast.error("Create Payments Failed", {
+        description: errorMessage,
+        duration: 5000,
+      });
+    },
+  });
+}
+
 export function useConfirmPayment() {
   const queryClient = useQueryClient();
 
@@ -79,6 +106,37 @@ export function useConfirmPayment() {
                           error.message ||
                           "Failed to confirm payment. Please try again.";
       toast.error("Confirm Payment Failed", {
+        description: errorMessage,
+        duration: 5000,
+      });
+    },
+  });
+}
+
+export function useConfirmBulkPayments() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: ConfirmBulkPaymentsRequest) =>
+      paymentsApi.confirmBulk(data.paymentIds, {
+        paymentDate: data.paymentDate,
+        paymentMethod: data.paymentMethod,
+      }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      const totalAmount = result.payments.reduce((sum, p) => sum + p.amount, 0);
+      toast.success("Payments Confirmed", {
+        description: `Successfully confirmed ${result.payments.length} payment${result.payments.length !== 1 ? 's' : ''} with receipt ${result.receipt.receiptNumber}. Total: $${totalAmount.toFixed(2)}`,
+        duration: 3000,
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.errorMessage || 
+                          error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message ||
+                          "Failed to confirm payments. Please try again.";
+      toast.error("Confirm Payments Failed", {
         description: errorMessage,
         duration: 5000,
       });
