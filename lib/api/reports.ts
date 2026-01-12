@@ -119,6 +119,26 @@ export interface StudentReportResponse {
   }>;
 }
 
+export interface ClassReportResponse {
+  class: {
+    id: string;
+    name: string;
+  };
+  students: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    classStatus: string;
+  }>;
+  attendance: {
+    averageAttendanceRate: number;
+  };
+  marks: {
+    averageScore: number;
+  };
+}
+
 export const reportsApi = {
   getPaymentReports: async (params?: PaymentReportsParams): Promise<PaymentReportsResponse> => {
     const response = await apiClient.get<PaymentReportsResponse>('/api/reports/payments', { params });
@@ -131,5 +151,21 @@ export const reportsApi = {
   getStudentReport: async (studentId: string): Promise<StudentReportResponse> => {
     const response = await apiClient.get<StudentReportResponse>(`/api/reports/student/${studentId}`);
     return response.data;
+  },
+  getClassReport: async (classId: string, term?: string): Promise<ClassReportResponse> => {
+    const params = term ? { term } : undefined;
+    const response = await apiClient.get<any>(`/api/reports/class/${classId}`, { params });
+    const backendData = response.data;
+    // Transform backend response to match frontend expectations
+    return {
+      class: backendData.class,
+      students: backendData.students || [],
+      attendance: {
+        averageAttendanceRate: backendData.attendanceSummary?.averageAttendanceRate || 0,
+      },
+      marks: {
+        averageScore: backendData.academicSummary?.averageScore || 0,
+      },
+    };
   },
 };

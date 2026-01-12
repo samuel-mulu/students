@@ -32,3 +32,14 @@ export function useStudentReport(studentId: string) {
     enabled: !!studentId, // Only fetch if studentId is provided
   });
 }
+
+export function useClassReport(classId: string, term?: string) {
+  return useQuery({
+    queryKey: ['classReport', classId, term],
+    queryFn: async () => {
+      const data = await reportsApi.getClassReport(classId, term);
+      return { data };
+    },
+    enabled: !!classId, // Only fetch if classId is provided
+  });
+}
