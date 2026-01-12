@@ -1,17 +1,53 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCreatePayment } from '@/lib/hooks/use-payments';
+import { useCreateBulkPayment, useConfirmBulkPayments } from '@/lib/hooks/use-payments';
 import { PaymentForm } from '@/components/forms/PaymentForm';
-import { CreatePaymentRequest } from '@/lib/types';
+import { CreatePaymentRequest, CreateBulkPaymentRequest } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function NewPaymentPage() {
   const router = useRouter();
-  const createPayment = useCreatePayment();
+  const createBulkPayment = useCreateBulkPayment();
+  const confirmBulkPayments = useConfirmBulkPayments();
 
-  const handleSubmit = async (data: CreatePaymentRequest) => {
-    await createPayment.mutateAsync(data);
+  const handleSubmit = async (data: CreatePaymentRequest | CreateBulkPaymentRequest) => {
+    // Check if it's a bulk payment request (has months array)
+    if ('months' in data && Array.isArray(data.months)) {
+      // Handle bulk payment
+      const bulkData = data as CreateBulkPaymentRequest;
+      const payments = await createBulkPayment.mutateAsync(bulkData);
+      
+      // Auto-confirm all payments with one shared receipt
+      const paymentIds = payments.map(p => p.id);
+      await confirmBulkPayments.mutateAsync({
+        paymentIds,
+        paymentDate: new Date().toISOString(),
+        paymentMethod: bulkData.paymentMethod || 'cash',
+      });
+    } else {
+      // Handle single payment (backward compatibility)
+      // Convert to bulk format for consistency
+      const singleData = data as CreatePaymentRequest;
+      const month = `${singleData.year}-${String(singleData.month).padStart(2, '0')}`;
+      const bulkData: CreateBulkPaymentRequest = {
+        studentId: singleData.studentId,
+        paymentTypeId: singleData.paymentTypeId,
+        months: [month],
+        paymentMethod: singleData.paymentMethod,
+        notes: singleData.notes,
+      };
+      const payments = await createBulkPayment.mutateAsync(bulkData);
+      
+      // Auto-confirm
+      const paymentIds = payments.map(p => p.id);
+      await confirmBulkPayments.mutateAsync({
+        paymentIds,
+        paymentDate: new Date().toISOString(),
+        paymentMethod: singleData.paymentMethod || 'cash',
+      });
+    }
+    
     router.push('/dashboard/payments');
   };
 
@@ -32,7 +68,7 @@ export default function NewPaymentPage() {
           <PaymentForm
             onSubmit={handleSubmit}
             onCancel={() => router.back()}
-            isLoading={createPayment.isPending}
+            isLoading={createBulkPayment.isPending || confirmBulkPayments.isPending}
           />
         </CardContent>
       </Card>
