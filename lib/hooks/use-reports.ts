@@ -1,25 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { reportsApi } from '@/lib/api/reports';
+import { reportsApi, PaymentReportsParams } from '@/lib/api/reports';
 
-export function useStudentReport(studentId: string) {
+export function usePaymentReports(params?: PaymentReportsParams) {
   return useQuery({
-    queryKey: ['reports', 'student', studentId],
+    queryKey: ['paymentReports', params],
     queryFn: async () => {
-      const report = await reportsApi.getStudentReport(studentId);
-      return { data: report };
+      const data = await reportsApi.getPaymentReports(params);
+      return { data };
     },
-    enabled: !!studentId,
   });
 }
-
-export function useClassReport(classId: string) {
-  return useQuery({
-    queryKey: ['reports', 'class', classId],
-    queryFn: async () => {
-      const report = await reportsApi.getClassReport(classId);
-      return { data: report };
-    },
-    enabled: !!classId,
-  });
-}
-

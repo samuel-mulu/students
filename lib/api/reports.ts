@@ -1,21 +1,55 @@
 import apiClient from './client';
-import { StudentReport, ClassReport, Payment, ApiResponse } from '@/lib/types';
+
+export interface PaymentReportsParams {
+  academicYearId?: string;
+  paymentTypeId?: string;
+  month?: string; // YYYY-MM format
+  registrarId?: string;
+}
+
+export interface PaymentReportsSummary {
+  totalRevenue: number;
+  monthlyRevenue: number;
+  paymentCount: number;
+  confirmedPaymentCount: number;
+  totalStudents: number;
+  paidStudents: number;
+  paymentProgress: number; // Percentage
+}
+
+export interface MonthlyBreakdown {
+  month: string;
+  amount: number;
+  count: number;
+}
+
+export interface PaymentTypeReport {
+  paymentTypeId: string;
+  paymentTypeName: string;
+  totalAmount: number;
+  monthlyBreakdown: MonthlyBreakdown[];
+}
+
+export interface MonthReport {
+  month: string;
+  totalAmount: number;
+  paymentCount: number;
+  breakdown: Array<{
+    paymentTypeId: string;
+    paymentTypeName: string;
+    amount: number;
+  }>;
+}
+
+export interface PaymentReportsResponse {
+  summary: PaymentReportsSummary;
+  byPaymentType: PaymentTypeReport[];
+  byMonth: MonthReport[];
+}
 
 export const reportsApi = {
-  getStudentReport: async (studentId: string): Promise<StudentReport> => {
-    const response = await apiClient.get<StudentReport>(`/api/reports/student/${studentId}`);
-    return response.data;
-  },
-
-  getStudentPayments: async (studentId: string): Promise<Payment[]> => {
-    const response = await apiClient.get<Payment[]>(`/api/reports/student/${studentId}/payments`);
-    return response.data;
-  },
-
-  getClassReport: async (classId: string): Promise<ClassReport> => {
-    const response = await apiClient.get<ClassReport>(`/api/reports/class/${classId}`);
+  getPaymentReports: async (params?: PaymentReportsParams): Promise<PaymentReportsResponse> => {
+    const response = await apiClient.get<PaymentReportsResponse>('/api/reports/payments', { params });
     return response.data;
   },
 };
-
-
