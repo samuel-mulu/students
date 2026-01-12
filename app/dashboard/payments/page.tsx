@@ -34,7 +34,7 @@ import { ReceiptDialog } from '@/components/shared/ReceiptDialog';
 import { Student, Payment, CreatePaymentRequest, CreateBulkPaymentRequest } from '@/lib/types';
 import { generateAllMonths, hasPaymentForMonth } from '@/lib/utils/format';
 import { useAuthStore } from '@/lib/store/auth-store';
-import { CheckCircle2, DollarSign, FileText } from 'lucide-react';
+import { CheckCircle2, DollarSign, FileText, AlertCircle } from 'lucide-react';
 
 export default function PaymentsPage() {
   const { user, hasRole } = useAuthStore();
@@ -281,6 +281,15 @@ export default function PaymentsPage() {
     return { paid: false };
   };
 
+  // Calculate unpaid students count for selected month
+  const unpaidCount = useMemo(() => {
+    if (!monthFilter) return null; // No count if no month selected
+    return finalStudents.filter((student: Student) => {
+      const paymentStatus = getStudentPaymentStatus(student);
+      return !paymentStatus.paid;
+    }).length;
+  }, [finalStudents, monthFilter, payments]);
+
   const handleCreatePayment = async (data: CreatePaymentRequest | CreateBulkPaymentRequest) => {
     try {
       // Check if it's a bulk payment request (has months array)
@@ -384,14 +393,19 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Payments</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage student payments by grade and section
-          </p>
-        </div>
-      </div>
+      {monthFilter && unpaidCount !== null ? (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0" />
+              <div>
+                <p className="text-2xl font-bold text-orange-900">{unpaidCount}</p>
+                <p className="text-xs text-orange-700">Unpaid Students</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

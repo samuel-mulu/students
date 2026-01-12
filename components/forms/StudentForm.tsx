@@ -22,6 +22,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
+import { usePaymentTypes } from "@/lib/hooks/use-payment-types";
+import { generateAllMonths, formatCurrency } from "@/lib/utils/format";
+import { CheckCircle2, Check } from "lucide-react";
 
 const studentSchema = z.object({
   // Personal
@@ -59,6 +62,11 @@ const studentSchema = z.object({
   // Class assignment (optional, only for new students)
   classId: z.string().optional(),
   assignClassReason: z.string().optional(),
+  // Payment fields (optional, only for new students)
+  paymentTypeId: z.string().uuid().optional(),
+  months: z.array(z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format")).optional(),
+  paymentMethod: z.string().optional(),
+  paymentNotes: z.string().optional(),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -80,10 +88,21 @@ export function StudentForm({
 }: StudentFormProps) {
   const { data: classesData } = useClasses();
   const { data: activeYearData } = useActiveAcademicYear();
+  const { data: paymentTypesData } = usePaymentTypes();
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
   const activeYear = activeYearData?.data;
+  const paymentTypes = Array.isArray(paymentTypesData?.data) 
+    ? paymentTypesData.data.filter(pt => pt.isActive) 
+    : [];
   const isCreating = !student;
   const [activeTab, setActiveTab] = useState("personal");
+  
+  // Generate month options for current year
+  const monthOptions = useMemo(() => {
+    return generateAllMonths(new Date().getFullYear());
+  }, []);
+  
+  const currentMonth = new Date().toISOString().slice(0, 7);
 
   // Filter classes to show only classes from active academic year when creating student
   const classes = useMemo(() => {
@@ -123,6 +142,10 @@ export function StudentForm({
     transferReason: "other",
     classId: "class",
     assignClassReason: "class",
+    paymentTypeId: "payment",
+    months: "payment",
+    paymentMethod: "payment",
+    paymentNotes: "payment",
   };
 
   const {
@@ -163,8 +186,28 @@ export function StudentForm({
           previousClass: student.previousClass || "",
           transferReason: student.transferReason || "",
         }
-      : undefined,
+      : {
+          months: [currentMonth], // Default to current month
+        },
   });
+  
+  // Watch payment-related fields
+  const selectedPaymentTypeId = watch("paymentTypeId");
+  const selectedMonths = watch("months") || [];
+  const selectedPaymentType = paymentTypes.find(pt => pt.id === selectedPaymentTypeId);
+  const totalAmount = selectedPaymentType && selectedMonths.length > 0
+    ? selectedPaymentType.amount * selectedMonths.length
+    : 0;
+  
+  // Handle month toggle
+  const handleMonthToggle = (monthValue: string) => {
+    const currentMonths = watch("months") || [];
+    if (currentMonths.includes(monthValue)) {
+      setValue("months", currentMonths.filter(m => m !== monthValue), { shouldValidate: true });
+    } else {
+      setValue("months", [...currentMonths, monthValue], { shouldValidate: true });
+    }
+  };
 
   // Navigate to tab with first error and scroll to it
   useEffect(() => {
@@ -228,6 +271,7 @@ export function StudentForm({
         value === "" ? undefined : value,
       ])
     ) as CreateStudentRequest | UpdateStudentRequest;
+    
     await onSubmit(cleaned);
   };
 
@@ -240,7 +284,7 @@ export function StudentForm({
       >
         <TabsList
           className={`grid w-full ${
-            isCreating ? "grid-cols-5" : "grid-cols-4"
+            isCreating ? "grid-cols-6" : "grid-cols-4"
           }`}
         >
           <TabsTrigger value="personal">Personal</TabsTrigger>
@@ -248,6 +292,7 @@ export function StudentForm({
           <TabsTrigger value="address">Address</TabsTrigger>
           <TabsTrigger value="other">Other</TabsTrigger>
           {isCreating && <TabsTrigger value="class">Class</TabsTrigger>}
+          {isCreating && <TabsTrigger value="payment">Payment</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="personal" className="space-y-4">
@@ -603,6 +648,162 @@ export function StudentForm({
                     {errors.assignClassReason.message}
                   </p>
                 )}
+              </div>
+            </div>
+          </TabsContent>
+        )}
+
+        {isCreating && (
+          <TabsContent value="payment" className="space-y-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="paymentTypeId">Payment Type *</Label>
+                <Select
+                  value={watch("paymentTypeId") || ""}
+                  onValueChange={(value) =>
+                    setValue("paymentTypeId", value, { shouldValidate: true })
+                  }
+                >
+                  <SelectTrigger
+                    id="paymentTypeId"
+                    aria-invalid={errors.paymentTypeId ? "true" : "false"}
+                    className={errors.paymentTypeId ? "border-destructive" : ""}
+                  >
+                    <SelectValue placeholder="Select payment type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentTypes.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No payment types available
+                      </div>
+                    ) : (
+                      paymentTypes.map((paymentType) => (
+                        <SelectItem key={paymentType.id} value={paymentType.id}>
+                          {paymentType.name} - {formatCurrency(paymentType.amount)}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {errors.paymentTypeId && (
+                  <p className="text-sm text-destructive font-medium">
+                    {errors.paymentTypeId.message}
+                  </p>
+                )}
+              </div>
+
+              {selectedPaymentType && (
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Amount per Month</Label>
+                  <Input
+                    id="amount"
+                    value={formatCurrency(selectedPaymentType.amount)}
+                    readOnly
+                    disabled
+                    className="bg-muted font-semibold"
+                  />
+                  {selectedPaymentType.description && (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedPaymentType.description}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label>Select Months *</Label>
+                <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[280px] overflow-y-auto">
+                  <div className="grid grid-cols-3 gap-3">
+                    {monthOptions.map((month) => {
+                      const isSelected = selectedMonths.includes(month.value);
+                      
+                      return (
+                        <div
+                          key={month.value}
+                          className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all ${
+                            isSelected
+                              ? "bg-blue-50 border-blue-300 hover:bg-blue-100 cursor-pointer"
+                              : "bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer"
+                          }`}
+                          onClick={() => handleMonthToggle(month.value)}
+                        >
+                          <div className="relative h-5 w-5 flex items-center justify-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleMonthToggle(month.value)}
+                              className={`h-5 w-5 rounded-sm border-2 cursor-pointer appearance-none transition-all ${
+                                isSelected
+                                  ? "bg-blue-600 border-blue-600"
+                                  : "bg-white border-gray-300 hover:border-blue-500"
+                              }`}
+                            />
+                            {isSelected && (
+                              <Check className="absolute h-4 w-4 text-white pointer-events-none left-0.5 top-0.5" strokeWidth={3} />
+                            )}
+                          </div>
+                          <div className="flex-1 flex flex-col">
+                            <Label className="text-sm font-medium cursor-pointer">
+                              {month.label}
+                            </Label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {errors.months && (
+                  <p className="text-sm text-destructive">{errors.months.message}</p>
+                )}
+                {selectedMonths.length > 0 && (
+                  <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                    <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                    <p className="text-sm font-medium text-blue-900">
+                      {selectedMonths.length} month{selectedMonths.length !== 1 ? "s" : ""} selected
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {selectedPaymentType && selectedMonths.length > 0 && (
+                <div className="space-y-2 p-3 bg-muted rounded-md">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Total Amount:</span>
+                    <span className="text-lg font-bold">{formatCurrency(totalAmount)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {formatCurrency(selectedPaymentType.amount)} × {selectedMonths.length} month{selectedMonths.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="paymentMethod">Payment Method (Optional)</Label>
+                <Select
+                  value={watch("paymentMethod") || ""}
+                  onValueChange={(value) =>
+                    setValue("paymentMethod", value || undefined)
+                  }
+                >
+                  <SelectTrigger id="paymentMethod">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="card">Card</SelectItem>
+                    <SelectItem value="check">Check</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="paymentNotes">Notes (Optional)</Label>
+                <Input
+                  id="paymentNotes"
+                  {...register("paymentNotes")}
+                  placeholder="Add any notes about this payment"
+                />
               </div>
             </div>
           </TabsContent>
