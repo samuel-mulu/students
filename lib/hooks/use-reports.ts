@@ -21,3 +21,14 @@ export function useRegistrarPaymentReports(params: RegistrarPaymentReportsParams
     enabled: !!params.academicYearId, // Only fetch if academicYearId is provided
   });
 }
+
+export function useStudentReport(studentId: string) {
+  return useQuery({
+    queryKey: ['studentReport', studentId],
+    queryFn: async () => {
+      const data = await reportsApi.getStudentReport(studentId);
+      return { data };
+    },
+    enabled: !!studentId, // Only fetch if studentId is provided
+  });
+}

@@ -86,6 +86,39 @@ export interface RegistrarPaymentReportsResponse {
   byDate: DateReport[];
 }
 
+export interface StudentReportResponse {
+  student: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    classStatus: string;
+    paymentStatus: string;
+  };
+  attendance: {
+    totalDays: number;
+    presentDays: number;
+    absentDays: number;
+    attendanceRate: number;
+  };
+  marks: Array<{
+    subjectId: string;
+    subjectName: string;
+    term1Total?: number;
+    term2Total?: number;
+    yearAverage?: number;
+    grade?: string;
+  }>;
+  payments: Array<{
+    id: string;
+    month: string;
+    year: number;
+    amount: number;
+    status: string;
+    paymentDate?: string;
+  }>;
+}
+
 export const reportsApi = {
   getPaymentReports: async (params?: PaymentReportsParams): Promise<PaymentReportsResponse> => {
     const response = await apiClient.get<PaymentReportsResponse>('/api/reports/payments', { params });
@@ -93,6 +126,10 @@ export const reportsApi = {
   },
   getRegistrarPaymentReports: async (params: RegistrarPaymentReportsParams): Promise<RegistrarPaymentReportsResponse> => {
     const response = await apiClient.get<RegistrarPaymentReportsResponse>('/api/reports/payments/registrar', { params });
+    return response.data;
+  },
+  getStudentReport: async (studentId: string): Promise<StudentReportResponse> => {
+    const response = await apiClient.get<StudentReportResponse>(`/api/reports/student/${studentId}`);
     return response.data;
   },
 };
