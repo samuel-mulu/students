@@ -25,6 +25,7 @@ import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
 import { usePaymentTypes } from "@/lib/hooks/use-payment-types";
 import { generateAllMonths, formatCurrency } from "@/lib/utils/format";
 import { CheckCircle2, Check } from "lucide-react";
+import { ImageUpload } from "@/components/shared/ImageUpload";
 
 const studentSchema = z.object({
   // Personal
@@ -67,6 +68,8 @@ const studentSchema = z.object({
   months: z.array(z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format")).optional(),
   paymentMethod: z.string().optional(),
   paymentNotes: z.string().optional(),
+  // Profile image
+  profileImageUrl: z.string().url().optional().or(z.literal("")),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -185,9 +188,11 @@ export function StudentForm({
           previousSchool: student.previousSchool || "",
           previousClass: student.previousClass || "",
           transferReason: student.transferReason || "",
+          profileImageUrl: student.profileImageUrl || "",
         }
       : {
           months: [currentMonth], // Default to current month
+          profileImageUrl: "",
         },
   });
   
@@ -296,6 +301,14 @@ export function StudentForm({
         </TabsList>
 
         <TabsContent value="personal" className="space-y-4">
+          {/* Profile Image Upload */}
+          <ImageUpload
+            value={watch("profileImageUrl") || ""}
+            onChange={(imageUrl) => setValue("profileImageUrl", imageUrl)}
+            onRemove={() => setValue("profileImageUrl", "")}
+            disabled={isLoading}
+          />
+          
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="firstName">First Name *</Label>

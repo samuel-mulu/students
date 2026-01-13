@@ -31,10 +31,16 @@ import { ErrorState } from '@/components/shared/ErrorState';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PaymentDialog } from '@/components/forms/PaymentDialog';
 import { ReceiptDialog } from '@/components/shared/ReceiptDialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Student, Payment, CreatePaymentRequest, CreateBulkPaymentRequest } from '@/lib/types';
 import { generateAllMonths, hasPaymentForMonth } from '@/lib/utils/format';
 import { useAuthStore } from '@/lib/store/auth-store';
-import { CheckCircle2, DollarSign, FileText, AlertCircle } from 'lucide-react';
+import { CheckCircle2, DollarSign, FileText, AlertCircle, Image as ImageIcon } from 'lucide-react';
 
 export default function PaymentsPage() {
   const { user, hasRole } = useAuthStore();
@@ -67,6 +73,11 @@ export default function PaymentsPage() {
     payments: undefined,
     isLoading: false,
   });
+  const [proofImageViewer, setProofImageViewer] = useState<{
+    open: boolean;
+    imageUrl: string | null;
+    transactionNumber?: string;
+  }>({ open: false, imageUrl: null });
 
   // Data hooks
   const { data: classesData } = useClasses();
@@ -596,6 +607,20 @@ export default function PaymentsPage() {
                             <FileText className="h-4 w-4 text-green-600" />
                           </Button>
                         )}
+                        {paymentStatus.payment?.proofImageUrl && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setProofImageViewer({
+                              open: true,
+                              imageUrl: paymentStatus.payment!.proofImageUrl!,
+                              transactionNumber: paymentStatus.payment!.transactionNumber,
+                            })}
+                            title="View Payment Proof"
+                          >
+                            <ImageIcon className="h-4 w-4 text-blue-600" />
+                          </Button>
+                        )}
                         {monthFilter && (
                           <Button
                             size="sm"
@@ -639,6 +664,32 @@ export default function PaymentsPage() {
         payments={receiptDialog.payments}
         isLoading={receiptDialog.isLoading}
       />
+
+      {/* Proof Image Viewer */}
+      {proofImageViewer.imageUrl && (
+        <Dialog open={proofImageViewer.open} onOpenChange={(open) => setProofImageViewer({ open, imageUrl: null })}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Payment Proof</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center justify-center py-4">
+                <img
+                  src={proofImageViewer.imageUrl}
+                  alt="Payment proof"
+                  className="max-w-full max-h-[70vh] rounded-lg object-contain"
+                />
+              </div>
+              {proofImageViewer.transactionNumber && (
+                <div className="text-center pt-4 border-t">
+                  <p className="text-sm text-muted-foreground mb-1">Transaction Number</p>
+                  <p className="font-mono font-semibold text-lg">{proofImageViewer.transactionNumber}</p>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

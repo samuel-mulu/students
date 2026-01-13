@@ -21,6 +21,7 @@ import { formatCurrency, generateAllMonths } from '@/lib/utils/format';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle2, Check, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
+import { PaymentProofUpload } from './PaymentProofUpload';
 
 const paymentSchema = z.object({
   studentId: z.string().min(1, 'Student is required'),
@@ -28,6 +29,8 @@ const paymentSchema = z.object({
   months: z.array(z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format')).min(1, 'At least one month must be selected'),
   paymentMethod: z.string().optional(),
   notes: z.string().optional(),
+  proofImageUrl: z.string().url().optional().or(z.literal('')),
+  transactionNumber: z.string().optional(),
 });
 
 type PaymentFormData = z.infer<typeof paymentSchema>;
@@ -60,8 +63,10 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
     resolver: zodResolver(paymentSchema),
     defaultValues: {
       months: [currentMonth],
-      paymentMethod: '',
+      paymentMethod: 'cash',
       notes: '',
+      proofImageUrl: '',
+      transactionNumber: '',
     },
   });
 
@@ -88,6 +93,9 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
   const selectedPaymentTypeId = watch('paymentTypeId');
   const selectedPaymentType = paymentTypes.find(pt => pt.id === selectedPaymentTypeId);
   const selectedMonths = watch('months') || [];
+  const selectedPaymentMethod = watch('paymentMethod');
+  const proofImageUrl = watch('proofImageUrl');
+  const transactionNumber = watch('transactionNumber');
 
   const handleMonthToggle = (monthValue: string) => {
     // Don't allow toggling already paid (confirmed) months
@@ -269,24 +277,41 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="paymentMethod">Payment Method</Label>
-          <Select
-            value={watch('paymentMethod')}
-            onValueChange={(value) => setValue('paymentMethod', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select method" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cash">Cash</SelectItem>
-              <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-              <SelectItem value="card">Card</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="paymentMethod">Payment Method</Label>
+        <Select
+          value={watch('paymentMethod') || 'cash'}
+          onValueChange={(value) => {
+            setValue('paymentMethod', value);
+            // Clear proof fields when switching away from mobile_banking
+            if (value !== 'mobile_banking') {
+              setValue('proofImageUrl', '');
+              setValue('transactionNumber', '');
+            }
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select method" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cash">Cash</SelectItem>
+            <SelectItem value="mobile_banking">Mobile Banking</SelectItem>
+            <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+            <SelectItem value="card">Card</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+
+      {selectedPaymentMethod === 'mobile_banking' && (
+        <PaymentProofUpload
+          imageUrl={proofImageUrl || ''}
+          transactionNumber={transactionNumber || ''}
+          onImageChange={(url) => setValue('proofImageUrl', url)}
+          onTransactionNumberChange={(number) => setValue('transactionNumber', number)}
+          disabled={isLoading}
+        />
+      )}
+
       <div className="space-y-2">
         <Label htmlFor="notes">Notes</Label>
         <Input id="notes" {...register('notes')} />

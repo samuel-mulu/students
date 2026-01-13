@@ -15,12 +15,14 @@ import { Button } from '@/components/ui/button';
 import { Student } from '@/lib/types';
 import { formatFullName } from '@/lib/utils/format';
 import { MoreHorizontal, Edit, Trash2, UserPlus, Eye, ArrowRightLeft } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ImageViewerDialog } from '@/components/shared/ImageViewerDialog';
 
 interface StudentsTableProps {
   students: Student[];
@@ -39,6 +41,14 @@ export function StudentsTable({
   onTransferClass,
   showActions = true,
 }: StudentsTableProps) {
+  const [imageViewer, setImageViewer] = useState<{
+    open: boolean;
+    student: Student | null;
+  }>({
+    open: false,
+    student: null,
+  });
+
   // Helper function to get current class name
   const getCurrentClassName = (student: Student): string => {
     // Check if student has classHistory with class information
@@ -57,6 +67,9 @@ export function StudentsTable({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-20">
+              Photo
+            </TableHead>
             <TableHead className="w-16">
               NO
             </TableHead>
@@ -77,7 +90,7 @@ export function StudentsTable({
           {students.length === 0 ? (
             <TableRow>
               <TableCell 
-                colSpan={showActions ? 4 : 3} 
+                colSpan={showActions ? 5 : 4} 
                 className="text-center py-12 text-gray-500 text-sm"
               >
                 No students found
@@ -86,11 +99,28 @@ export function StudentsTable({
           ) : (
             students.map((student, index) => {
               const currentClassName = getCurrentClassName(student);
+              const initials = `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
               
               return (
                 <TableRow 
                   key={student.id}
                 >
+                  <TableCell>
+                    <button
+                      onClick={() => setImageViewer({ open: true, student })}
+                      className="hover:opacity-80 transition-opacity cursor-pointer"
+                      title="View profile image"
+                    >
+                      <Avatar className="h-10 w-10">
+                        {student.profileImageUrl ? (
+                          <AvatarImage src={student.profileImageUrl} alt={formatFullName(student.firstName, student.lastName)} />
+                        ) : null}
+                        <AvatarFallback className="bg-indigo-100 text-indigo-700 font-semibold">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                    </button>
+                  </TableCell>
                   <TableCell className="text-center font-medium">
                     {index + 1}
                   </TableCell>
@@ -162,6 +192,17 @@ export function StudentsTable({
           )}
         </TableBody>
       </Table>
+
+      {/* Image Viewer Dialog */}
+      {imageViewer.student && (
+        <ImageViewerDialog
+          open={imageViewer.open}
+          onOpenChange={(open) => setImageViewer({ open, student: imageViewer.student })}
+          imageUrl={imageViewer.student.profileImageUrl}
+          firstName={imageViewer.student.firstName}
+          lastName={imageViewer.student.lastName}
+        />
+      )}
     </div>
   );
 }

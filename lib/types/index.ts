@@ -62,6 +62,7 @@ export interface Student {
   previousSchool?: string;
   previousClass?: string;
   transferReason?: string;
+  profileImageUrl?: string;
   classStatus: ClassStatus;
   paymentStatus: PaymentStatus;
   createdAt: string;
@@ -97,6 +98,7 @@ export interface CreateStudentRequest {
   transferReason?: string;
   classId?: string;
   assignClassReason?: string;
+  profileImageUrl?: string;
 }
 
 export interface UpdateStudentRequest {
@@ -126,6 +128,7 @@ export interface UpdateStudentRequest {
   previousSchool?: string;
   previousClass?: string;
   transferReason?: string;
+  profileImageUrl?: string;
 }
 
 export interface AssignClassRequest {
@@ -406,6 +409,8 @@ export interface Payment {
   paymentDate?: string;
   paymentMethod?: string;
   notes?: string;
+  proofImageUrl?: string;
+  transactionNumber?: string;
   student?: Student;
   paymentType?: PaymentType;
   receipt?: Receipt;
@@ -420,6 +425,8 @@ export interface CreatePaymentRequest {
   year: number;
   paymentMethod?: string;
   notes?: string;
+  proofImageUrl?: string;
+  transactionNumber?: string;
   amount?: number; // Optional for backward compatibility
 }
 
@@ -429,17 +436,23 @@ export interface CreateBulkPaymentRequest {
   months: string[]; // Array of YYYY-MM format
   paymentMethod?: string;
   notes?: string;
+  proofImageUrl?: string;
+  transactionNumber?: string;
 }
 
 export interface ConfirmPaymentRequest {
   paymentDate?: string;
   paymentMethod?: string;
+  proofImageUrl?: string;
+  transactionNumber?: string;
 }
 
 export interface ConfirmBulkPaymentsRequest {
   paymentIds: string[];
   paymentDate?: string;
   paymentMethod?: string;
+  proofImageUrl?: string;
+  transactionNumber?: string;
 }
 
 export interface Receipt {

@@ -12,8 +12,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Printer } from 'lucide-react';
-import { useRef } from 'react';
+import { Printer, Image as ImageIcon } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ImageViewerDialog } from './ImageViewerDialog';
 
 interface ReceiptDialogProps {
   open: boolean;
@@ -25,6 +26,11 @@ interface ReceiptDialogProps {
 
 export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading }: ReceiptDialogProps) {
   const printRef = useRef<HTMLDivElement>(null);
+  const [proofImageViewer, setProofImageViewer] = useState<{
+    open: boolean;
+    imageUrl: string | null;
+    transactionNumber?: string;
+  }>({ open: false, imageUrl: null });
 
   const handlePrint = () => {
     if (!printRef.current) return;
@@ -215,6 +221,36 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
                   <p className="text-sm">{displayPayment.notes}</p>
                 </div>
               )}
+
+              {(displayPayment.proofImageUrl || displayPayment.transactionNumber) && (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="font-medium text-muted-foreground mb-2">Payment Proof:</p>
+                  <div className="flex items-center gap-4">
+                    {displayPayment.proofImageUrl && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setProofImageViewer({
+                          open: true,
+                          imageUrl: displayPayment.proofImageUrl!,
+                          transactionNumber: displayPayment.transactionNumber,
+                        })}
+                        className="flex items-center gap-2"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                        View Proof Image
+                      </Button>
+                    )}
+                    {displayPayment.transactionNumber && (
+                      <div className="text-sm">
+                        <span className="font-medium text-muted-foreground">Transaction Number: </span>
+                        <span className="font-mono font-semibold">{displayPayment.transactionNumber}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -236,6 +272,32 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Proof Image Viewer */}
+      {proofImageViewer.imageUrl && (
+        <Dialog open={proofImageViewer.open} onOpenChange={(open) => setProofImageViewer({ open, imageUrl: null })}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Payment Proof</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center justify-center py-4">
+                <img
+                  src={proofImageViewer.imageUrl}
+                  alt="Payment proof"
+                  className="max-w-full max-h-[70vh] rounded-lg object-contain"
+                />
+              </div>
+              {proofImageViewer.transactionNumber && (
+                <div className="text-center pt-4 border-t">
+                  <p className="text-sm text-muted-foreground mb-1">Transaction Number</p>
+                  <p className="font-mono font-semibold text-lg">{proofImageViewer.transactionNumber}</p>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   );
 }

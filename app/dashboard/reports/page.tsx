@@ -316,9 +316,296 @@ export default function ReportsPage() {
   const handleRegistrarExport = handleDailyExport;
   const handleExport = handleMonthlyExport;
 
-  // Print report
+  // Print Monthly Report (Student Tracking)
+  const handleMonthlyPrint = () => {
+    if (!monthlyReports) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const monthRows = monthlyReports.byMonth.map(monthData => {
+      const monthDate = new Date(monthData.month + '-01');
+      const progress = monthData.paymentProgress ?? 0;
+      const totalStudents = monthData.totalStudents ?? 0;
+      const paidStudents = monthData.paidStudents ?? 0;
+      const unpaidStudents = monthData.unpaidStudents ?? 0;
+      
+      return `
+        <tr>
+          <td style="padding: 8px; border: 1px solid #ddd;">${format(monthDate, 'MMMM yyyy')}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${totalStudents}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: #16a34a; font-weight: bold;">${paidStudents}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: #ea580c; font-weight: bold;">${unpaidStudents}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${progress.toFixed(1)}%</td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${formatCurrency(monthData.totalAmount)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Monthly Student Payment Progress Report</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              color: #000;
+            }
+            h1 {
+              color: #1f2937;
+              border-bottom: 2px solid #3b82f6;
+              padding-bottom: 10px;
+              margin-bottom: 20px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            th {
+              background-color: #f3f4f6;
+              padding: 12px;
+              text-align: left;
+              border: 1px solid #ddd;
+              font-weight: bold;
+            }
+            td {
+              padding: 8px;
+              border: 1px solid #ddd;
+            }
+            .summary {
+              margin-top: 30px;
+              padding: 15px;
+              background-color: #f9fafb;
+              border: 1px solid #ddd;
+            }
+            .summary h2 {
+              margin-top: 0;
+              color: #1f2937;
+            }
+            .summary-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 8px 0;
+              border-bottom: 1px solid #e5e7eb;
+            }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Monthly Student Payment Progress Report</h1>
+          <p><strong>Generated:</strong> ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th style="text-align: right;">Total Students</th>
+                <th style="text-align: right;">Paid Students</th>
+                <th style="text-align: right;">Unpaid Students</th>
+                <th style="text-align: right;">Progress %</th>
+                <th style="text-align: right;">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${monthRows}
+              <tr style="background-color: #f3f4f6; font-weight: bold;">
+                <td style="padding: 8px; border: 1px solid #ddd;">Total</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${monthlyReports.summary.totalStudents}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: #16a34a;">${monthlyReports.summary.paidStudents}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: #ea580c;">${monthlyReports.summary.totalStudents - monthlyReports.summary.paidStudents}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${monthlyReports.summary.paymentProgress.toFixed(1)}%</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(monthlyReports.summary.totalRevenue)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="summary">
+            <h2>Summary</h2>
+            <div class="summary-row">
+              <span><strong>Total Revenue:</strong></span>
+              <span>${formatCurrency(monthlyReports.summary.totalRevenue)}</span>
+            </div>
+            <div class="summary-row">
+              <span><strong>Total Students:</strong></span>
+              <span>${monthlyReports.summary.totalStudents}</span>
+            </div>
+            <div class="summary-row">
+              <span><strong>Paid Students:</strong></span>
+              <span>${monthlyReports.summary.paidStudents}</span>
+            </div>
+            <div class="summary-row">
+              <span><strong>Payment Progress:</strong></span>
+              <span>${monthlyReports.summary.paymentProgress.toFixed(1)}%</span>
+            </div>
+            <div class="summary-row">
+              <span><strong>Payment Count:</strong></span>
+              <span>${monthlyReports.summary.paymentCount}</span>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
+  // Print Daily Report (Money Tracking)
+  const handleDailyPrint = () => {
+    if (!dailyReports || !dailyTableData) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const paymentTypeHeaders = dailyTableData.paymentTypes.map(pt => 
+      `<th style="text-align: right;">${pt.name}</th>`
+    ).join('');
+
+    const dateRows = dailyTableData.rows.map(row => {
+      const date = new Date(row.date);
+      const paymentTypeCells = dailyTableData.paymentTypes.map(pt => {
+        const amount = row.paymentTypeData.get(pt.id) || 0;
+        return `<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${amount > 0 ? formatCurrency(amount) : '-'}</td>`;
+      }).join('');
+
+      return `
+        <tr>
+          <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${format(date, 'MMM dd, yyyy')}</td>
+          ${paymentTypeCells}
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${formatCurrency(row.totalAmount)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const totalRow = dailyTableData.paymentTypes.map(pt => {
+      const typeTotal = dailyReports.byDate.reduce((sum, dateReport) => {
+        const breakdown = dateReport.breakdown.find(b => b.paymentTypeId === pt.id);
+        return sum + (breakdown?.amount || 0);
+      }, 0);
+      return `<td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${typeTotal > 0 ? formatCurrency(typeTotal) : '-'}</td>`;
+    }).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Day-by-Day Payment Tracking Report</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              color: #000;
+            }
+            h1 {
+              color: #1f2937;
+              border-bottom: 2px solid #3b82f6;
+              padding-bottom: 10px;
+              margin-bottom: 20px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            th {
+              background-color: #f3f4f6;
+              padding: 12px;
+              text-align: left;
+              border: 1px solid #ddd;
+              font-weight: bold;
+            }
+            td {
+              padding: 8px;
+              border: 1px solid #ddd;
+            }
+            .summary {
+              margin-top: 30px;
+              padding: 15px;
+              background-color: #f9fafb;
+              border: 1px solid #ddd;
+            }
+            .summary h2 {
+              margin-top: 0;
+              color: #1f2937;
+            }
+            .summary-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 8px 0;
+              border-bottom: 1px solid #e5e7eb;
+            }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Day-by-Day Payment Tracking Report</h1>
+          <p><strong>Generated:</strong> ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                ${paymentTypeHeaders}
+                <th style="text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${dateRows}
+              <tr style="background-color: #f3f4f6; font-weight: bold;">
+                <td style="padding: 8px; border: 1px solid #ddd;">Total</td>
+                ${totalRow}
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(dailyReports.summary.totalRevenue)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="summary">
+            <h2>Summary</h2>
+            <div class="summary-row">
+              <span><strong>Total Revenue:</strong></span>
+              <span>${formatCurrency(dailyReports.summary.totalRevenue)}</span>
+            </div>
+            <div class="summary-row">
+              <span><strong>Today's Revenue:</strong></span>
+              <span>${formatCurrency(dailyReports.summary.todayRevenue)}</span>
+            </div>
+            <div class="summary-row">
+              <span><strong>Payment Count:</strong></span>
+              <span>${dailyReports.summary.paymentCount}</span>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
+  // Legacy print function for backward compatibility
   const handlePrint = () => {
-    window.print();
+    if (viewMode === 'daily') {
+      handleDailyPrint();
+    } else {
+      handleMonthlyPrint();
+    }
   };
 
   // Registrar View
@@ -347,18 +634,6 @@ export default function ReportsPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={viewMode === 'daily' ? handleDailyExport : handleMonthlyExport} 
-              disabled={viewMode === 'daily' ? !dailyReports : !monthlyReports}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
-            <Button variant="outline" onClick={handlePrint} disabled={!monthlyReports && !dailyReports}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
             <Button variant="outline" onClick={() => refetchFn()}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
@@ -500,7 +775,29 @@ export default function ReportsPage() {
             ) : (
               <Card>
                 <CardHeader>
-                  <CardTitle>Monthly Student Payment Progress</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Monthly Student Payment Progress</CardTitle>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={handleMonthlyExport} 
+                        disabled={!monthlyReports}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Export
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={handlePrint} 
+                        disabled={!monthlyReports}
+                      >
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -722,7 +1019,29 @@ export default function ReportsPage() {
             ) : dailyTableData ? (
               <Card>
                 <CardHeader>
-                  <CardTitle>Day-by-Day Payment Tracking</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Day-by-Day Payment Tracking</CardTitle>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={handleDailyExport} 
+                        disabled={!dailyReports}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Export
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={handleDailyPrint} 
+                        disabled={!dailyReports}
+                      >
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -828,18 +1147,6 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={viewMode === 'daily' ? handleDailyExport : handleMonthlyExport} 
-            disabled={viewMode === 'daily' ? !dailyReports : !monthlyReports}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-          <Button variant="outline" onClick={handlePrint} disabled={!monthlyReports && !dailyReports}>
-            <Printer className="mr-2 h-4 w-4" />
-            Print
-          </Button>
           <Button variant="outline" onClick={() => ownerRefetchFn()}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
@@ -1062,7 +1369,29 @@ export default function ReportsPage() {
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle>Monthly Student Payment Progress</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Monthly Student Payment Progress</CardTitle>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleMonthlyExport} 
+                      disabled={!monthlyReports}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Export
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleMonthlyPrint} 
+                      disabled={!monthlyReports}
+                    >
+                      <Printer className="mr-2 h-4 w-4" />
+                      Print
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -1310,7 +1639,29 @@ export default function ReportsPage() {
           ) : dailyTableData ? (
             <Card>
               <CardHeader>
-                <CardTitle>Day-by-Day Payment Tracking</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Day-by-Day Payment Tracking</CardTitle>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleDailyExport} 
+                      disabled={!dailyReports}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Export
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleDailyPrint} 
+                      disabled={!dailyReports}
+                    >
+                      <Printer className="mr-2 h-4 w-4" />
+                      Print
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">

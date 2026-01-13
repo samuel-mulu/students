@@ -13,6 +13,8 @@ export function useAttendance(params?: {
   date?: string;
   startDate?: string;
   endDate?: string;
+  page?: number;
+  limit?: number;
 }) {
   return useQuery({
     queryKey: ['attendance', params],

@@ -3,7 +3,8 @@ import {
   Attendance,
   CreateAttendanceRequest,
   BulkAttendanceRequest,
-  UpdateAttendanceRequest
+  UpdateAttendanceRequest,
+  PaginationParams
 } from '@/lib/types';
 
 export const attendanceApi = {
@@ -17,7 +18,7 @@ export const attendanceApi = {
     return response.data;
   },
 
-  getAll: async (params?: {
+  getAll: async (params?: PaginationParams & {
     studentId?: string;
     classId?: string;
     date?: string;

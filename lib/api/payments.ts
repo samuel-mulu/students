@@ -82,6 +82,19 @@ export const paymentsApi = {
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/payments/${id}`);
   },
+
+  uploadProof: async (file: File): Promise<{ imageUrl: string; publicId: string }> => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await apiClient.post<{ imageUrl: string; publicId: string }>(
+      '/api/payments/upload-proof',
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }
+    );
+    return response.data;
+  },
 };
 
 

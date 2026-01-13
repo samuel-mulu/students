@@ -45,7 +45,7 @@ export default function StudentsPage() {
     return className.replace(/\s*\([^)]*\)\s*$/, "").trim();
   };
   const [page, setPage] = useState(1);
-  const [limit] = useState(10);
+  const [limit] = useState(40);
   const [search, setSearch] = useState("");
   const [classStatusFilter, setClassStatusFilter] = useState<string>("all");
   const [academicYearFilter, setAcademicYearFilter] = useState<string>("");
@@ -85,9 +85,15 @@ export default function StudentsPage() {
   const grades = Array.isArray(gradesData?.data) ? gradesData.data : [];
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
 
-  // Set default academic year to active or latest
+  // Set default academic year to active or latest (only if not filtering by "new" status)
   useEffect(() => {
-    if (!academicYearFilter && academicYears.length > 0) {
+    if (classStatusFilter === "new") {
+      // Reset academic year filter when showing "new" students
+      setAcademicYearFilter("");
+      setGradeFilter("all");
+      setClassFilter("all");
+      setShowGradeClasses(false);
+    } else if (!academicYearFilter && academicYears.length > 0) {
       if (activeYearData?.data?.id) {
         setAcademicYearFilter(activeYearData.data.id);
       } else {
@@ -101,7 +107,7 @@ export default function StudentsPage() {
         }
       }
     }
-  }, [academicYears, activeYearData, academicYearFilter]);
+  }, [academicYears, activeYearData, academicYearFilter, classStatusFilter]);
 
   // Filter classes by academic year only (for general filtering)
   const classesByAcademicYear = useMemo(() => {
@@ -334,7 +340,7 @@ export default function StudentsPage() {
           <CardTitle>Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className={`grid gap-4 ${classStatusFilter === "new" ? "md:grid-cols-2" : "md:grid-cols-2 lg:grid-cols-4"}`}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -345,50 +351,54 @@ export default function StudentsPage() {
               />
             </div>
 
-            {/* Academic Year Filter */}
-            <Select
-              value={academicYearFilter}
-              onValueChange={(value) => {
-                setAcademicYearFilter(value);
-                setGradeFilter("all");
-                setClassFilter("all");
-                setShowGradeClasses(false);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Academic Year" />
-              </SelectTrigger>
-              <SelectContent>
-                {academicYears.map((year) => (
-                  <SelectItem key={year.id} value={year.id}>
-                    {year.name}
-                    {activeYearData?.data?.id === year.id && " (Active)"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Academic Year Filter - Hidden when filtering by "new" students */}
+            {classStatusFilter !== "new" && (
+              <Select
+                value={academicYearFilter}
+                onValueChange={(value) => {
+                  setAcademicYearFilter(value);
+                  setGradeFilter("all");
+                  setClassFilter("all");
+                  setShowGradeClasses(false);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Academic Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {academicYears.map((year) => (
+                    <SelectItem key={year.id} value={year.id}>
+                      {year.name}
+                      {activeYearData?.data?.id === year.id && " (Active)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
-            {/* Grade Filter */}
-            <Select
-              value={gradeFilter}
-              onValueChange={(value) => {
-                setGradeFilter(value);
-                setClassFilter("all");
-                setShowGradeClasses(value !== "all");
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Grade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Grades</SelectItem>
-                {grades.map((grade) => (
-                  <SelectItem key={grade.id} value={grade.id}>
-                    {grade.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Grade Filter - Hidden when filtering by "new" students */}
+            {classStatusFilter !== "new" && (
+              <Select
+                value={gradeFilter}
+                onValueChange={(value) => {
+                  setGradeFilter(value);
+                  setClassFilter("all");
+                  setShowGradeClasses(value !== "all");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Grade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Grades</SelectItem>
+                  {grades.map((grade) => (
+                    <SelectItem key={grade.id} value={grade.id}>
+                      {grade.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             {/* Class Status Filter */}
             <Select
@@ -406,8 +416,8 @@ export default function StudentsPage() {
             </Select>
           </div>
 
-          {/* Show classes dropdown when grade is selected */}
-          {showGradeClasses && gradeFilter !== "all" && (
+          {/* Show classes dropdown when grade is selected (hidden for "new" students) */}
+          {classStatusFilter !== "new" && showGradeClasses && gradeFilter !== "all" && (
             <div className="mt-4 pt-4 border-t">
               <Label className="text-xs text-gray-400 font-medium mb-2 block">
                 Sections/Classes for Selected Grade
