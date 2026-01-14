@@ -786,7 +786,7 @@ export default function AttendanceBulkPage({
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-600 border-t-transparent mx-auto mb-2" />
                       <p className="text-sm text-slate-600">Loading attendance summary...</p>
                     </div>
-                  ) : (displayDates.length > 0 || summaryData?.data?.length > 0) ? (
+                  ) : (displayDates.length > 0 || (summaryData?.data && summaryData.data.length > 0)) ? (
                     <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
                       <Table>
                         <TableHeader>
