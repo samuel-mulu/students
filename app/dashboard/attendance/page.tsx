@@ -43,6 +43,8 @@ import {
   Clock,
   Save,
   History,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AttendanceStatus } from "@/lib/types";
@@ -57,7 +59,7 @@ import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
 
 export default function AttendancePage() {
   const router = useRouter();
-  const { hasRole } = useAuthStore();
+  const { hasRole, user } = useAuthStore();
   const { data: activeYearData } = useActiveAcademicYear();
   
   // Role-based access control
@@ -85,14 +87,46 @@ export default function AttendancePage() {
   const { data: classesData } = useClasses();
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
   
-  // Filter classes for teachers: show all classes from active academic year (not just assigned)
+  // Filter classes for teachers: 
+  // Step 1: Filter by active academic year first
+  // Step 2: Then filter by assigned classes
   const classes = useMemo(() => {
-    if (isTeacher && activeYear) {
-      return allClasses.filter((cls) => cls.academicYearId === activeYear.id);
-    }
     // For owners, show all classes
-    return allClasses;
-  }, [isTeacher, activeYear, allClasses]);
+    if (!isTeacher) {
+      return allClasses;
+    }
+    
+    // For teachers: must have active academic year
+    if (!activeYear || !activeYear.id) {
+      return [];
+    }
+    
+    // Step 1: Get classes from active academic year
+    const activeYearClasses = allClasses.filter((cls) => {
+      // Check both academicYearId and legacy academicYear field
+      if (cls.academicYearId) {
+        return cls.academicYearId === activeYear.id;
+      }
+      // Legacy support: check if academicYear is a string matching the active year name
+      if (typeof cls.academicYear === 'string') {
+        return cls.academicYear === activeYear.name;
+      }
+      // If academicYear is an object, check its id
+      if (typeof cls.academicYear === 'object' && cls.academicYear?.id) {
+        return cls.academicYear.id === activeYear.id;
+      }
+      return false;
+    });
+    
+    // Step 2: Filter by assigned classes (if teacher has assigned classes)
+    if (user?.teacherClasses && user.teacherClasses.length > 0) {
+      const assignedClassIds = user.teacherClasses.map((tc) => tc.id);
+      return activeYearClasses.filter((cls) => assignedClassIds.includes(cls.id));
+    }
+    
+    // If no assigned classes, return empty array
+    return [];
+  }, [isTeacher, user?.teacherClasses, activeYear, allClasses]);
   
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(
@@ -111,68 +145,67 @@ export default function AttendancePage() {
     Record<string, AttendanceStatus>
   >({});
   const [attendanceNotes, setAttendanceNotes] = useState<Record<string, string>>({});
-  const [hasCheckedAttendance, setHasCheckedAttendance] = useState(false);
 
-  // Check if attendance already exists for the selected date and class (before listing students)
-  useEffect(() => {
-    if (!selectedClassId || !selectedDate || attendanceLoading || studentsLoading) {
-      return;
-    }
-
-    // Check if attendance data exists
+  // Check if attendance is recorded for the selected date
+  const isAttendanceRecorded = useMemo(() => {
+    if (!attendanceData?.data || !selectedClassId) return false;
+    
     let attendanceArray: any[] = [];
-    if (attendanceData?.data) {
-      if (Array.isArray(attendanceData.data)) {
-        attendanceArray = attendanceData.data;
-      } else if (attendanceData.data.students) {
-        attendanceArray = attendanceData.data.students.map((item: any) => ({
-          ...item.attendance,
-          studentId: item.student?.id || item.attendance?.studentId,
-        })).filter((item: any) => item && item.id);
-      }
+    if (Array.isArray(attendanceData.data)) {
+      attendanceArray = attendanceData.data;
+    } else if (attendanceData.data.students) {
+      attendanceArray = attendanceData.data.students.map((item: any) => ({
+        ...item.attendance,
+        studentId: item.student?.id || item.attendance?.studentId,
+      })).filter((item: any) => item && item.id);
     }
+    
+    return attendanceArray.length > 0;
+  }, [attendanceData, selectedClassId]);
 
-    // If attendance exists and we haven't checked yet, show message and move to next day
-    if (attendanceArray.length > 0 && !hasCheckedAttendance && studentsData?.data && studentsData.data.length > 0) {
-      toast.warning("Attendance Already Recorded", {
-        description: `Attendance for ${formatDate(selectedDate)} has already been recorded. Moving to the next day.`,
-        duration: 4000,
-      });
+  // Determine if we're in read-only mode (past date with recorded attendance)
+  const isReadOnly = useMemo(() => {
+    if (!isAttendanceRecorded) return false;
+    const selected = new Date(selectedDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    selected.setHours(0, 0, 0, 0);
+    return selected < today;
+  }, [isAttendanceRecorded, selectedDate]);
 
-      // Move to the next day
-      const currentDate = new Date(selectedDate);
-      currentDate.setDate(currentDate.getDate() + 1);
-      const nextDateStr = currentDate.toISOString().split("T")[0];
-      setSelectedDate(nextDateStr);
-      setHasCheckedAttendance(false); // Reset to check the new date
-      
-      // Reset attendance states for the new date
-      if (studentsData.data) {
-        const states: Record<string, AttendanceStatus> = {};
-        const notes: Record<string, string> = {};
-        studentsData.data.forEach((student) => {
-          states[student.id] = "present";
-          notes[student.id] = "";
-        });
-        setAttendanceStates(states);
-        setAttendanceNotes(notes);
-      }
-      return;
+  // Date navigation functions
+  const handlePreviousDate = () => {
+    const currentDate = new Date(selectedDate);
+    currentDate.setDate(currentDate.getDate() - 1);
+    setSelectedDate(currentDate.toISOString().split("T")[0]);
+  };
+
+  const handleNextDate = () => {
+    const currentDate = new Date(selectedDate);
+    currentDate.setDate(currentDate.getDate() + 1);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (currentDate <= today) {
+      setSelectedDate(currentDate.toISOString().split("T")[0]);
     }
+  };
 
-    // Mark as checked after processing
-    if (!attendanceLoading && !studentsLoading && selectedClassId && selectedDate) {
-      setHasCheckedAttendance(true);
-    }
-  }, [selectedClassId, selectedDate, attendanceData, attendanceLoading, studentsLoading, studentsData, hasCheckedAttendance]);
+  // Check if navigation buttons should be disabled
+  const canGoPrevious = useMemo(() => {
+    // Allow going back as far as needed (or set a limit if desired)
+    return true;
+  }, []);
 
-  // Reset check flag when class or date changes
+  const canGoNext = useMemo(() => {
+    const currentDate = new Date(selectedDate);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    currentDate.setHours(23, 59, 59, 999);
+    return currentDate < today;
+  }, [selectedDate]);
+
+  // Initialize attendance states from API data
   useEffect(() => {
-    setHasCheckedAttendance(false);
-  }, [selectedClassId, selectedDate]);
-
-  // Initialize attendance states
-  useMemo(() => {
     if (attendanceData?.data && studentsData?.data) {
       const states: Record<string, AttendanceStatus> = {};
       const notes: Record<string, string> = {};
@@ -198,7 +231,8 @@ export default function AttendancePage() {
       });
       setAttendanceStates(states);
       setAttendanceNotes(notes);
-    } else if (studentsData?.data) {
+    } else if (studentsData?.data && !isReadOnly) {
+      // Only set default "present" if not in read-only mode (to avoid overwriting recorded data)
       const states: Record<string, AttendanceStatus> = {};
       const notes: Record<string, string> = {};
       studentsData.data.forEach((student) => {
@@ -208,7 +242,7 @@ export default function AttendancePage() {
       setAttendanceStates(states);
       setAttendanceNotes(notes);
     }
-  }, [attendanceData, studentsData]);
+  }, [attendanceData, studentsData, isReadOnly]);
 
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
     setAttendanceStates((prev) => ({ ...prev, [studentId]: status }));
@@ -253,28 +287,9 @@ export default function AttendancePage() {
 
     if (attendanceArray.length > 0) {
       toast.warning("Attendance Already Recorded", {
-        description: `Attendance for ${formatDate(selectedDate)} has already been recorded. Moving to the next day.`,
+        description: `Attendance for ${formatDate(selectedDate)} has already been recorded.`,
         duration: 4000,
       });
-
-      // Move to the next day
-      const currentDate = new Date(selectedDate);
-      currentDate.setDate(currentDate.getDate() + 1);
-      const nextDateStr = currentDate.toISOString().split("T")[0];
-      setSelectedDate(nextDateStr);
-      setHasCheckedAttendance(false); // Reset to check the new date
-      
-      // Reset attendance states for the new date
-      if (studentsData.data) {
-        const states: Record<string, AttendanceStatus> = {};
-        const notes: Record<string, string> = {};
-        studentsData.data.forEach((student) => {
-          states[student.id] = "present";
-          notes[student.id] = "";
-        });
-        setAttendanceStates(states);
-        setAttendanceNotes(notes);
-      }
       return;
     }
 
@@ -287,29 +302,43 @@ export default function AttendancePage() {
       };
     });
 
-    await bulkAttendance.mutateAsync({
-      classId: selectedClassId,
-      date: selectedDate,
-      attendanceData: attendanceDataToSave,
-    });
-
-    // After saving, move to the next date
-    const currentDate = new Date(selectedDate);
-    currentDate.setDate(currentDate.getDate() + 1);
-    const nextDateStr = currentDate.toISOString().split("T")[0];
-    setSelectedDate(nextDateStr);
-    setHasCheckedAttendance(false); // Reset to check the new date
-
-    // Reset attendance states for the new date
-    if (studentsData.data) {
-      const states: Record<string, AttendanceStatus> = {};
-      const notes: Record<string, string> = {};
-      studentsData.data.forEach((student) => {
-        states[student.id] = "present";
-        notes[student.id] = "";
+    try {
+      await bulkAttendance.mutateAsync({
+        classId: selectedClassId,
+        date: selectedDate,
+        attendanceData: attendanceDataToSave,
       });
-      setAttendanceStates(states);
-      setAttendanceNotes(notes);
+
+      // Show success confirmation
+      const presentCount = attendanceDataToSave.filter(a => a.status === 'present').length;
+      const absentCount = attendanceDataToSave.filter(a => a.status === 'absent').length;
+      const lateCount = attendanceDataToSave.filter(a => a.status === 'late').length;
+
+      toast.success("Attendance Saved Successfully", {
+        description: `Attendance for ${formatDate(selectedDate)} has been recorded. Present: ${presentCount}, Absent: ${absentCount}, Late: ${lateCount}`,
+        duration: 5000,
+      });
+
+      // After saving, move to the next date
+      const currentDate = new Date(selectedDate);
+      currentDate.setDate(currentDate.getDate() + 1);
+      const nextDateStr = currentDate.toISOString().split("T")[0];
+      setSelectedDate(nextDateStr);
+
+      // Reset attendance states for the new date
+      if (studentsData.data) {
+        const states: Record<string, AttendanceStatus> = {};
+        const notes: Record<string, string> = {};
+        studentsData.data.forEach((student) => {
+          states[student.id] = "present";
+          notes[student.id] = "";
+        });
+        setAttendanceStates(states);
+        setAttendanceNotes(notes);
+      }
+    } catch (error) {
+      // Error handling is done by the mutation hook
+      console.error("Failed to save attendance:", error);
     }
   };
 
@@ -366,7 +395,7 @@ export default function AttendancePage() {
                     {classes.length === 0 ? (
                       <div className="px-2 py-1.5 text-sm text-muted-foreground">
                         {isTeacher && activeYear
-                          ? `No classes found in active academic year (${activeYear.name})`
+                          ? `No assigned classes found in active academic year (${activeYear.name})`
                           : isTeacher && !activeYear
                           ? "No active academic year found. Please contact administrator."
                           : "No classes available"}
@@ -385,18 +414,72 @@ export default function AttendancePage() {
                 <Label htmlFor="date" className="text-slate-700 font-semibold">
                   Date *
                 </Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="border-slate-200"
-                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handlePreviousDate}
+                    disabled={!canGoPrevious || attendanceLoading}
+                    className="border-slate-200"
+                    title="Previous day"
+                  >
+                    {attendanceLoading ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+                    ) : (
+                      <ChevronLeft className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <div className="flex-1 relative">
+                    <Input
+                      id="date"
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      disabled={attendanceLoading}
+                      className="border-slate-200"
+                    />
+                    {isAttendanceRecorded && (
+                      <Badge
+                        className="absolute -top-2 -right-2 bg-green-500 text-white border-green-600"
+                        variant="default"
+                      >
+                        <Check className="h-3 w-3 mr-1" />
+                        Recorded
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleNextDate}
+                    disabled={!canGoNext || attendanceLoading}
+                    className="border-slate-200"
+                    title="Next day"
+                  >
+                    {attendanceLoading ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                {attendanceLoading && (
+                  <p className="text-xs text-muted-foreground">
+                    Loading attendance data...
+                  </p>
+                )}
+                {!attendanceLoading && isReadOnly && (
+                  <p className="text-xs text-muted-foreground">
+                    Viewing recorded attendance (read-only)
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Quick Actions - Only show when class is selected, has students, and user can mark attendance */}
-            {showAttendanceTable && hasStudents && canMarkAttendance && (
+            {/* Quick Actions - Only show when class is selected, has students, user can mark attendance, and not in read-only mode */}
+            {showAttendanceTable && hasStudents && canMarkAttendance && !isReadOnly && (
               <div className="flex gap-2 flex-wrap pt-2 border-t border-slate-200">
                 <Button
                   variant="outline"
@@ -538,9 +621,9 @@ export default function AttendancePage() {
                                   <div className="flex items-center justify-center">
                                     <Checkbox
                                       checked={status === "present"}
-                                      disabled={!canMarkAttendance}
+                                      disabled={!canMarkAttendance || isReadOnly}
                                       onCheckedChange={(checked) => {
-                                        if (checked && canMarkAttendance) {
+                                        if (checked && canMarkAttendance && !isReadOnly) {
                                           handleStatusChange(
                                             student.id,
                                             "present"
@@ -551,7 +634,7 @@ export default function AttendancePage() {
                                         "h-5 w-5 border-green-600",
                                         status === "present" &&
                                           "bg-green-600 border-green-600",
-                                        !canMarkAttendance && "opacity-50 cursor-not-allowed"
+                                        (!canMarkAttendance || isReadOnly) && "opacity-50 cursor-not-allowed"
                                       )}
                                     />
                                   </div>
@@ -560,9 +643,9 @@ export default function AttendancePage() {
                                   <div className="flex items-center justify-center">
                                     <Checkbox
                                       checked={status === "absent"}
-                                      disabled={!canMarkAttendance}
+                                      disabled={!canMarkAttendance || isReadOnly}
                                       onCheckedChange={(checked) => {
-                                        if (checked && canMarkAttendance) {
+                                        if (checked && canMarkAttendance && !isReadOnly) {
                                           handleStatusChange(
                                             student.id,
                                             "absent"
@@ -573,7 +656,7 @@ export default function AttendancePage() {
                                         "h-5 w-5 border-red-600",
                                         status === "absent" &&
                                           "bg-red-600 border-red-600",
-                                        !canMarkAttendance && "opacity-50 cursor-not-allowed"
+                                        (!canMarkAttendance || isReadOnly) && "opacity-50 cursor-not-allowed"
                                       )}
                                     />
                                   </div>
@@ -582,9 +665,9 @@ export default function AttendancePage() {
                                   <div className="flex items-center justify-center">
                                     <Checkbox
                                       checked={status === "late"}
-                                      disabled={!canMarkAttendance}
+                                      disabled={!canMarkAttendance || isReadOnly}
                                       onCheckedChange={(checked) => {
-                                        if (checked && canMarkAttendance) {
+                                        if (checked && canMarkAttendance && !isReadOnly) {
                                           handleStatusChange(
                                             student.id,
                                             "late"
@@ -595,7 +678,7 @@ export default function AttendancePage() {
                                         "h-5 w-5 border-yellow-600",
                                         status === "late" &&
                                           "bg-yellow-600 border-yellow-600",
-                                        !canMarkAttendance && "opacity-50 cursor-not-allowed"
+                                        (!canMarkAttendance || isReadOnly) && "opacity-50 cursor-not-allowed"
                                       )}
                                     />
                                   </div>
@@ -607,8 +690,11 @@ export default function AttendancePage() {
                                       placeholder={status === 'late' ? "Reason for being late..." : "Reason for absence..."}
                                       value={notes}
                                       onChange={(e) => handleNotesChange(student.id, e.target.value)}
-                                      disabled={!canMarkAttendance}
-                                      className="w-full min-w-[200px] text-sm"
+                                      disabled={!canMarkAttendance || isReadOnly}
+                                      className={cn(
+                                        "w-full min-w-[200px] text-sm",
+                                        isReadOnly && "cursor-not-allowed"
+                                      )}
                                       maxLength={200}
                                     />
                                   ) : (
@@ -629,8 +715,8 @@ export default function AttendancePage() {
         </CardContent>
       </Card>
 
-      {/* Save Button at Bottom - Only for TEACHER and when there are students */}
-      {showAttendanceTable && hasStudents && canMarkAttendance && (
+      {/* Save Button at Bottom - Only for TEACHER, when there are students, and not in read-only mode */}
+      {showAttendanceTable && hasStudents && canMarkAttendance && !isReadOnly && (
         <div className="flex justify-end pt-2">
           <Button
             onClick={handleSave}

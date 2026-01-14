@@ -47,6 +47,23 @@ export const attendanceApi = {
     return response.data;
   },
 
+  getClassSummary: async (classId: string): Promise<Array<{
+    date: string;
+    present: number;
+    absent: number;
+    late: number;
+    total: number;
+  }>> => {
+    const response = await apiClient.get<Array<{
+      date: string;
+      present: number;
+      absent: number;
+      late: number;
+      total: number;
+    }>>(`/api/attendance/class/${classId}/summary`);
+    return response.data;
+  },
+
   update: async (id: string, data: UpdateAttendanceRequest): Promise<Attendance> => {
     const response = await apiClient.patch<Attendance>(`/api/attendance/${id}`, data);
     return response.data;

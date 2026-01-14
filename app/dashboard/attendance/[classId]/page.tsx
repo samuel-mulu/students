@@ -8,6 +8,7 @@ import {
   useAttendanceByClass,
   useBulkAttendance,
   useClassAttendanceDates,
+  useClassAttendanceSummary,
   useUpdateAttendance,
 } from "@/lib/hooks/use-attendance";
 import { Button } from "@/components/ui/button";
@@ -50,8 +51,10 @@ import {
   Users,
   Save,
   History as HistoryIcon,
-  Edit,
+  Download,
+  Printer,
 } from "lucide-react";
+import { format } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
@@ -79,28 +82,68 @@ export default function AttendanceBulkPage({
   });
 
   // Get available dates for history
-  const { data: datesData } = useClassAttendanceDates(classId);
+  const { data: datesData, isLoading: datesLoading, refetch: refetchDates, error: datesError } = useClassAttendanceDates(classId);
+  const { data: summaryData, isLoading: summaryLoading, refetch: refetchSummary } = useClassAttendanceSummary(classId);
+  
   const availableDates = useMemo(() => {
-    const dates = datesData?.data || [];
-    // Sort dates: latest first
-    return dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    if (!datesData?.data) return [];
+    const dates = Array.isArray(datesData.data) ? datesData.data : [];
+    // Filter out any invalid dates and sort: latest first
+    const validDates = dates.filter(date => {
+      const d = new Date(date);
+      return !isNaN(d.getTime());
+    });
+    return validDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
   }, [datesData]);
 
-  // Get latest date from available dates for default
-  const latestDate = availableDates.length > 0 ? availableDates[0] : todayStr;
+  // Create a map of date -> summary stats for quick lookup
+  const summaryMap = useMemo(() => {
+    if (!summaryData?.data) return new Map();
+    const map = new Map();
+    summaryData.data.forEach((item) => {
+      // Normalize date to YYYY-MM-DD format for consistent lookup
+      const normalizedDate = item.date.split('T')[0];
+      map.set(normalizedDate, item);
+      // Also set with original date format for compatibility
+      map.set(item.date, item);
+    });
+    return map;
+  }, [summaryData]);
+
+  // Use summary dates as primary source, fallback to availableDates
+  const displayDates = useMemo(() => {
+    if (summaryData?.data && summaryData.data.length > 0) {
+      // Extract dates from summary data and normalize to YYYY-MM-DD
+      return summaryData.data.map(item => {
+        const date = item.date.split('T')[0];
+        return date;
+      }).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    }
+    return availableDates;
+  }, [summaryData, availableDates]);
+
+  // Get latest date from display dates for default
+  const latestDate = displayDates.length > 0 ? displayDates[0] : todayStr;
 
   const [selectedDate, setSelectedDate] = useState<string>(
     searchParams.get("date") || (isHistoryMode ? latestDate : todayStr)
   );
 
+  // Refetch dates when component mounts or classId changes
+  useEffect(() => {
+    if (classId && isHistoryMode) {
+      refetchDates();
+    }
+  }, [classId, isHistoryMode, refetchDates]);
+
   // Update selected date to latest when in history mode and dates are loaded
   useEffect(() => {
     if (
       isHistoryMode &&
-      availableDates.length > 0 &&
+      displayDates.length > 0 &&
       !searchParams.get("date")
     ) {
-      const latest = availableDates[0];
+      const latest = displayDates[0];
       if (latest && latest !== selectedDate) {
         setSelectedDate(latest);
         router.push(
@@ -111,17 +154,71 @@ export default function AttendanceBulkPage({
     }
   }, [
     isHistoryMode,
-    availableDates,
+    displayDates,
     classId,
     router,
     searchParams,
     selectedDate,
   ]);
 
-  const { data: attendanceData, isLoading: attendanceLoading } =
+  // Sync selectedDate with URL params
+  useEffect(() => {
+    const urlDate = searchParams.get("date");
+    if (urlDate && urlDate !== selectedDate) {
+      setSelectedDate(urlDate);
+    }
+  }, [searchParams, selectedDate]);
+
+  const { data: attendanceData, isLoading: attendanceLoading, refetch: refetchAttendance } =
     useAttendanceByClass(classId, selectedDate);
+
+  // Force refetch when selectedDate changes
+  useEffect(() => {
+    if (selectedDate && classId) {
+      refetchAttendance();
+    }
+  }, [selectedDate, classId, refetchAttendance]);
   const bulkAttendance = useBulkAttendance();
   const updateAttendance = useUpdateAttendance();
+
+  // Prepare students data for memoization
+  const students = useMemo(() => {
+    return Array.isArray(studentsData?.data) ? studentsData.data : [];
+  }, [studentsData?.data]);
+
+  // Calculate attendance statistics for the currently selected date
+  const currentDateStats = useMemo(() => {
+    if (!attendanceData?.data || !studentsData?.data) {
+      return { present: 0, absent: 0, late: 0, total: students.length };
+    }
+
+    let attendanceRecords: any[] = [];
+    if (Array.isArray(attendanceData.data)) {
+      attendanceRecords = attendanceData.data;
+    } else if (attendanceData.data.students) {
+      attendanceRecords = attendanceData.data.students
+        .map((item: any) => ({
+          ...item.attendance,
+          studentId: item.student?.id || item.attendance?.studentId,
+        }))
+        .filter((item: any) => item && item.id);
+    }
+
+    const stats = {
+      present: 0,
+      absent: 0,
+      late: 0,
+      total: students.length,
+    };
+
+    attendanceRecords.forEach((record: any) => {
+      if (record.status === "present") stats.present++;
+      else if (record.status === "absent") stats.absent++;
+      else if (record.status === "late") stats.late++;
+    });
+
+    return stats;
+  }, [attendanceData, studentsData, students]);
 
   const [attendanceStates, setAttendanceStates] = useState<
     Record<string, AttendanceStatus>
@@ -136,13 +233,14 @@ export default function AttendanceBulkPage({
 
   // Update URL when date changes
   const handleDateChange = (newDate: string) => {
+    if (newDate === selectedDate) return; // Prevent unnecessary updates
     setSelectedDate(newDate);
+    setHasChanges(false);
     const historyParam = isHistoryMode ? "&history=true" : "";
     router.push(
       `/dashboard/attendance/${classId}?date=${newDate}${historyParam}`,
       { scroll: false }
     );
-    setHasChanges(false);
   };
 
   // Date navigation helpers
@@ -356,11 +454,6 @@ export default function AttendanceBulkPage({
   const canMarkAttendance = hasRole(["TEACHER"]);
   const canViewHistory = hasRole(["TEACHER", "OWNER"]);
 
-  // Prepare students data for memoization (hooks must be called before early returns)
-  const students = useMemo(() => {
-    return Array.isArray(studentsData?.data) ? studentsData.data : [];
-  }, [studentsData?.data]);
-
   // Sort students alphabetically by first name (A, B, C...) - must be called before early returns
   const sortedStudents = useMemo(() => {
     return [...students].sort((a, b) => {
@@ -393,25 +486,18 @@ export default function AttendanceBulkPage({
         <div className="flex items-center gap-4">
           <BackButton href="/dashboard/attendance" />
           <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                "p-3 rounded-lg border",
-                isHistory
-                  ? "bg-amber-50 border-amber-200"
-                  : "bg-slate-100 border-slate-200"
-              )}
-            >
+            <div className="p-3 rounded-lg border bg-slate-50 border-slate-200">
               {isHistory ? (
-                <HistoryIcon className="h-8 w-8 text-amber-700" />
+                <HistoryIcon className="h-8 w-8 text-slate-700" />
               ) : (
                 <Calendar className="h-8 w-8 text-slate-700" />
               )}
             </div>
             <div>
-              <h1 className="text-xl font-semibold">
+              <h1 className="text-xl font-semibold text-slate-900">
                 {isHistory ? "Attendance History" : "Mark Attendance"}
               </h1>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm text-slate-600 mt-1">
                 {classData.data.name} • {formatDate(selectedDate)}
               </p>
             </div>
@@ -436,7 +522,7 @@ export default function AttendanceBulkPage({
           {isHistory && (
             <Badge
               variant="secondary"
-              className="bg-amber-100 text-amber-800 border-amber-300"
+              className="bg-slate-100 text-slate-700 border-slate-300"
             >
               <HistoryIcon className="h-3 w-3 mr-1" />
               Viewing History
@@ -446,30 +532,11 @@ export default function AttendanceBulkPage({
       </div>
 
       {/* Date Navigation Card */}
-      <Card
-        className={cn(
-          "border shadow-sm",
-          isHistory ? "border-amber-200 bg-amber-50/30" : "border-slate-200"
-        )}
-      >
-        <CardHeader
-          className={cn(
-            "border-b",
-            isHistory
-              ? "bg-amber-50 border-amber-200"
-              : "bg-slate-50 border-slate-200"
-          )}
-        >
+      <Card className="border shadow-sm border-slate-200">
+        <CardHeader className="border-b bg-slate-50 border-slate-200">
           <div className="flex items-center gap-3">
-            <Calendar
-              className={cn(
-                "h-5 w-5",
-                isHistory ? "text-amber-700" : "text-slate-600"
-              )}
-            />
-            <CardTitle
-              className={isHistory ? "text-amber-900" : "text-slate-900"}
-            >
+            <Calendar className="h-5 w-5 text-slate-600" />
+            <CardTitle className="text-slate-900">
               Date Selection
             </CardTitle>
           </div>
@@ -477,35 +544,332 @@ export default function AttendanceBulkPage({
         <CardContent className="p-6">
           <div className="space-y-4">
             {isHistory ? (
-              /* History Mode: Only show dropdown */
+              /* History Mode: Show table with attendance statistics */
               <div className="space-y-4">
                 <div>
-                  <Label className="text-slate-700 font-semibold mb-2 block">
-                    Select Date from History
-                  </Label>
-                  {availableDates.length > 0 ? (
-                    <>
-                      <Select
-                        value={selectedDate}
-                        onValueChange={handleDateChange}
-                      >
-                        <SelectTrigger className="w-full md:w-[300px] border-slate-200">
-                          <SelectValue placeholder="Select a date from history" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableDates.map((date) => (
-                            <SelectItem key={date} value={date}>
-                              {formatDate(date)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {availableDates.length}{" "}
-                        {availableDates.length === 1 ? "date" : "dates"} with
-                        attendance records
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <Label className="text-slate-800 font-semibold text-base">
+                        Daily Attendance Summary
+                      </Label>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Click on any date to view detailed student records
                       </p>
-                    </>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          refetchDates();
+                          refetchSummary();
+                        }}
+                        disabled={datesLoading || summaryLoading}
+                        className="text-xs"
+                      >
+                        {datesLoading || summaryLoading ? (
+                          <>
+                            <div className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600 mr-2" />
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <HistoryIcon className="h-3 w-3 mr-1" />
+                            Refresh
+                          </>
+                        )}
+                      </Button>
+                      {summaryData?.data && summaryData.data.length > 0 && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Export to CSV
+                              const headers = ['Date', 'Present', 'Absent', 'Late', 'Total'];
+                              const rows = summaryData.data.map((item) => [
+                                format(new Date(item.date), 'MMM dd, yyyy'),
+                                item.present.toString(),
+                                item.absent.toString(),
+                                item.late.toString(),
+                                item.total.toString(),
+                              ]);
+                              const csvContent = [
+                                headers.join(','),
+                                ...rows.map(row => row.join(',')),
+                              ].join('\n');
+                              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                              const link = document.createElement('a');
+                              const url = URL.createObjectURL(blob);
+                              link.setAttribute('href', url);
+                              link.setAttribute('download', `attendance-summary-${classData?.data?.name || 'class'}-${format(new Date(), 'yyyy-MM-dd')}.csv`);
+                              link.style.visibility = 'hidden';
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }}
+                            className="text-xs"
+                          >
+                            <Download className="h-3 w-3 mr-1" />
+                            Export
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Print
+                              if (!summaryData?.data || !classData?.data) return;
+                              const printWindow = window.open('', '_blank');
+                              if (!printWindow) return;
+                              const dateRows = summaryData.data.map((item) => {
+                                const date = new Date(item.date);
+                                return `
+                                  <tr>
+                                    <td style="padding: 10px; border: 1px solid #e5e7eb;">${format(date, 'MMM dd, yyyy')}</td>
+                                    <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #16a34a; font-weight: 600;">${item.present}</td>
+                                    <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #dc2626; font-weight: 600;">${item.absent}</td>
+                                    <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #ca8a04; font-weight: 600;">${item.late}</td>
+                                    <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${item.total}</td>
+                                  </tr>
+                                `;
+                              }).join('');
+                              const totalPresent = summaryData.data.reduce((sum, item) => sum + item.present, 0);
+                              const totalAbsent = summaryData.data.reduce((sum, item) => sum + item.absent, 0);
+                              const totalLate = summaryData.data.reduce((sum, item) => sum + item.late, 0);
+                              const totalDays = summaryData.data.length;
+                              const avgTotal = summaryData.data.length > 0 ? Math.round(summaryData.data.reduce((sum, item) => sum + item.total, 0) / summaryData.data.length) : 0;
+                              const htmlContent = `
+                                <!DOCTYPE html>
+                                <html>
+                                  <head>
+                                    <title>Daily Attendance Summary - ${classData.data.name}</title>
+                                    <style>
+                                      body {
+                                        font-family: Arial, sans-serif;
+                                        margin: 20px;
+                                        color: #000;
+                                      }
+                                      h1 {
+                                        color: #1f2937;
+                                        border-bottom: 2px solid #3b82f6;
+                                        padding-bottom: 10px;
+                                        margin-bottom: 20px;
+                                      }
+                                      table {
+                                        width: 100%;
+                                        border-collapse: collapse;
+                                        margin-top: 20px;
+                                      }
+                                      th {
+                                        background-color: #f3f4f6;
+                                        padding: 12px;
+                                        text-align: left;
+                                        border: 1px solid #ddd;
+                                        font-weight: bold;
+                                      }
+                                      td {
+                                        padding: 8px;
+                                        border: 1px solid #ddd;
+                                      }
+                                      .summary {
+                                        margin-top: 30px;
+                                        padding: 15px;
+                                        background-color: #f9fafb;
+                                        border: 1px solid #ddd;
+                                      }
+                                      .summary h2 {
+                                        margin-top: 0;
+                                        color: #1f2937;
+                                      }
+                                      .summary-row {
+                                        display: flex;
+                                        justify-content: space-between;
+                                        padding: 8px 0;
+                                        border-bottom: 1px solid #e5e7eb;
+                                      }
+                                      @media print {
+                                        body { margin: 0; }
+                                        .no-print { display: none; }
+                                      }
+                                    </style>
+                                  </head>
+                                  <body>
+                                    <h1>Daily Attendance Summary - ${classData.data.name}</h1>
+                                    <p><strong>Generated:</strong> ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
+                                    <table>
+                                      <thead>
+                                        <tr>
+                                          <th>Date</th>
+                                          <th style="text-align: right;">Present</th>
+                                          <th style="text-align: right;">Absent</th>
+                                          <th style="text-align: right;">Late</th>
+                                          <th style="text-align: right;">Total</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        ${dateRows}
+                                        <tr style="background-color: #f3f4f6; font-weight: bold;">
+                                          <td style="padding: 10px; border: 1px solid #e5e7eb;">Total</td>
+                                          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #16a34a;">${totalPresent}</td>
+                                          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #dc2626;">${totalAbsent}</td>
+                                          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #ca8a04;">${totalLate}</td>
+                                          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">${avgTotal * totalDays}</td>
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                    <div class="summary">
+                                      <h2>Summary</h2>
+                                      <div class="summary-row">
+                                        <span><strong>Total Days Recorded:</strong></span>
+                                        <span>${totalDays}</span>
+                                      </div>
+                                      <div class="summary-row">
+                                        <span><strong>Total Present:</strong></span>
+                                        <span>${totalPresent}</span>
+                                      </div>
+                                      <div class="summary-row">
+                                        <span><strong>Total Absent:</strong></span>
+                                        <span>${totalAbsent}</span>
+                                      </div>
+                                      <div class="summary-row">
+                                        <span><strong>Total Late:</strong></span>
+                                        <span>${totalLate}</span>
+                                      </div>
+                                      <div class="summary-row">
+                                        <span><strong>Average Students per Day:</strong></span>
+                                        <span>${avgTotal}</span>
+                                      </div>
+                                    </div>
+                                  </body>
+                                </html>
+                              `;
+                              printWindow.document.write(htmlContent);
+                              printWindow.document.close();
+                              printWindow.focus();
+                              setTimeout(() => {
+                                printWindow.print();
+                              }, 250);
+                            }}
+                            className="text-xs"
+                          >
+                            <Printer className="h-3 w-3 mr-1" />
+                            Print
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {datesLoading ? (
+                    <div className="p-8 border border-slate-200 rounded-md bg-slate-50 text-center">
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-600 border-t-transparent mx-auto mb-2" />
+                      <p className="text-sm text-slate-600">Loading attendance dates...</p>
+                    </div>
+                  ) : datesError ? (
+                    <div className="p-4 border border-red-200 rounded-md bg-red-50">
+                      <p className="text-sm text-red-600">
+                        Failed to load attendance dates. Please try refreshing.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          refetchDates();
+                          refetchSummary();
+                        }}
+                        className="mt-2"
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  ) : (summaryLoading || datesLoading) ? (
+                    <div className="p-8 border border-slate-200 rounded-md bg-slate-50 text-center">
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-600 border-t-transparent mx-auto mb-2" />
+                      <p className="text-sm text-slate-600">Loading attendance summary...</p>
+                    </div>
+                  ) : (displayDates.length > 0 || summaryData?.data?.length > 0) ? (
+                    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50 hover:bg-slate-50">
+                            <TableHead className="font-semibold text-slate-700">Date</TableHead>
+                            <TableHead className="font-semibold text-slate-700 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Check className="h-4 w-4 text-green-600" />
+                                <span>Present</span>
+                              </div>
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <X className="h-4 w-4 text-red-600" />
+                                <span>Absent</span>
+                              </div>
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Clock className="h-4 w-4 text-yellow-600" />
+                                <span>Late</span>
+                              </div>
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700 text-center">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {displayDates.map((date) => {
+                            const isSelected = date === selectedDate;
+                            // Normalize date for lookup (ensure YYYY-MM-DD format)
+                            const normalizedDate = date.split('T')[0];
+                            const summary = summaryMap.get(normalizedDate) || summaryMap.get(date);
+                            const stats = summary || { present: 0, absent: 0, late: 0, total: students.length };
+                            
+                            return (
+                              <TableRow
+                                key={date}
+                                className={cn(
+                                  "cursor-pointer hover:bg-slate-50 transition-colors",
+                                  isSelected && "bg-blue-50 border-l-4 border-l-blue-600"
+                                )}
+                                onClick={() => handleDateChange(date)}
+                              >
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <Calendar className="h-4 w-4 text-slate-500" />
+                                    <span>{formatDate(date)}</span>
+                                    {isSelected && (
+                                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs border-blue-200">
+                                        Viewing
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-green-50 text-green-700 font-semibold text-sm border border-green-200">
+                                    {stats.present}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-red-50 text-red-700 font-semibold text-sm border border-red-200">
+                                    {stats.absent}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-yellow-50 text-yellow-700 font-semibold text-sm border border-yellow-200">
+                                    {stats.late}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-center font-semibold text-slate-700">
+                                  {stats.total}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                      <div className="p-3 border-t border-slate-200 bg-slate-50">
+                        <p className="text-xs text-slate-600 text-center">
+                          Showing <strong className="text-slate-800">{displayDates.length}</strong> date{displayDates.length !== 1 ? 's' : ''} with attendance records
+                        </p>
+                      </div>
+                    </div>
                   ) : (
                     <div className="p-4 border border-slate-200 rounded-md bg-slate-50">
                       <p className="text-sm text-slate-600">
@@ -578,36 +942,15 @@ export default function AttendanceBulkPage({
       </Card>
 
       {/* Students Attendance Table */}
-      <Card
-        className={cn(
-          "border shadow-sm",
-          isHistory ? "border-amber-200 bg-amber-50/30" : "border-slate-200"
-        )}
-      >
-        <CardHeader
-          className={cn(
-            "border-b",
-            isHistory
-              ? "bg-amber-50 border-amber-200"
-              : "bg-slate-50 border-slate-200"
-          )}
-        >
+      <Card className="border shadow-sm border-slate-200">
+        <CardHeader className="border-b bg-slate-50 border-slate-200">
           <div className="flex items-center gap-3">
-            <Users
-              className={cn(
-                "h-5 w-5",
-                isHistory ? "text-amber-700" : "text-slate-600"
-              )}
-            />
+            <Users className="h-5 w-5 text-slate-600" />
             <div>
-              <CardTitle
-                className={isHistory ? "text-amber-900" : "text-slate-900"}
-              >
+              <CardTitle className="text-slate-900">
                 Students Attendance
               </CardTitle>
-              <CardDescription
-                className={isHistory ? "text-amber-700" : "text-slate-600"}
-              >
+              <CardDescription className="text-slate-600">
                 {students.length}{" "}
                 {students.length === 1 ? "student" : "students"} in class
                 {isHistory && " • Historical Record"}

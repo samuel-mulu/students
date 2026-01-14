@@ -44,6 +44,23 @@ export function useClassAttendanceDates(classId: string) {
       return { data: dates };
     },
     enabled: !!classId,
+    staleTime: 1000, // Consider data stale after 1 second
+    refetchOnMount: 'always', // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+  });
+}
+
+export function useClassAttendanceSummary(classId: string) {
+  return useQuery({
+    queryKey: ['attendance', 'class', classId, 'summary'],
+    queryFn: async () => {
+      const summary = await attendanceApi.getClassSummary(classId);
+      return { data: summary };
+    },
+    enabled: !!classId,
+    staleTime: 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -53,11 +70,18 @@ export function useBulkAttendance() {
   return useMutation({
     mutationFn: (data: BulkAttendanceRequest) => attendanceApi.createBulk(data),
     onSuccess: (result, variables) => {
+      // Invalidate all attendance queries
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      // Specifically invalidate the dates query to ensure it refreshes
+      queryClient.invalidateQueries({
+        queryKey: ['attendance', 'class', variables.classId, 'dates'],
+      });
+      // Invalidate the specific date query
       queryClient.invalidateQueries({
         queryKey: ['attendance', 'class', variables.classId, variables.date],
       });
-      queryClient.invalidateQueries({
+      // Force refetch the dates query
+      queryClient.refetchQueries({
         queryKey: ['attendance', 'class', variables.classId, 'dates'],
       });
       const count = variables.attendanceData.length;

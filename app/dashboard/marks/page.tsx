@@ -32,18 +32,45 @@ export default function MarksPage() {
   const activeYear = activeYearData?.data;
   const isTeacher = hasRole(['TEACHER']);
 
-  // Filter classes for teachers: show only assigned classes from active academic year
+  // Filter classes for teachers:
+  // Step 1: Filter by active academic year first
+  // Step 2: Then filter by assigned classes
   const classes = useMemo(() => {
-    if (isTeacher && user?.teacherClasses && activeYear) {
-      const assignedClassIds = user.teacherClasses.map((tc) => tc.id);
-      return allClasses.filter(
-        (cls) =>
-          assignedClassIds.includes(cls.id) &&
-          cls.academicYearId === activeYear.id
-      );
-    }
     // For owners, show all classes
-    return allClasses;
+    if (!isTeacher) {
+      return allClasses;
+    }
+    
+    // For teachers: must have active academic year
+    if (!activeYear || !activeYear.id) {
+      return [];
+    }
+    
+    // Step 1: Get classes from active academic year
+    const activeYearClasses = allClasses.filter((cls) => {
+      // Check both academicYearId and legacy academicYear field
+      if (cls.academicYearId) {
+        return cls.academicYearId === activeYear.id;
+      }
+      // Legacy support: check if academicYear is a string matching the active year name
+      if (typeof cls.academicYear === 'string') {
+        return cls.academicYear === activeYear.name;
+      }
+      // If academicYear is an object, check its id
+      if (typeof cls.academicYear === 'object' && cls.academicYear?.id) {
+        return cls.academicYear.id === activeYear.id;
+      }
+      return false;
+    });
+    
+    // Step 2: Filter by assigned classes (if teacher has assigned classes)
+    if (user?.teacherClasses && user.teacherClasses.length > 0) {
+      const assignedClassIds = user.teacherClasses.map((tc) => tc.id);
+      return activeYearClasses.filter((cls) => assignedClassIds.includes(cls.id));
+    }
+    
+    // If no assigned classes, return empty array
+    return [];
   }, [isTeacher, user?.teacherClasses, activeYear, allClasses]);
 
   // Filter academic years for teachers: show only active academic year

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { User, Class } from '@/lib/types';
+import { useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
 
 interface AssignHeadTeacherDialogProps {
   open: boolean;
@@ -38,6 +39,8 @@ export function AssignHeadTeacherDialog({
   isLoading,
 }: AssignHeadTeacherDialogProps) {
   const [selectedClassId, setSelectedClassId] = useState<string>('');
+  const { data: activeYearData } = useActiveAcademicYear();
+  const activeYear = activeYearData?.data;
 
   const handleSubmit = async () => {
     if (selectedClassId) {
@@ -47,11 +50,19 @@ export function AssignHeadTeacherDialog({
     }
   };
 
+  // Filter classes by active academic year
+  const activeYearClasses = useMemo(() => {
+    if (!activeYear) return [];
+    return classes.filter((cls) => cls.academicYearId === activeYear.id);
+  }, [classes, activeYear]);
+
   // Filter out classes already assigned to this teacher
-  const availableClasses = classes.filter((cls) => {
-    if (!user?.teacherClasses) return true;
-    return !user.teacherClasses.some((tc) => tc.id === cls.id);
-  });
+  const availableClasses = useMemo(() => {
+    return activeYearClasses.filter((cls) => {
+      if (!user?.teacherClasses) return true;
+      return !user.teacherClasses.some((tc) => tc.id === cls.id);
+    });
+  }, [activeYearClasses, user?.teacherClasses]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -70,9 +81,15 @@ export function AssignHeadTeacherDialog({
                 <SelectValue placeholder="Select a class" />
               </SelectTrigger>
               <SelectContent>
-                {availableClasses.length === 0 ? (
+                {!activeYear ? (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                    No available classes
+                    No active academic year found. Please activate an academic year first.
+                  </div>
+                ) : availableClasses.length === 0 ? (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    {activeYearClasses.length === 0
+                      ? `No classes found in active academic year (${activeYear.name})`
+                      : 'No available classes (all classes are already assigned to this teacher)'}
                   </div>
                 ) : (
                   availableClasses.map((cls) => (
@@ -83,9 +100,16 @@ export function AssignHeadTeacherDialog({
                 )}
               </SelectContent>
             </Select>
-            {user?.teacherClasses && user.teacherClasses.length > 0 && (
+            {user?.teacherClasses && user.teacherClasses.length > 0 && activeYear && (
               <p className="text-xs text-muted-foreground mt-1">
-                Currently assigned to: {user.teacherClasses.map((c) => c.name).join(', ')}
+                Currently assigned to (active academic year):{' '}
+                {user.teacherClasses
+                  .filter((tc) => {
+                    const classData = classes.find((c) => c.id === tc.id);
+                    return classData?.academicYearId === activeYear.id;
+                  })
+                  .map((c) => c.name)
+                  .join(', ') || 'None'}
               </p>
             )}
           </div>

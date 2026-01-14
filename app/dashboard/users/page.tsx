@@ -22,6 +22,7 @@ import { AssignHeadTeacherDialog } from '@/components/forms/AssignHeadTeacherDia
 import { User } from '@/lib/types';
 import { Users, Plus, Search, GraduationCap } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
 import {
   Table,
   TableBody,
@@ -62,11 +63,13 @@ export default function UsersPage() {
 
   const { data, isLoading, error, refetch } = useUsers();
   const { data: classesData } = useClasses();
+  const { data: activeYearData } = useActiveAcademicYear();
   const deleteUser = useDeleteUser();
   const updateClass = useUpdateClass();
 
   const users = Array.isArray(data?.data) ? data.data : [];
   const classes = Array.isArray(classesData?.data) ? classesData.data : [];
+  const activeYear = activeYearData?.data;
 
   // Filter users
   const filteredUsers = users.filter((user: User) => {
@@ -256,37 +259,59 @@ export default function UsersPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="py-4 px-6 border-r border-slate-200">
-                          {user.teacherClasses && user.teacherClasses.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {user.teacherClasses.map((cls) => (
-                                <Badge
-                                  key={cls.id}
-                                  variant="outline"
-                                  className="bg-green-50 text-green-700 border-green-300 flex items-center gap-1 pr-1"
-                                >
-                                  <span>{cls.name}</span>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setRemoveClassDialog({
-                                        open: true,
-                                        user,
-                                        classId: cls.id,
-                                        className: cls.name,
-                                      });
-                                    }}
-                                    className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors flex items-center justify-center w-4 h-4"
-                                    disabled={updateClass.isPending}
-                                    title={`Remove from ${cls.name}`}
+                          {(() => {
+                            // Filter teacher classes by active academic year
+                            if (!activeYear) {
+                              return (
+                                <span className="text-muted-foreground text-sm">
+                                  No active academic year
+                                </span>
+                              );
+                            }
+
+                            const activeYearClasses = user.teacherClasses?.filter((tc) => {
+                              const classData = classes.find((c) => c.id === tc.id);
+                              return classData?.academicYearId === activeYear.id;
+                            }) || [];
+
+                            if (activeYearClasses.length === 0) {
+                              return (
+                                <span className="text-muted-foreground text-sm">
+                                  None (active academic year: {activeYear.name})
+                                </span>
+                              );
+                            }
+
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {activeYearClasses.map((cls) => (
+                                  <Badge
+                                    key={cls.id}
+                                    variant="outline"
+                                    className="bg-green-50 text-green-700 border-green-300 flex items-center gap-1 pr-1"
                                   >
-                                    <span className="text-red-600 text-xs leading-none font-bold">×</span>
-                                  </button>
-                                </Badge>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">None</span>
-                          )}
+                                    <span>{cls.name}</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRemoveClassDialog({
+                                          open: true,
+                                          user,
+                                          classId: cls.id,
+                                          className: cls.name,
+                                        });
+                                      }}
+                                      className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors flex items-center justify-center w-4 h-4"
+                                      disabled={updateClass.isPending}
+                                      title={`Remove from ${cls.name}`}
+                                    >
+                                      <span className="text-red-600 text-xs leading-none font-bold">×</span>
+                                    </button>
+                                  </Badge>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="py-4 px-6">
                           <div className="flex gap-2">
