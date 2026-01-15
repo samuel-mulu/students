@@ -54,8 +54,8 @@ const menuItems: MenuItem[] = [
     roles: ["OWNER", "TEACHER"],
   },
   {
-    label: "Marks",
-    href: "/dashboard/marks",
+    label: "Results",
+    href: "/dashboard/results",
     icon: FileText,
     roles: ["OWNER", "TEACHER"],
   },

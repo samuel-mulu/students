@@ -7,9 +7,9 @@ export const subexamsApi = {
     return response.data;
   },
 
-  getBySubjectAndTerm: async (subjectId: string, termId: string): Promise<SubExam[]> => {
+  getBySubject: async (gradeId: string, subjectId: string): Promise<SubExam[]> => {
     const response = await apiClient.get<SubExam[]>(
-      `/api/subexams/subject/${subjectId}/term/${termId}`
+      `/api/subexams/grade/${gradeId}/subject/${subjectId}`
     );
     return response.data;
   },

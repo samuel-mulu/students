@@ -3,14 +3,14 @@ import { subexamsApi } from '@/lib/api/subexams';
 import { CreateSubExamRequest, UpdateSubExamRequest } from '@/lib/types';
 import { toast } from 'sonner';
 
-export function useSubExams(subjectId: string, termId: string) {
+export function useSubExams(gradeId: string, subjectId: string) {
   return useQuery({
-    queryKey: ['subexams', subjectId, termId],
+    queryKey: ['subexams', gradeId, subjectId],
     queryFn: async () => {
-      const subexams = await subexamsApi.getBySubjectAndTerm(subjectId, termId);
+      const subexams = await subexamsApi.getBySubject(gradeId, subjectId);
       return { data: subexams };
     },
-    enabled: !!subjectId && !!termId,
+    enabled: !!gradeId && !!subjectId,
   });
 }
 

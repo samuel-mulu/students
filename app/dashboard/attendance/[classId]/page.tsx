@@ -551,7 +551,7 @@ export default function AttendanceBulkPage({
                     <div>
                       <Label className="text-slate-800 font-semibold text-base">
                         Daily Attendance Summary
-                      </Label>
+                  </Label>
                       <p className="text-xs text-slate-500 mt-1">
                         Click on any date to view detailed student records
                       </p>

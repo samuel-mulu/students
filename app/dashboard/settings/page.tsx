@@ -1,31 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   useSettings,
   useSetting,
   useUpdateSetting,
 } from "@/lib/hooks/use-settings";
 import {
-  useGrades,
-  useCreateGrade,
-  useUpdateGrade,
-  useDeleteGrade,
-} from "@/lib/hooks/use-grades";
-import {
-  useAcademicYears,
-  useActiveAcademicYear,
-  useCreateAcademicYear,
-  useUpdateAcademicYear,
-  useActivateAcademicYear,
-  useCloseAcademicYear,
-} from "@/lib/hooks/use-academicYears";
-import {
   usePaymentTypes,
   useCreatePaymentType,
   useUpdatePaymentType,
   useDeletePaymentType,
 } from "@/lib/hooks/use-payment-types";
+import { useGrades } from "@/lib/hooks/use-grades";
+import { useGradeSubjects } from "@/lib/hooks/use-classes";
+import {
+  useSubExams,
+  useCreateSubExam,
+  useUpdateSubExam,
+  useDeleteSubExam,
+} from "@/lib/hooks/use-subexams";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -41,15 +35,16 @@ import { Label } from "@/components/ui/label";
 import {
   Settings,
   Save,
-  GraduationCap,
-  Calendar,
   Sliders,
   Plus,
   Edit,
   Trash2,
-  CheckCircle2,
-  XCircle,
   DollarSign,
+  FileText,
+  ClipboardList,
+  BookOpen,
+  GraduationCap,
+  Loader2,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -64,8 +59,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Grade, AcademicYear, PaymentType } from "@/lib/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PaymentType, SubExam, ExamType } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils/format";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function SettingsPage() {
   const { hasRole } = useAuthStore();
@@ -90,70 +94,63 @@ export default function SettingsPage() {
   const updateSetting = useUpdateSetting();
   const [threshold, setThreshold] = useState("60.0");
 
-  // Grades
-  const {
-    data: gradesData,
-    isLoading: gradesLoading,
-    error: gradesError,
-    refetch: refetchGrades,
-  } = useGrades();
-  const createGrade = useCreateGrade();
-  const updateGrade = useUpdateGrade();
-  const deleteGrade = useDeleteGrade();
+  // Marks/Sub-Exams
+  const { data: gradesData } = useGrades();
+  const grades = Array.isArray(gradesData?.data) ? gradesData.data : [];
+  const [selectedGradeId, setSelectedGradeId] = useState<string>("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
+  
+  const { data: subjectsData, isLoading: subjectsLoading } = useGradeSubjects(selectedGradeId);
+  const subjects = Array.isArray(subjectsData?.data) ? subjectsData.data : [];
+  
+  const { data: subExamsData, isLoading: subExamsLoading } = useSubExams(selectedGradeId, selectedSubjectId);
+  
+  const createSubExam = useCreateSubExam();
+  const updateSubExam = useUpdateSubExam();
+  const deleteSubExam = useDeleteSubExam();
 
-  // Academic Years
-  const {
-    data: academicYearsData,
-    isLoading: academicYearsLoading,
-    error: academicYearsError,
-    refetch: refetchAcademicYears,
-  } = useAcademicYears();
-  const { data: activeYearData } = useActiveAcademicYear();
-  const createAcademicYear = useCreateAcademicYear();
-  const updateAcademicYear = useUpdateAcademicYear();
-  const activateAcademicYear = useActivateAcademicYear();
-  const closeAcademicYear = useCloseAcademicYear();
-
-  // Grade Dialog State
-  const [gradeDialog, setGradeDialog] = useState<{
+  // Sub-Exam Dialog State
+  const [subExamDialog, setSubExamDialog] = useState<{
     open: boolean;
-    grade: Grade | null;
+    subExam: SubExam | null;
     mode: "create" | "edit";
   }>({
     open: false,
-    grade: null,
+    subExam: null,
     mode: "create",
   });
 
-  const [gradeFormData, setGradeFormData] = useState({
+  const [subExamFormData, setSubExamFormData] = useState({
     name: "",
-    order: 1,
-    isHighest: false,
+    examType: "quiz" as ExamType,
+    maxScore: 0,
+    weightPercent: 0,
   });
 
-  const [deleteGradeDialog, setDeleteGradeDialog] = useState<{
+  const [deleteSubExamDialog, setDeleteSubExamDialog] = useState<{
     open: boolean;
-    grade: Grade | null;
+    subExam: SubExam | null;
   }>({
     open: false,
-    grade: null,
+    subExam: null,
   });
 
-  // Academic Year Dialog State
-  const [academicYearDialog, setAcademicYearDialog] = useState<{
+  // Bulk Creation State
+  const [bulkDialog, setBulkDialog] = useState<{
     open: boolean;
-    year: AcademicYear | null;
-    mode: "create" | "edit";
+    loading: boolean;
+    results: Array<{ gradeId: string; subjectId: string; gradeName: string; subjectName: string; success: boolean; error?: string }>;
   }>({
     open: false,
-    year: null,
-    mode: "create",
+    loading: false,
+    results: [],
   });
-
-  const [academicYearFormData, setAcademicYearFormData] = useState({
+  const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
+  const [bulkFormData, setBulkFormData] = useState({
     name: "",
-    startDate: "",
-    endDate: "",
+    examType: "quiz" as ExamType,
+    maxScore: 0,
+    weightPercent: 0,
   });
 
   // Payment Types
@@ -200,81 +197,233 @@ export default function SettingsPage() {
     }
   }, [thresholdData]);
 
-  // Grade Handlers
-  const handleOpenCreateGrade = () => {
-    setGradeFormData({ name: "", order: 1, isHighest: false });
-    setGradeDialog({ open: true, grade: null, mode: "create" });
-  };
-
-  const handleOpenEditGrade = (grade: Grade) => {
-    setGradeFormData({
-      name: grade.name,
-      order: grade.order,
-      isHighest: grade.isHighest,
-    });
-    setGradeDialog({ open: true, grade, mode: "edit" });
-  };
-
-  const handleSubmitGrade = async () => {
-    if (gradeDialog.mode === "create") {
-      await createGrade.mutateAsync(gradeFormData);
-    } else if (gradeDialog.grade) {
-      await updateGrade.mutateAsync({
-        id: gradeDialog.grade.id,
-        data: gradeFormData,
-      });
+  // Reset subject when grade changes
+  useEffect(() => {
+    if (selectedGradeId) {
+      setSelectedSubjectId("");
     }
-    setGradeDialog({ open: false, grade: null, mode: "create" });
-  };
+  }, [selectedGradeId]);
 
-  const handleDeleteGrade = async () => {
-    if (deleteGradeDialog.grade) {
-      await deleteGrade.mutateAsync(deleteGradeDialog.grade.id);
-      setDeleteGradeDialog({ open: false, grade: null });
-    }
-  };
-
-  // Academic Year Handlers
-  const handleOpenCreateAcademicYear = () => {
-    setAcademicYearFormData({ name: "", startDate: "", endDate: "" });
-    setAcademicYearDialog({ open: true, year: null, mode: "create" });
-  };
-
-  const handleOpenEditAcademicYear = (year: AcademicYear) => {
-    setAcademicYearFormData({
-      name: year.name,
-      startDate: year.startDate.split("T")[0],
-      endDate: year.endDate ? year.endDate.split("T")[0] : "",
+  // Sub-Exam Handlers
+  const handleOpenCreateSubExam = () => {
+    if (!selectedSubjectId || !selectedGradeId) return;
+    
+    // Start with quiz preset (weight = maxScore)
+    setSubExamFormData({
+      name: "",
+      examType: "quiz",
+      maxScore: 10,
+      weightPercent: 10, // Auto-set to maxScore
     });
-    setAcademicYearDialog({ open: true, year, mode: "edit" });
+    setSubExamDialog({ open: true, subExam: null, mode: "create" });
   };
 
-  const handleSubmitAcademicYear = async () => {
-    const submitData = {
-      name: academicYearFormData.name,
-      startDate: new Date(academicYearFormData.startDate).toISOString(),
-      endDate: academicYearFormData.endDate
-        ? new Date(academicYearFormData.endDate).toISOString()
-        : undefined,
+  const handleOpenBulkCreate = () => {
+    setSelectedGrades([]);
+    // Start with quiz preset (weight = maxScore)
+    setBulkFormData({
+      name: "",
+      examType: "quiz",
+      maxScore: 10,
+      weightPercent: 10, // Auto-set to maxScore
+    });
+    setBulkDialog({ open: true, loading: false, results: [] });
+  };
+
+  const handleBulkCreate = async () => {
+    if (selectedGrades.length === 0 || selectedSubjectId === "" || !bulkFormData.name || bulkFormData.maxScore <= 0) {
+      return;
+    }
+
+    // Validate max score limits
+    if (bulkFormData.examType === "quiz" || bulkFormData.examType === "assignment") {
+      if (bulkFormData.maxScore > 10) {
+        toast.error("Max score too high", {
+          description: `${bulkFormData.examType === "quiz" ? "Quiz" : "Assignment"} maximum is 10 points.`,
+        });
+        return;
+      }
+    } else if (bulkFormData.examType === "mid_exam") {
+      if (bulkFormData.maxScore > 20) {
+        toast.error("Max score too high", {
+          description: "Mid Exam maximum is 20 points.",
+        });
+        return;
+      }
+    } else if (bulkFormData.examType === "general_test") {
+      if (bulkFormData.maxScore > 40) {
+        toast.error("Max score too high", {
+          description: "General Test maximum is 40 points.",
+        });
+        return;
+      }
+    }
+
+    // Auto-set weight = maxScore
+    const finalBulkFormData = {
+      ...bulkFormData,
+      weightPercent: bulkFormData.maxScore, // Weight equals max score
     };
 
-    if (academicYearDialog.mode === "create") {
-      await createAcademicYear.mutateAsync(submitData);
-    } else if (academicYearDialog.year) {
-      await updateAcademicYear.mutateAsync({
-        id: academicYearDialog.year.id,
-        data: submitData,
+    setBulkDialog(prev => ({ ...prev, loading: true, results: [] }));
+    const results: Array<{ gradeId: string; subjectId: string; gradeName: string; subjectName: string; success: boolean; error?: string }> = [];
+    const subject = subjects.find(s => s.id === selectedSubjectId);
+    const subjectName = subject?.name || selectedSubjectId;
+
+    for (const gradeId of selectedGrades) {
+      const grade = grades.find(g => g.id === gradeId);
+      const gradeName = grade?.name || gradeId;
+      
+      try {
+        await createSubExam.mutateAsync({
+          gradeId,
+          subjectId: selectedSubjectId,
+          ...finalBulkFormData,
+        });
+        results.push({
+          gradeId,
+          subjectId: selectedSubjectId,
+          gradeName,
+          subjectName,
+          success: true,
+        });
+      } catch (error: any) {
+        results.push({
+          gradeId,
+          subjectId: selectedSubjectId,
+          gradeName,
+          subjectName,
+          success: false,
+          error: error?.response?.data?.message || error?.message || "Failed to create",
+        });
+      }
+    }
+
+    setBulkDialog(prev => ({ ...prev, loading: false, results }));
+  };
+
+  const handleOpenEditSubExam = (subExam: SubExam) => {
+    setSubExamFormData({
+      name: subExam.name,
+      examType: subExam.examType,
+      maxScore: subExam.maxScore,
+      weightPercent: subExam.maxScore, // Auto-set weight = maxScore (weight should equal maxScore)
+    });
+    setSubExamDialog({ open: true, subExam, mode: "edit" });
+  };
+
+  const handleSubmitSubExam = async () => {
+    if (!selectedSubjectId || !selectedGradeId) return;
+
+    // Validate max score limits
+    if (subExamFormData.examType === "quiz" || subExamFormData.examType === "assignment") {
+      if (subExamFormData.maxScore > 10) {
+        toast.error("Max score too high", {
+          description: `${subExamFormData.examType === "quiz" ? "Quiz" : "Assignment"} maximum is 10 points.`,
+        });
+        return;
+      }
+    } else if (subExamFormData.examType === "mid_exam") {
+      if (subExamFormData.maxScore > 20) {
+        toast.error("Max score too high", {
+          description: "Mid Exam maximum is 20 points.",
+        });
+        return;
+      }
+      // Check for existing mid exam
+      const existingMidExam = subExams.find(
+        (se) => se.examType === "mid_exam" && se.id !== subExamDialog.subExam?.id
+      );
+      if (existingMidExam) {
+        toast.error("Mid Exam already exists", {
+          description: "Only one mid exam can exist per subject. Please delete the existing one first.",
+        });
+        return;
+      }
+    } else if (subExamFormData.examType === "general_test") {
+      if (subExamFormData.maxScore > 40) {
+        toast.error("Max score too high", {
+          description: "General Test maximum is 40 points.",
+        });
+        return;
+      }
+      // Check for existing general test
+      const existingGeneralTest = subExams.find(
+        (se) => se.examType === "general_test" && se.id !== subExamDialog.subExam?.id
+      );
+      if (existingGeneralTest) {
+        toast.error("General Test already exists", {
+          description: "Only one general test can exist per subject. Please delete the existing one first.",
+        });
+        return;
+      }
+    }
+
+    // Validate max score is provided
+    if (!subExamFormData.maxScore || subExamFormData.maxScore <= 0) {
+      toast.error("Max score required", {
+        description: "Please enter a max score for this sub-exam.",
+      });
+      return;
+    }
+
+    // Auto-set weight = maxScore
+    const finalFormData = {
+      ...subExamFormData,
+      weightPercent: subExamFormData.maxScore, // Weight equals max score
+    };
+
+    if (subExamDialog.mode === "create") {
+      await createSubExam.mutateAsync({
+        gradeId: selectedGradeId,
+        subjectId: selectedSubjectId,
+        ...finalFormData,
+      });
+    } else if (subExamDialog.subExam) {
+      await updateSubExam.mutateAsync({
+        id: subExamDialog.subExam.id,
+        data: finalFormData,
       });
     }
-    setAcademicYearDialog({ open: false, year: null, mode: "create" });
+    setSubExamDialog({ open: false, subExam: null, mode: "create" });
   };
 
-  const handleActivateAcademicYear = async (id: string) => {
-    await activateAcademicYear.mutateAsync(id);
+  const handleDeleteSubExam = async () => {
+    if (deleteSubExamDialog.subExam) {
+      await deleteSubExam.mutateAsync(deleteSubExamDialog.subExam.id);
+      setDeleteSubExamDialog({ open: false, subExam: null });
+    }
   };
 
-  const handleCloseAcademicYear = async (id: string) => {
-    await closeAcademicYear.mutateAsync(id);
+
+  // Group sub-exams by exam type
+  const groupedSubExams = useMemo(() => {
+    const subExams = Array.isArray(subExamsData?.data) ? subExamsData.data : [];
+    const groups: Record<string, SubExam[]> = {
+      quiz: [],
+      assignment: [],
+      mid_exam: [],
+      general_test: [],
+    };
+
+    subExams.forEach((subExam) => {
+      if (groups[subExam.examType]) {
+        groups[subExam.examType].push(subExam);
+      }
+    });
+
+    return groups;
+  }, [subExamsData]);
+
+  // Get exam type display info
+  const getExamTypeInfo = (type: ExamType) => {
+    const info: Record<ExamType, { name: string; icon: any; color: string }> = {
+      quiz: { name: "Quiz", icon: ClipboardList, color: "text-blue-600" },
+      assignment: { name: "Assignment", icon: FileText, color: "text-purple-600" },
+      mid_exam: { name: "Mid Exam", icon: BookOpen, color: "text-orange-600" },
+      general_test: { name: "General Test", icon: GraduationCap, color: "text-green-600" },
+    };
+    return info[type] || info.quiz;
   };
 
   // Payment Type Handlers
@@ -337,11 +486,7 @@ export default function SettingsPage() {
     );
   }
 
-  const grades = Array.isArray(gradesData?.data) ? gradesData.data : [];
-  const academicYears = Array.isArray(academicYearsData?.data)
-    ? academicYearsData.data
-    : [];
-  const activeYear = activeYearData?.data;
+  const subExams = Array.isArray(subExamsData?.data) ? subExamsData.data : [];
   const paymentTypes = Array.isArray(paymentTypesData?.data) ? paymentTypesData.data : [];
 
   return (
@@ -350,24 +495,20 @@ export default function SettingsPage() {
         <div>
           <h1 className="text-xl font-semibold">Settings</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage system configuration, grades, and academic years
+            Manage system configuration, results/exams, and payment types
           </p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="system">
             <Sliders className="mr-2 h-4 w-4" />
             System
           </TabsTrigger>
-          <TabsTrigger value="grades">
-            <GraduationCap className="mr-2 h-4 w-4" />
-            Grades
-          </TabsTrigger>
-          <TabsTrigger value="academic-years">
-            <Calendar className="mr-2 h-4 w-4" />
-            Academic Years
+          <TabsTrigger value="marks">
+            <FileText className="mr-2 h-4 w-4" />
+            Results (Exam)
           </TabsTrigger>
           <TabsTrigger value="payment-types">
             <DollarSign className="mr-2 h-4 w-4" />
@@ -430,216 +571,208 @@ export default function SettingsPage() {
           )}
         </TabsContent>
 
-        {/* Grades Tab */}
-        <TabsContent value="grades" className="space-y-6">
-          <div className="flex items-center justify-between">
+        {/* Results (Exam) Tab */}
+        <TabsContent value="marks" className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold">Grade Progression</h2>
+            <h2 className="text-xl font-semibold">Results & Exams Configuration</h2>
               <p className="text-sm text-muted-foreground">
-                Manage the grade sequence for student progression
-              </p>
-            </div>
-            {hasRole(["OWNER", "REGISTRAR"]) && (
-              <Button onClick={handleOpenCreateGrade}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Grade
-              </Button>
-            )}
+              Manage sub-exams (quizzes, assignments, mid exams, general tests) and their weights for each subject
+            </p>
           </div>
 
-          {gradesLoading ? (
-            <LoadingState rows={5} columns={3} />
-          ) : gradesError ? (
-            <ErrorState
-              message="Failed to load grades"
-              onRetry={() => refetchGrades()}
-            />
-          ) : grades.length === 0 ? (
+          {/* Selection Section */}
             <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-8">
-                  <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No grades found</p>
-                  {hasRole(["OWNER", "REGISTRAR"]) && (
-                    <Button onClick={handleOpenCreateGrade} className="mt-4">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create First Grade
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {grades.map((grade) => (
-                <Card
-                  key={grade.id}
-                  className="hover:shadow-md transition-shadow"
-                >
                   <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <GraduationCap className="h-5 w-5" />
-                        {grade.name}
-                      </div>
-                      {grade.isHighest && (
-                        <Badge variant="default">Highest</Badge>
-                      )}
-                    </CardTitle>
+              <CardTitle>Select Grade and Subject</CardTitle>
+              <CardDescription>
+                Choose a grade and subject to manage sub-exams (sub-exams are shared across all terms)
+              </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Order:{" "}
-                        <span className="font-semibold">{grade.order}</span>
-                      </p>
-                      {hasRole(["OWNER", "REGISTRAR"]) && (
-                        <div className="flex gap-2 pt-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOpenEditGrade(grade)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setDeleteGradeDialog({ open: true, grade })
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="grade-select">Grade</Label>
+                  <Select
+                    value={selectedGradeId}
+                    onValueChange={setSelectedGradeId}
+                  >
+                    <SelectTrigger id="grade-select" className="w-full">
+                      <SelectValue placeholder="Select a grade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {grades.map((grade) => (
+                        <SelectItem key={grade.id} value={grade.id}>
+                          {grade.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="subject-select">Subject</Label>
+                  <Select
+                    value={selectedSubjectId}
+                    onValueChange={setSelectedSubjectId}
+                    disabled={!selectedGradeId || subjectsLoading}
+                  >
+                    <SelectTrigger id="subject-select" className="w-full">
+                      <SelectValue 
+                        placeholder={
+                          subjectsLoading 
+                            ? "Loading subjects..." 
+                            : "Select a subject"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subjectsLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          <span className="ml-2 text-sm text-muted-foreground">Loading subjects...</span>
                         </div>
+                      ) : subjects.length === 0 ? (
+                        <div className="py-4 text-center text-sm text-muted-foreground">
+                          No subjects found
+                        </div>
+                      ) : (
+                        subjects.map((subject) => (
+                          <SelectItem key={subject.id} value={subject.id}>
+                            {subject.name}
+                          </SelectItem>
+                        ))
                       )}
+                    </SelectContent>
+                  </Select>
+                </div>
                     </div>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
 
-        {/* Academic Years Tab */}
-        <TabsContent value="academic-years" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">Academic Years</h2>
-              <p className="text-sm text-muted-foreground">
-                Manage academic years and set the active year
-              </p>
+          {/* Sub-Exams List */}
+          {selectedSubjectId && selectedGradeId ? (
+            <div className="space-y-6">
+              {subExamsLoading ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="ml-3 text-sm text-muted-foreground">Loading sub-exams...</span>
             </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">Sub-Exams</h3>
             {hasRole(["OWNER", "REGISTRAR"]) && (
-              <Button onClick={handleOpenCreateAcademicYear}>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={handleOpenBulkCreate}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add Academic Year
+                          Bulk Create
               </Button>
+                        <Button onClick={handleOpenCreateSubExam}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Sub-Exam
+                        </Button>
+                      </div>
             )}
           </div>
 
-          {activeYear && (
-            <Card className="border-primary">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-primary" />
-                  Active Academic Year
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold">{activeYear.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(activeYear.startDate).toLocaleDateString()} -{" "}
-                      {activeYear.endDate
-                        ? new Date(activeYear.endDate).toLocaleDateString()
-                        : "Ongoing"}
-                    </p>
-                  </div>
+                  {subExams.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No sub-exams found</p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Create sub-exams for this subject
+                      </p>
                   {hasRole(["OWNER", "REGISTRAR"]) && (
-                    <Button
-                      variant="outline"
-                      onClick={() => handleCloseAcademicYear(activeYear.id)}
-                      disabled={closeAcademicYear.isPending}
-                    >
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Close Year
+                        <Button onClick={handleOpenCreateSubExam} className="mt-4">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Create First Sub-Exam
                     </Button>
                   )}
                 </div>
               </CardContent>
             </Card>
-          )}
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(groupedSubExams).map(([examType, typeSubExams]) => {
+                    if (typeSubExams.length === 0) return null;
+                    const typeInfo = getExamTypeInfo(examType as ExamType);
+                    const TypeIcon = typeInfo.icon;
+                    const totalWeight = typeSubExams.reduce((sum, se) => sum + se.maxScore, 0); // Use maxScore since weight = maxScore
 
-          {academicYearsLoading ? (
-            <LoadingState rows={5} columns={3} />
-          ) : academicYearsError ? (
-            <ErrorState
-              message="Failed to load academic years"
-              onRetry={() => refetchAcademicYears()}
-            />
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {academicYears.map((year) => (
-                <Card
-                  key={year.id}
-                  className={`hover:shadow-md transition-shadow ${
-                    year.id === activeYear?.id ? "border-primary" : ""
-                  }`}
-                >
+                    return (
+                      <Card key={examType}>
                   <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-5 w-5" />
-                        {year.name}
-                      </div>
-                      <Badge
-                        variant={
-                          year.status === "ACTIVE" ? "default" : "secondary"
-                        }
-                      >
-                        {year.status}
+                          <CardTitle className="flex items-center gap-2">
+                            <TypeIcon className={cn("h-5 w-5", typeInfo.color)} />
+                            {typeInfo.name}
+                            <Badge variant="secondary" className="ml-auto">
+                              {totalWeight.toFixed(1)} points total
                       </Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(year.startDate).toLocaleDateString()} -{" "}
-                        {year.endDate
-                          ? new Date(year.endDate).toLocaleDateString()
-                          : "Ongoing"}
-                      </p>
+                            {typeSubExams.map((subExam) => (
+                              <div
+                                key={subExam.id}
+                                className="flex items-center justify-between p-3 border rounded-md hover:bg-slate-50"
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-semibold">{subExam.name}</p>
+                                    <Badge variant="outline">{subExam.examType}</Badge>
+                                  </div>
+                                  <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
+                                    <span>Max Score: {subExam.maxScore} points</span>
+                                    <span className="text-xs text-muted-foreground/70">(Weight = Max Score)</span>
+                                  </div>
+                                </div>
                       {hasRole(["OWNER", "REGISTRAR"]) && (
-                        <div className="flex gap-2 pt-2">
-                          {year.status !== "ACTIVE" && (
+                                  <div className="flex gap-2">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() =>
-                                handleActivateAcademicYear(year.id)
-                              }
-                              disabled={activateAcademicYear.isPending}
+                                      onClick={() => handleOpenEditSubExam(subExam)}
                             >
-                              <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Activate
+                                      <Edit className="h-4 w-4" />
                             </Button>
-                          )}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleOpenEditAcademicYear(year)}
+                                      onClick={() =>
+                                        setDeleteSubExamDialog({ open: true, subExam })
+                                      }
                           >
-                            <Edit className="h-4 w-4" />
+                                      <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       )}
+                              </div>
+                            ))}
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                    );
+                  })}
             </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center py-8">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Select a grade and subject to manage sub-exams</p>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
@@ -741,174 +874,390 @@ export default function SettingsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Grade Dialog */}
+      {/* Sub-Exam Dialog */}
       <Dialog
-        open={gradeDialog.open}
-        onOpenChange={(open) => setGradeDialog({ ...gradeDialog, open })}
+        open={subExamDialog.open}
+        onOpenChange={(open) => setSubExamDialog({ ...subExamDialog, open })}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {gradeDialog.mode === "create" ? "Create Grade" : "Edit Grade"}
+              {subExamDialog.mode === "create" ? "Create Sub-Exam" : "Edit Sub-Exam"}
             </DialogTitle>
             <DialogDescription>
-              {gradeDialog.mode === "create"
-                ? "Add a new grade to the progression sequence"
-                : "Update grade information"}
+              {subExamDialog.mode === "create"
+                ? "Add a new sub-exam for this subject and term"
+                : "Update sub-exam information"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="grade-name">Name</Label>
+              <Label htmlFor="subexam-name">Name *</Label>
               <Input
-                id="grade-name"
-                value={gradeFormData.name}
+                id="subexam-name"
+                value={subExamFormData.name}
                 onChange={(e) =>
-                  setGradeFormData({ ...gradeFormData, name: e.target.value })
+                  setSubExamFormData({ ...subExamFormData, name: e.target.value })
                 }
-                placeholder="e.g., Grade 1"
+                placeholder="e.g., Quiz 1, Assignment 1"
               />
             </div>
             <div>
-              <Label htmlFor="grade-order">Order</Label>
+              <Label htmlFor="subexam-type">Exam Type *</Label>
+              <Select
+                value={subExamFormData.examType}
+                onValueChange={(value) => {
+                  const examType = value as ExamType;
+                  // Auto-fill with common presets based on exam type
+                  // Weight is automatically set to maxScore
+                  const presets: Record<ExamType, { maxScore: number }> = {
+                    quiz: { maxScore: 10 },
+                    assignment: { maxScore: 10 },
+                    mid_exam: { maxScore: 20 },
+                    general_test: { maxScore: 40 },
+                  };
+                  setSubExamFormData({
+                    ...subExamFormData,
+                    examType,
+                    maxScore: presets[examType].maxScore,
+                    weightPercent: presets[examType].maxScore, // Auto-set weight = maxScore
+                  });
+                }}
+              >
+                <SelectTrigger id="subexam-type" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="quiz">Quiz (Max: 10 points, multiple allowed)</SelectItem>
+                  <SelectItem value="assignment">Assignment (Max: 10 points, multiple allowed)</SelectItem>
+                  <SelectItem value="mid_exam">Mid Exam (Max: 20 points, one only)</SelectItem>
+                  <SelectItem value="general_test">General Test (Max: 40 points, one only)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Select exam type to auto-fill common values. You can adjust them below.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="subexam-maxScore">Max Score (Points) *</Label>
               <Input
-                id="grade-order"
+                id="subexam-maxScore"
                 type="number"
-                value={gradeFormData.order}
-                onChange={(e) =>
-                  setGradeFormData({
-                    ...gradeFormData,
-                    order: parseInt(e.target.value) || 1,
-                  })
+                min="0.01"
+                step="0.01"
+                max={subExamFormData.examType === "quiz" || subExamFormData.examType === "assignment" ? 10 : 
+                     subExamFormData.examType === "mid_exam" ? 20 : 40}
+                value={subExamFormData.maxScore || ""}
+                onChange={(e) => {
+                  const maxScore = parseFloat(e.target.value) || 0;
+                  setSubExamFormData({
+                    ...subExamFormData,
+                    maxScore,
+                    weightPercent: maxScore, // Auto-set weight = maxScore
+                  });
+                }}
+                placeholder={
+                  subExamFormData.examType === "quiz" || subExamFormData.examType === "assignment" ? "Max 10 points" :
+                  subExamFormData.examType === "mid_exam" ? "Max 20 points" : "Max 40 points"
                 }
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                {subExamFormData.examType === "quiz" && "Maximum 10 points per quiz. Weight equals max score."}
+                {subExamFormData.examType === "assignment" && "Maximum 10 points per assignment. Weight equals max score."}
+                {subExamFormData.examType === "mid_exam" && "Maximum 20 points. Only one mid exam allowed. Weight equals max score."}
+                {subExamFormData.examType === "general_test" && "Maximum 40 points. Only one general test allowed. Weight equals max score."}
+              </p>
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="grade-isHighest"
-                checked={gradeFormData.isHighest}
-                onCheckedChange={(checked) =>
-                  setGradeFormData({
-                    ...gradeFormData,
-                    isHighest: checked as boolean,
-                  })
-                }
-              />
-              <Label htmlFor="grade-isHighest">Mark as highest grade</Label>
+            {(() => {
+              // Calculate total of all sub-exams (excluding the one being edited)
+              const currentSubExams = subExams.filter(se => se.id !== subExamDialog.subExam?.id);
+              const currentTotal = currentSubExams.reduce((sum, se) => sum + se.maxScore, 0);
+              const newTotal = currentTotal + (subExamFormData.maxScore || 0);
+              const remaining = 100 - newTotal;
+              
+              // Check for mid exam and general test uniqueness
+              let hasMidExam = currentSubExams.some(se => se.examType === "mid_exam") || 
+                               (subExamFormData.examType === "mid_exam" && subExamDialog.mode === "create");
+              let hasGeneralTest = currentSubExams.some(se => se.examType === "general_test") || 
+                                   (subExamFormData.examType === "general_test" && subExamDialog.mode === "create");
+              
+              if (subExamDialog.subExam?.examType === "mid_exam") {
+                // If editing mid exam, don't count it as duplicate
+                const otherMidExam = currentSubExams.find(se => se.examType === "mid_exam" && se.id !== subExamDialog.subExam?.id);
+                if (otherMidExam) hasMidExam = true;
+              }
+              if (subExamDialog.subExam?.examType === "general_test") {
+                // If editing general test, don't count it as duplicate
+                const otherGeneralTest = currentSubExams.find(se => se.examType === "general_test" && se.id !== subExamDialog.subExam?.id);
+                if (otherGeneralTest) hasGeneralTest = true;
+              }
+              
+              return (
+                <div className="space-y-2">
+                  <div className={cn(
+                    "p-3 rounded-md text-xs",
+                    newTotal > 100 ? "bg-red-50 text-red-700 border border-red-200" : 
+                    remaining > 0 ? "bg-amber-50 text-amber-700 border border-amber-200" : 
+                    "bg-green-50 text-green-700 border border-green-200"
+                  )}>
+                    <p className="font-medium">
+                      Total Points: {newTotal.toFixed(1)} / 100 points
+                      {remaining > 0 && ` (${remaining.toFixed(1)} points remaining)`}
+                      {newTotal > 100 && " ⚠️ Exceeds 100 points limit!"}
+                    </p>
+                    <p className="mt-1 text-xs opacity-80">
+                      All sub-exams combined must total exactly 100 points. Weight automatically equals max score.
+                    </p>
             </div>
+                  {subExamFormData.examType === "mid_exam" && hasMidExam && subExamDialog.mode === "create" && (
+                    <div className="p-2 bg-red-50 text-red-700 border border-red-200 rounded-md text-xs">
+                      ⚠️ Only one Mid Exam is allowed per subject.
+                    </div>
+                  )}
+                  {subExamFormData.examType === "general_test" && hasGeneralTest && subExamDialog.mode === "create" && (
+                    <div className="p-2 bg-red-50 text-red-700 border border-red-200 rounded-md text-xs">
+                      ⚠️ Only one General Test is allowed per subject.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setGradeDialog({ ...gradeDialog, open: false })}
+              onClick={() => setSubExamDialog({ ...subExamDialog, open: false })}
             >
               Cancel
             </Button>
             <Button
-              onClick={handleSubmitGrade}
-              disabled={createGrade.isPending || updateGrade.isPending}
+              onClick={handleSubmitSubExam}
+              disabled={createSubExam.isPending || updateSubExam.isPending}
             >
-              {gradeDialog.mode === "create" ? "Create" : "Update"}
+              {subExamDialog.mode === "create" ? "Create" : "Update"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Grade Dialog */}
-      <ConfirmDialog
-        open={deleteGradeDialog.open}
-        onOpenChange={(open) =>
-          setDeleteGradeDialog({ ...deleteGradeDialog, open })
-        }
-        onConfirm={handleDeleteGrade}
-        title="Delete Grade"
-        description={`Are you sure you want to delete "${deleteGradeDialog.grade?.name}"? This action cannot be undone.`}
-      />
-
-      {/* Academic Year Dialog */}
+      {/* Bulk Create Sub-Exam Dialog */}
       <Dialog
-        open={academicYearDialog.open}
-        onOpenChange={(open) =>
-          setAcademicYearDialog({ ...academicYearDialog, open })
-        }
+        open={bulkDialog.open}
+        onOpenChange={(open) => {
+          if (!bulkDialog.loading) {
+            setBulkDialog({ open, loading: false, results: [] });
+            setSelectedGrades([]);
+          }
+        }}
       >
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {academicYearDialog.mode === "create"
-                ? "Create Academic Year"
-                : "Edit Academic Year"}
-            </DialogTitle>
+            <DialogTitle>Bulk Create Sub-Exam</DialogTitle>
             <DialogDescription>
-              {academicYearDialog.mode === "create"
-                ? "Add a new academic year"
-                : "Update academic year information"}
+              Create the same sub-exam for multiple grades and the selected subject
             </DialogDescription>
           </DialogHeader>
+          {bulkDialog.results.length > 0 ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 rounded-md">
+                <h4 className="font-semibold mb-2">Creation Results</h4>
+                <div className="space-y-2 text-sm">
+                  <p>
+                    <span className="font-medium">Total Attempted:</span> {bulkDialog.results.length}
+                  </p>
+                  <p className="text-green-600">
+                    <span className="font-medium">Successful:</span> {bulkDialog.results.filter(r => r.success).length}
+                  </p>
+                  {bulkDialog.results.some(r => !r.success) && (
+                    <p className="text-red-600">
+                      <span className="font-medium">Failed:</span> {bulkDialog.results.filter(r => !r.success).length}
+                    </p>
+                  )}
+                </div>
+                {bulkDialog.results.some(r => !r.success) && (
+                  <div className="mt-4 space-y-1">
+                    <p className="text-sm font-medium text-red-600">Failed Combinations:</p>
+                    <div className="max-h-32 overflow-y-auto space-y-1">
+                      {bulkDialog.results.filter(r => !r.success).map((result, idx) => (
+                        <p key={idx} className="text-xs text-red-600">
+                          {result.gradeName} - {result.subjectName}: {result.error}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button onClick={() => {
+                  setBulkDialog({ open: false, loading: false, results: [] });
+                  setSelectedGrades([]);
+                }}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="year-name">Name</Label>
+                  <Label>Select Grades *</Label>
+                  <div className="mt-2 border rounded-md p-4 max-h-48 overflow-y-auto">
+                    {grades.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No grades available</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {grades.map((grade) => (
+                          <div key={grade.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`grade-${grade.id}`}
+                              checked={selectedGrades.includes(grade.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedGrades([...selectedGrades, grade.id]);
+                                } else {
+                                  setSelectedGrades(selectedGrades.filter(id => id !== grade.id));
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor={`grade-${grade.id}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                              {grade.name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select one or more grades to create the sub-exam for
+                  </p>
+            </div>
+            <div>
+                  <Label htmlFor="bulk-subexam-name">Name *</Label>
               <Input
-                id="year-name"
-                value={academicYearFormData.name}
+                    id="bulk-subexam-name"
+                    value={bulkFormData.name}
                 onChange={(e) =>
-                  setAcademicYearFormData({
-                    ...academicYearFormData,
-                    name: e.target.value,
-                  })
+                      setBulkFormData({ ...bulkFormData, name: e.target.value })
                 }
-                placeholder="e.g., 2024-2025"
+                    placeholder="e.g., Quiz 1, Assignment 1"
               />
             </div>
             <div>
-              <Label htmlFor="year-startDate">Start Date</Label>
+                  <Label htmlFor="bulk-subexam-type">Exam Type *</Label>
+                  <Select
+                    value={bulkFormData.examType}
+                    onValueChange={(value) => {
+                      const examType = value as ExamType;
+                      // Auto-fill with common presets based on exam type
+                      // Weight is automatically set to maxScore
+                      const presets: Record<ExamType, { maxScore: number }> = {
+                        quiz: { maxScore: 10 },
+                        assignment: { maxScore: 10 },
+                        mid_exam: { maxScore: 20 },
+                        general_test: { maxScore: 40 },
+                      };
+                      setBulkFormData({
+                        ...bulkFormData,
+                        examType,
+                        maxScore: presets[examType].maxScore,
+                        weightPercent: presets[examType].maxScore, // Auto-set weight = maxScore
+                      });
+                    }}
+                  >
+                    <SelectTrigger id="bulk-subexam-type" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="quiz">Quiz (Max: 10 points, multiple allowed)</SelectItem>
+                      <SelectItem value="assignment">Assignment (Max: 10 points, multiple allowed)</SelectItem>
+                      <SelectItem value="mid_exam">Mid Exam (Max: 20 points, one only)</SelectItem>
+                      <SelectItem value="general_test">General Test (Max: 40 points, one only)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select exam type to auto-fill common values. You can adjust them below.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="bulk-subexam-maxScore">Max Score (Points) *</Label>
               <Input
-                id="year-startDate"
-                type="date"
-                value={academicYearFormData.startDate}
-                onChange={(e) =>
-                  setAcademicYearFormData({
-                    ...academicYearFormData,
-                    startDate: e.target.value,
-                  })
-                }
-              />
-            </div>
-            <div>
-              <Label htmlFor="year-endDate">End Date (Optional)</Label>
-              <Input
-                id="year-endDate"
-                type="date"
-                value={academicYearFormData.endDate}
-                onChange={(e) =>
-                  setAcademicYearFormData({
-                    ...academicYearFormData,
-                    endDate: e.target.value,
-                  })
-                }
-              />
+                    id="bulk-subexam-maxScore"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    max={bulkFormData.examType === "quiz" || bulkFormData.examType === "assignment" ? 10 : 
+                         bulkFormData.examType === "mid_exam" ? 20 : 40}
+                    value={bulkFormData.maxScore || ""}
+                    onChange={(e) => {
+                      const maxScore = parseFloat(e.target.value) || 0;
+                      setBulkFormData({
+                        ...bulkFormData,
+                        maxScore,
+                        weightPercent: maxScore, // Auto-set weight = maxScore
+                      });
+                    }}
+                    placeholder={
+                      bulkFormData.examType === "quiz" || bulkFormData.examType === "assignment" ? "Max 10 points" :
+                      bulkFormData.examType === "mid_exam" ? "Max 20 points" : "Max 40 points"
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {bulkFormData.examType === "quiz" && "Maximum 10 points per quiz. Weight equals max score."}
+                    {bulkFormData.examType === "assignment" && "Maximum 10 points per assignment. Weight equals max score."}
+                    {bulkFormData.examType === "mid_exam" && "Maximum 20 points. Only one mid exam allowed. Weight equals max score."}
+                    {bulkFormData.examType === "general_test" && "Maximum 40 points. Only one general test allowed. Weight equals max score."}
+                  </p>
             </div>
           </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() =>
-                setAcademicYearDialog({ ...academicYearDialog, open: false })
-              }
+                  onClick={() => {
+                    setBulkDialog({ open: false, loading: false, results: [] });
+                    setSelectedGrades([]);
+                  }}
+                  disabled={bulkDialog.loading}
             >
               Cancel
             </Button>
             <Button
-              onClick={handleSubmitAcademicYear}
+                  onClick={handleBulkCreate}
               disabled={
-                createAcademicYear.isPending || updateAcademicYear.isPending
-              }
-            >
-              {academicYearDialog.mode === "create" ? "Create" : "Update"}
+                    bulkDialog.loading ||
+                    selectedGrades.length === 0 ||
+                    !selectedSubjectId ||
+                    !bulkFormData.name ||
+                    bulkFormData.maxScore <= 0
+                  }
+                >
+                  {bulkDialog.loading ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Create for Selected Grades"
+                  )}
             </Button>
           </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Sub-Exam Dialog */}
+      <ConfirmDialog
+        open={deleteSubExamDialog.open}
+        onOpenChange={(open) =>
+          setDeleteSubExamDialog({ ...deleteSubExamDialog, open })
+        }
+        onConfirm={handleDeleteSubExam}
+        title="Delete Sub-Exam"
+        description={`Are you sure you want to delete "${deleteSubExamDialog.subExam?.name}"? This action cannot be undone.`}
+      />
 
       {/* Payment Type Dialog */}
       <Dialog

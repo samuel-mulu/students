@@ -59,9 +59,9 @@ export function AssignHeadTeacherDialog({
   // Filter out classes already assigned to this teacher
   const availableClasses = useMemo(() => {
     return activeYearClasses.filter((cls) => {
-      if (!user?.teacherClasses) return true;
-      return !user.teacherClasses.some((tc) => tc.id === cls.id);
-    });
+    if (!user?.teacherClasses) return true;
+    return !user.teacherClasses.some((tc) => tc.id === cls.id);
+  });
   }, [activeYearClasses, user?.teacherClasses]);
 
   return (

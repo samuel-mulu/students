@@ -10,7 +10,7 @@ import {
   PaginationParams
 } from '@/lib/types';
 
-export const marksApi = {
+export const resultsApi = {
   create: async (data: CreateMarkRequest): Promise<Mark> => {
     const response = await apiClient.post<Mark>('/api/marks', data);
     return response.data;
@@ -82,8 +82,38 @@ export const marksApi = {
     return response.data;
   },
 
-  getRoster: async (classId: string, termId: string): Promise<RosterEntry[]> => {
-    const response = await apiClient.get<RosterEntry[]>(`/api/results/roster/class/${classId}/term/${termId}`);
+  getRoster: async (classId: string, termId: string): Promise<{
+    class: { id: string; name: string };
+    term: { id: string; name: string };
+    students: Array<{
+      studentId: string;
+      firstName: string;
+      lastName: string;
+      subjects: Array<{
+        subjectId: string;
+        subjectName: string;
+        subjectCode: string;
+        termTotal: number;
+        grade: string;
+      }>;
+    }>;
+  }> => {
+    const response = await apiClient.get<{
+      class: { id: string; name: string };
+      term: { id: string; name: string };
+      students: Array<{
+        studentId: string;
+        firstName: string;
+        lastName: string;
+        subjects: Array<{
+          subjectId: string;
+          subjectName: string;
+          subjectCode: string;
+          termTotal: number;
+          grade: string;
+        }>;
+      }>;
+    }>(`/api/results/roster/class/${classId}/term/${termId}`);
     return response.data;
   },
 
@@ -96,5 +126,3 @@ export const marksApi = {
     await apiClient.delete(`/api/marks/${id}`);
   },
 };
-
-

@@ -33,7 +33,7 @@ export function ArchivedYearsModal({
     const basePaths: Record<string, string> = {
       classes: '/dashboard/classes',
       students: '/dashboard/students',
-      marks: '/dashboard/marks',
+      marks: '/dashboard/results',
       payments: '/dashboard/payments',
     };
     
@@ -101,7 +101,7 @@ export function ArchivedYearsModal({
                     className="justify-start"
                   >
                     <FileText className="mr-2 h-4 w-4" />
-                    View Marks
+                    View Results
                   </Button>
 
                   <Button

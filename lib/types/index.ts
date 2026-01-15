@@ -281,8 +281,8 @@ export interface SubExam {
 }
 
 export interface CreateSubExamRequest {
+  gradeId: string;
   subjectId: string;
-  termId: string;
   name: string;
   maxScore: number;
   weightPercent: number;

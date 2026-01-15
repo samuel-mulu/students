@@ -4,7 +4,7 @@ import { use, useState, useMemo } from 'react';
 import { useStudent, useAssignClass, useTransferClass } from '@/lib/hooks/use-students';
 import { usePayments } from '@/lib/hooks/use-payments';
 import { useAttendance } from '@/lib/hooks/use-attendance';
-import { useMarks } from '@/lib/hooks/use-marks';
+import { useResults } from '@/lib/hooks/use-results';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,7 +68,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const { data: attendanceData, isLoading: attendanceLoading } = useAttendance(
     activeTab === 'attendance' ? { studentId: id, limit: 40 } : undefined
   );
-  const { data: marksData, isLoading: marksLoading } = useMarks(
+  const { data: marksData, isLoading: marksLoading } = useResults(
     activeTab === 'marks' ? { studentId: id, limit: 40 } : undefined
   );
 

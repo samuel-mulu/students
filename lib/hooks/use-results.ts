@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { marksApi } from '@/lib/api/marks';
+import { resultsApi } from '@/lib/api/results';
 import { CreateMarkRequest, RecordMarkRequest, UpdateMarkRequest } from '@/lib/types';
 import { toast } from 'sonner';
 
-export function useMarks(params?: {
+export function useResults(params?: {
   studentId?: string;
   classId?: string;
   subjectId?: string;
@@ -13,34 +13,34 @@ export function useMarks(params?: {
   limit?: number;
 }) {
   return useQuery({
-    queryKey: ['marks', params],
+    queryKey: ['results', params],
     queryFn: async () => {
-      const marks = await marksApi.getAll(params);
-      return { data: marks };
+      const results = await resultsApi.getAll(params);
+      return { data: results };
     },
   });
 }
 
-export function useMarksByClassAndTerm(classId: string, subjectId: string, termId: string) {
+export function useResultsByClassAndTerm(classId: string, subjectId: string, termId: string) {
   return useQuery({
-    queryKey: ['marks', 'class', classId, 'subject', subjectId, 'term', termId],
+    queryKey: ['results', 'class', classId, 'subject', subjectId, 'term', termId],
     queryFn: async () => {
-      const marks = await marksApi.getByClassAndTerm(classId, termId, subjectId);
-      return { data: marks };
+      const results = await resultsApi.getByClassAndTerm(classId, termId, subjectId);
+      return { data: results };
     },
     enabled: !!classId && !!subjectId && !!termId,
   });
 }
 
-export function useCreateMark() {
+export function useCreateResult() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CreateMarkRequest) => marksApi.create(data),
-    onSuccess: (mark) => {
-      queryClient.invalidateQueries({ queryKey: ['marks'] });
-      toast.success("Mark Created", {
-        description: `Mark of ${mark.score}/${mark.maxScore} has been recorded.`,
+    mutationFn: (data: CreateMarkRequest) => resultsApi.create(data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['results'] });
+      toast.success("Result Created", {
+        description: `Result of ${result.score}/${result.maxScore} has been recorded.`,
         duration: 3000,
       });
     },
@@ -49,8 +49,8 @@ export function useCreateMark() {
                           error.response?.data?.error || 
                           error.response?.data?.message || 
                           error.message ||
-                          "Failed to create mark. Please try again.";
-      toast.error("Create Mark Failed", {
+                          "Failed to create result. Please try again.";
+      toast.error("Create Result Failed", {
         description: errorMessage,
         duration: 5000,
       });
@@ -58,7 +58,7 @@ export function useCreateMark() {
   });
 }
 
-export function useRecordMark() {
+export function useRecordResult() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -72,11 +72,11 @@ export function useRecordMark() {
       subExamId: string;
       termId: string;
       data: RecordMarkRequest;
-    }) => marksApi.record(studentId, subExamId, termId, data),
-    onSuccess: (mark) => {
-      queryClient.invalidateQueries({ queryKey: ['marks'] });
-      toast.success("Mark Recorded", {
-        description: `Mark of ${mark.score}/${mark.maxScore} has been recorded.`,
+    }) => resultsApi.record(studentId, subExamId, termId, data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['results'] });
+      toast.success("Result Recorded", {
+        description: `Result of ${result.score}/${result.maxScore} has been recorded.`,
         duration: 3000,
       });
     },
@@ -85,8 +85,8 @@ export function useRecordMark() {
                           error.response?.data?.error || 
                           error.response?.data?.message || 
                           error.message ||
-                          "Failed to record mark. Please try again.";
-      toast.error("Record Mark Failed", {
+                          "Failed to record result. Please try again.";
+      toast.error("Record Result Failed", {
         description: errorMessage,
         duration: 5000,
       });
@@ -94,7 +94,7 @@ export function useRecordMark() {
   });
 }
 
-export function useRecordBulkMarks() {
+export function useRecordBulkResults() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -106,13 +106,13 @@ export function useRecordBulkMarks() {
       subExamId: string;
       termId: string;
       marksData: Array<{ studentId: string; score: number; notes?: string }>;
-    }) => marksApi.recordBulk(subExamId, termId, marksData),
+    }) => resultsApi.recordBulk(subExamId, termId, marksData),
     onSuccess: (results, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['marks'] });
+      queryClient.invalidateQueries({ queryKey: ['results'] });
       const successCount = results.filter((r: any) => r.success).length;
       const totalCount = variables.marksData.length;
-      toast.success("Marks Recorded", {
-        description: `Successfully recorded ${successCount} out of ${totalCount} marks.`,
+      toast.success("Results Recorded", {
+        description: `Successfully recorded ${successCount} out of ${totalCount} results.`,
         duration: 3000,
       });
     },
@@ -121,8 +121,8 @@ export function useRecordBulkMarks() {
                           error.response?.data?.error || 
                           error.response?.data?.message || 
                           error.message ||
-                          "Failed to record marks. Please try again.";
-      toast.error("Record Marks Failed", {
+                          "Failed to record results. Please try again.";
+      toast.error("Record Results Failed", {
         description: errorMessage,
         duration: 5000,
       });
@@ -130,16 +130,16 @@ export function useRecordBulkMarks() {
   });
 }
 
-export function useUpdateMark() {
+export function useUpdateResult() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateMarkRequest }) =>
-      marksApi.update(id, data),
-    onSuccess: (mark) => {
-      queryClient.invalidateQueries({ queryKey: ['marks'] });
-      toast.success("Mark Updated", {
-        description: `Mark has been updated to ${mark.score}/${mark.maxScore}.`,
+      resultsApi.update(id, data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['results'] });
+      toast.success("Result Updated", {
+        description: `Result has been updated to ${result.score}/${result.maxScore}.`,
         duration: 3000,
       });
     },
@@ -148,8 +148,8 @@ export function useUpdateMark() {
                           error.response?.data?.error || 
                           error.response?.data?.message || 
                           error.message ||
-                          "Failed to update mark. Please try again.";
-      toast.error("Update Mark Failed", {
+                          "Failed to update result. Please try again.";
+      toast.error("Update Result Failed", {
         description: errorMessage,
         duration: 5000,
       });
@@ -159,17 +159,27 @@ export function useUpdateMark() {
 
 export function useCalculateTermScore(termId: string, studentId: string, subjectId: string) {
   return useQuery({
-    queryKey: ['marks', 'calculate', 'term', termId, studentId, subjectId],
-    queryFn: () => marksApi.calculateTermScore(termId, studentId, subjectId),
+    queryKey: ['results', 'calculate', 'term', termId, studentId, subjectId],
+    queryFn: () => resultsApi.calculateTermScore(termId, studentId, subjectId),
     enabled: !!termId && !!studentId && !!subjectId,
   });
 }
 
-export function useRoster(classId: string, termId?: string) {
+export function useRosterResults(classId: string, termId: string) {
   return useQuery({
-    queryKey: ['marks', 'roster', classId, termId],
-    queryFn: () => marksApi.getRoster(classId, termId),
-    enabled: !!classId,
+    queryKey: ['results', 'roster', classId, termId],
+    queryFn: async () => {
+      const data = await resultsApi.getRoster(classId, termId);
+      return { data };
+    },
+    enabled: !!classId && !!termId,
   });
 }
 
+// Legacy exports for backward compatibility (can be removed later)
+export const useMarks = useResults;
+export const useMarksByClassAndTerm = useResultsByClassAndTerm;
+export const useCreateMark = useCreateResult;
+export const useRecordMark = useRecordResult;
+export const useRecordBulkMarks = useRecordBulkResults;
+export const useUpdateMark = useUpdateResult;

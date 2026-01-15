@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { classesApi } from "@/lib/api/classes";
+import { gradesApi } from "@/lib/api/grades";
 import {
   CreateClassRequest,
   UpdateClassRequest,
@@ -112,6 +113,17 @@ export function useDeleteClass() {
         duration: 5000,
       });
     },
+  });
+}
+
+export function useGradeSubjects(gradeId: string) {
+  return useQuery({
+    queryKey: ["grades", gradeId, "subjects"],
+    queryFn: async () => {
+      const subjects = await gradesApi.getSubjects(gradeId);
+      return { data: subjects };
+    },
+    enabled: !!gradeId,
   });
 }
 
