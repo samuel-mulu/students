@@ -1130,6 +1130,7 @@ export default function ContinuousResultsPage({
                   )}
                 </TableBody>
               </Table>
+              </div>
             </div>
           )}
         </CardContent>
