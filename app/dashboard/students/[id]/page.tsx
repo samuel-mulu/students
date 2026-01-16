@@ -34,12 +34,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { DollarSign, TrendingUp, FileText, Calendar, BookOpen, Award, CheckCircle2, XCircle, Clock, Image as ImageIcon } from 'lucide-react';
+import { DollarSign, TrendingUp, FileText, Calendar, BookOpen, Award, CheckCircle2, XCircle, Clock, Image as ImageIcon, IdCard } from 'lucide-react';
 import { format } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 export default function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { hasRole } = useAuthStore();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('personal');
   const [assignDialog, setAssignDialog] = useState(false);
   const [transferDialog, setTransferDialog] = useState(false);
@@ -300,20 +302,29 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
               {student.paymentStatus}
             </Badge>
           </div>
-          {hasRole(['OWNER', 'REGISTRAR']) && (
-            <div className="flex gap-2">
-              {student.classStatus === 'new' && (
-                <Button variant="outline" onClick={() => setAssignDialog(true)}>
-                  Assign Class
-                </Button>
-              )}
-              {student.classStatus === 'assigned' && hasRole(['OWNER']) && (
-                <Button variant="outline" onClick={() => setTransferDialog(true)}>
-                  Transfer Class
-                </Button>
-              )}
-            </div>
-          )}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/dashboard/badge/${student.id}`)}
+            >
+              <IdCard className="h-4 w-4 mr-2" />
+              ID Badge
+            </Button>
+            {hasRole(['OWNER', 'REGISTRAR']) && (
+              <>
+                {student.classStatus === 'new' && (
+                  <Button variant="outline" onClick={() => setAssignDialog(true)}>
+                    Assign Class
+                  </Button>
+                )}
+                {student.classStatus === 'assigned' && hasRole(['OWNER']) && (
+                  <Button variant="outline" onClick={() => setTransferDialog(true)}>
+                    Transfer Class
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 

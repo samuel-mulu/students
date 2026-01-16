@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Student } from '@/lib/types';
 import { formatFullName } from '@/lib/utils/format';
-import { MoreHorizontal, Edit, Trash2, UserPlus, Eye, ArrowRightLeft } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, UserPlus, Eye, ArrowRightLeft, IdCard } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -144,6 +144,11 @@ export function StudentsTable({
                         <Link href={`/dashboard/students/${student.id}`}>
                           <button className="w-7 h-7 flex items-center justify-center rounded-full bg-[#C3EBFA] hover:bg-[#A8D8E8] transition-colors" title="View Details">
                             <Eye className="h-4 w-4" />
+                          </button>
+                        </Link>
+                        <Link href={`/dashboard/badge/${student.id}`}>
+                          <button className="w-7 h-7 flex items-center justify-center rounded-full bg-[#D4F4DD] hover:bg-[#B8E6C7] transition-colors" title="Generate ID Badge">
+                            <IdCard className="h-4 w-4" />
                           </button>
                         </Link>
                         {onDelete && (
