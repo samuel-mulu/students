@@ -168,8 +168,13 @@ export function useCalculateTermScore(termId: string, studentId: string, subject
 export function useRoster(classId: string, termId?: string) {
   return useQuery({
     queryKey: ['marks', 'roster', classId, termId],
-    queryFn: () => marksApi.getRoster(classId, termId),
-    enabled: !!classId,
+    queryFn: () => {
+      if (!termId) {
+        throw new Error('termId is required for roster query');
+      }
+      return marksApi.getRoster(classId, termId);
+    },
+    enabled: !!classId && !!termId,
   });
 }
 
