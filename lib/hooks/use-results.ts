@@ -29,6 +29,9 @@ export function useResultsByClassAndTerm(classId: string, subjectId: string, ter
       return { data: results };
     },
     enabled: !!classId && !!subjectId && !!termId,
+    staleTime: 0, // Always consider data stale to refetch on mount
+    refetchOnMount: 'always', // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 }
 
@@ -58,8 +61,9 @@ export function useCreateResult() {
   });
 }
 
-export function useRecordResult() {
+export function useRecordResult(options?: { silent?: boolean }) {
   const queryClient = useQueryClient();
+  const silent = options?.silent ?? false;
 
   return useMutation({
     mutationFn: ({
@@ -73,12 +77,15 @@ export function useRecordResult() {
       termId: string;
       data: RecordMarkRequest;
     }) => resultsApi.record(studentId, subExamId, termId, data),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
+      // Invalidate all results queries - this will trigger refetch for active queries
       queryClient.invalidateQueries({ queryKey: ['results'] });
-      toast.success("Result Recorded", {
-        description: `Result of ${result.score}/${result.maxScore} has been recorded.`,
-        duration: 3000,
-      });
+      if (!silent) {
+        toast.success("Result Recorded", {
+          description: `Result of ${result.score}/${result.maxScore} has been recorded.`,
+          duration: 3000,
+        });
+      }
     },
     onError: (error: any) => {
       const errorMessage = error.errorMessage || 
@@ -108,6 +115,7 @@ export function useRecordBulkResults() {
       marksData: Array<{ studentId: string; score: number; notes?: string }>;
     }) => resultsApi.recordBulk(subExamId, termId, marksData),
     onSuccess: (results, variables) => {
+      // Invalidate all results queries - this will trigger refetch for active queries
       queryClient.invalidateQueries({ queryKey: ['results'] });
       const successCount = results.filter((r: any) => r.success).length;
       const totalCount = variables.marksData.length;

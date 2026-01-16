@@ -23,7 +23,8 @@ import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { formatFullName, getInitials } from '@/lib/utils/format';
 import { useDebouncedCallback } from '@/lib/utils/debounce';
-import { Save, CheckCircle2, Clock, AlertCircle, FileText, ClipboardList, BookOpen, GraduationCap, Users, TrendingUp, Download, Printer } from 'lucide-react';
+import { Save, CheckCircle2, Clock, AlertCircle, FileText, ClipboardList, BookOpen, GraduationCap, Users, TrendingUp, Download, Printer, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/shared/BackButton';
@@ -40,14 +41,20 @@ export default function ContinuousResultsPage({
   const { data: subjectsData } = useClassSubjects(classId);
   const { data: termsData } = useTerms();
   
+  // Get subject and term early for loading check
+  const subject = subjectsData?.data?.find((s) => s.id === subjectId);
+  const term = termsData?.data?.find((t) => t.id === termId);
+  
   // Get gradeId from class
   const gradeId = classData?.data?.gradeId || '';
-  const { data: subExamsData } = useSubExams(gradeId, subjectId);
-  const { data: studentsData } = useStudents({ classId, classStatus: 'assigned' });
-  const { data: marksData } = useResultsByClassAndTerm(classId, subjectId, termId);
+  const { data: subExamsData, isLoading: subExamsLoading } = useSubExams(gradeId, subjectId);
+  const { data: studentsData, isLoading: studentsLoading } = useStudents({ classId, classStatus: 'assigned' });
+  const { data: marksData, isLoading: marksLoading, refetch: refetchMarks } = useResultsByClassAndTerm(classId, subjectId, termId);
+  
+  const isLoading = subExamsLoading || studentsLoading || marksLoading || !classData?.data || !subject || !term;
 
   const recordBulkMarks = useRecordBulkResults();
-  const recordMark = useRecordResult();
+  const recordMark = useRecordResult({ silent: true }); // Silent mode for auto-save
   const [marks, setMarks] = useState<Record<string, Record<string, number>>>({});
   
   // Save status tracking: 'saved' | 'saving' | 'unsaved'
@@ -58,9 +65,18 @@ export default function ContinuousResultsPage({
   
   // Track pending saves to prevent duplicate saves
   const pendingSavesRef = useRef<Set<string>>(new Set());
+  
+  // Batch collection for auto-save - groups by subExamId
+  const pendingBatchRef = useRef<Map<string, {
+    studentId: string;
+    subExamId: string;
+    score: number;
+    maxScore: number;
+  }>>(new Map());
+  
+  // Track if marks have been initialized to prevent clearing after user edits
+  const marksInitializedRef = useRef(false);
 
-  const subject = subjectsData?.data?.find((s) => s.id === subjectId);
-  const term = termsData?.data?.find((t) => t.id === termId);
   const students = Array.isArray(studentsData?.data) ? studentsData.data : [];
   
   // Sort students alphabetically by first name (A, B, C...)
@@ -75,7 +91,10 @@ export default function ContinuousResultsPage({
 
   // Initialize marks from existing data
   useEffect(() => {
-    if (existingMarks.length > 0) {
+    // Only initialize when marks data is loaded and available
+    if (marksLoading) return;
+    
+    if (existingMarks && existingMarks.length > 0) {
       const initialMarks: Record<string, Record<string, number>> = {};
       const initialSaved: Record<string, Record<string, number>> = {};
       const initialStatus: Record<string, Record<string, 'saved' | 'saving' | 'unsaved'>> = {};
@@ -90,11 +109,35 @@ export default function ContinuousResultsPage({
         initialSaved[mark.studentId][mark.subExamId] = mark.score;
         initialStatus[mark.studentId][mark.subExamId] = 'saved';
       });
-      setMarks(initialMarks);
-      setSavedMarks(initialSaved);
-      setSaveStatus(initialStatus);
+      
+      // Only update if data has actually changed (prevent unnecessary re-renders)
+      setMarks((prev) => {
+        const prevKey = JSON.stringify(prev);
+        const newKey = JSON.stringify(initialMarks);
+        return prevKey !== newKey ? initialMarks : prev;
+      });
+      
+      setSavedMarks((prev) => {
+        const prevKey = JSON.stringify(prev);
+        const newKey = JSON.stringify(initialSaved);
+        return prevKey !== newKey ? initialSaved : prev;
+      });
+      
+      setSaveStatus((prev) => {
+        const prevKey = JSON.stringify(prev);
+        const newKey = JSON.stringify(initialStatus);
+        return prevKey !== newKey ? initialStatus : prev;
+      });
+      
+      marksInitializedRef.current = true;
+    } else if (existingMarks && existingMarks.length === 0 && !marksInitializedRef.current) {
+      // Only clear on initial load when there's no data and we haven't initialized yet
+      setMarks({});
+      setSavedMarks({});
+      setSaveStatus({});
+      marksInitializedRef.current = true;
     }
-  }, [existingMarks]);
+  }, [existingMarks, marksLoading]);
 
   // Group sub-exams by exam type
   const groupedSubExams = useMemo(() => {
@@ -123,103 +166,330 @@ export default function ContinuousResultsPage({
     return sortedGroups;
   }, [subExams]);
 
-  // Get exam type display name and icon
-  const getExamTypeInfo = (type: string) => {
-    const info: Record<string, { name: string; icon: any; color: string }> = {
-      quiz: { name: 'Quiz', icon: ClipboardList, color: 'text-blue-600' },
-      assignment: { name: 'Assignment', icon: FileText, color: 'text-purple-600' },
-      mid_exam: { name: 'Mid Exam', icon: BookOpen, color: 'text-orange-600' },
-      general_test: { name: 'General Test', icon: GraduationCap, color: 'text-green-600' },
-      other: { name: 'Other', icon: FileText, color: 'text-gray-600' },
+  // Get ordered sub-exams by type: quizzes, assignments, mid_exam, general_test
+  const orderedSubExams = useMemo(() => {
+    const quizzes = subExams.filter(se => se.examType === 'quiz').sort((a, b) => a.name.localeCompare(b.name));
+    const assignments = subExams.filter(se => se.examType === 'assignment').sort((a, b) => a.name.localeCompare(b.name));
+    const midExams = subExams.filter(se => se.examType === 'mid_exam').sort((a, b) => a.name.localeCompare(b.name));
+    const generalTests = subExams.filter(se => se.examType === 'general_test').sort((a, b) => a.name.localeCompare(b.name));
+    
+    return {
+      quizzes,
+      assignments,
+      midExams,
+      generalTests,
+      all: [...quizzes, ...assignments, ...midExams, ...generalTests]
     };
-    return info[type] || info.other;
+  }, [subExams]);
+
+  // Calculate subtotals for a student
+  const calculateStudentSubtotals = (studentId: string) => {
+    const getScore = (subExamId: string) => 
+      marks[studentId]?.[subExamId] ?? savedMarks[studentId]?.[subExamId] ?? 0;
+    
+    // Quizzes total
+    const quizzesTotal = orderedSubExams.quizzes.reduce((sum, se) => {
+      const score = getScore(se.id);
+      return sum + (score || 0);
+    }, 0);
+    const quizzesMax = orderedSubExams.quizzes.reduce((sum, se) => sum + se.maxScore, 0);
+    
+    // Assignments total
+    const assignmentsTotal = orderedSubExams.assignments.reduce((sum, se) => {
+      const score = getScore(se.id);
+      return sum + (score || 0);
+    }, 0);
+    const assignmentsMax = orderedSubExams.assignments.reduce((sum, se) => sum + se.maxScore, 0);
+    
+    // Mid Exams total
+    const midExamsTotal = orderedSubExams.midExams.reduce((sum, se) => {
+      const score = getScore(se.id);
+      return sum + (score || 0);
+    }, 0);
+    const midExamsMax = orderedSubExams.midExams.reduce((sum, se) => sum + se.maxScore, 0);
+    
+    // Sub-total (quizzes + assignments + mid exams) - should be 60
+    const subTotal = quizzesTotal + assignmentsTotal + midExamsTotal;
+    const subTotalMax = quizzesMax + assignmentsMax + midExamsMax;
+    
+    // General Test total - should be 40
+    const generalTestTotal = orderedSubExams.generalTests.reduce((sum, se) => {
+      const score = getScore(se.id);
+      return sum + (score || 0);
+    }, 0);
+    const generalTestMax = orderedSubExams.generalTests.reduce((sum, se) => sum + se.maxScore, 0);
+    
+    // Grand Total - should be 100
+    const grandTotal = subTotal + generalTestTotal;
+    const grandTotalMax = subTotalMax + generalTestMax;
+    
+    return {
+      quizzes: { total: quizzesTotal, max: quizzesMax },
+      assignments: { total: assignmentsTotal, max: assignmentsMax },
+      midExams: { total: midExamsTotal, max: midExamsMax },
+      subTotal: { total: subTotal, max: subTotalMax },
+      generalTest: { total: generalTestTotal, max: generalTestMax },
+      grandTotal: { total: grandTotal, max: grandTotalMax }
+    };
   };
 
-  // Calculate total weight for an exam type group
-  const getTotalWeight = (subExams: SubExam[]) => {
-    return subExams.reduce((sum, se) => sum + se.weightPercent, 0);
-  };
-
-  // Auto-save function with debounce
-  const debouncedSave = useDebouncedCallback(
-    async (studentId: string, subExamId: string, score: number, maxScore: number) => {
-      const key = `${studentId}-${subExamId}`;
-      if (pendingSavesRef.current.has(key)) return;
-      
-      // Check if value has changed
-      const savedValue = savedMarks[studentId]?.[subExamId];
-      if (savedValue === score) {
-        setSaveStatus((prev) => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            [subExamId]: 'saved',
-          },
-        }));
-        return;
-      }
-
-      // Validate score
-      if (score < 0 || score > maxScore) {
-        setSaveStatus((prev) => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            [subExamId]: 'unsaved',
-          },
-        }));
-        return;
-      }
-
-      pendingSavesRef.current.add(key);
+  // Add to batch for auto-save
+  const addToBatch = (studentId: string, subExamId: string, score: number, maxScore: number) => {
+    const key = `${studentId}-${subExamId}`;
+    
+    // Check if value has changed
+    const savedValue = savedMarks[studentId]?.[subExamId];
+    if (savedValue === score) {
       setSaveStatus((prev) => ({
         ...prev,
         [studentId]: {
           ...prev[studentId],
-          [subExamId]: 'saving',
+          [subExamId]: 'saved',
         },
       }));
+      return;
+    }
 
-      try {
-        await recordMark.mutateAsync({
-          studentId,
-          subExamId,
-          termId,
-          data: { score, notes: '' },
-        });
-        
-        // Update saved marks
-        setSavedMarks((prev) => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            [subExamId]: score,
-          },
-        }));
-        
-        setSaveStatus((prev) => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            [subExamId]: 'saved',
-          },
-        }));
-      } catch (error) {
-        setSaveStatus((prev) => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            [subExamId]: 'unsaved',
-          },
-        }));
-      } finally {
-        pendingSavesRef.current.delete(key);
-      }
+    // Validate score - clamp to valid range
+    if (score < 0) {
+      score = 0;
+    }
+    if (score > maxScore) {
+      score = maxScore;
+    }
+
+    // Add to batch
+    pendingBatchRef.current.set(key, { studentId, subExamId, score, maxScore });
+    
+    // Mark as saving
+    setSaveStatus((prev) => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        [subExamId]: 'saving',
+      },
+    }));
+  };
+
+  // Batch save function - groups by subExamId and uses bulk endpoint when possible
+  const debouncedBatchSave = useDebouncedCallback(
+    async () => {
+      if (pendingBatchRef.current.size === 0) return;
+
+      const batch = Array.from(pendingBatchRef.current.values());
+      pendingBatchRef.current.clear();
+
+      // Group by subExamId for bulk saves
+      const marksBySubExam = new Map<string, Array<{ studentId: string; score: number; notes?: string }>>();
+      const individualSaves: Array<{ studentId: string; subExamId: string; score: number; maxScore: number }> = [];
+
+      batch.forEach(({ studentId, subExamId, score, maxScore }) => {
+        const key = `${studentId}-${subExamId}`;
+        if (pendingSavesRef.current.has(key)) {
+          individualSaves.push({ studentId, subExamId, score, maxScore });
+          return;
+        }
+
+        if (!marksBySubExam.has(subExamId)) {
+          marksBySubExam.set(subExamId, []);
+        }
+        marksBySubExam.get(subExamId)!.push({ studentId, score, notes: '' });
+        pendingSavesRef.current.add(key);
+      });
+
+      const savePromises: Promise<void>[] = [];
+
+      // Use bulk endpoint for groups with multiple marks
+      marksBySubExam.forEach((marksData, subExamId) => {
+        if (marksData.length > 1) {
+          // Bulk save
+          savePromises.push(
+            recordBulkMarks
+              .mutateAsync({
+                subExamId,
+                termId,
+                marksData,
+              })
+              .then((results) => {
+                // Update saved marks and status for successful saves
+                marksData.forEach(({ studentId, score }, index) => {
+                  const result = Array.isArray(results) ? results[index] : results;
+                  if (result && result.success === true) {
+                    setSavedMarks((prev) => ({
+                      ...prev,
+                      [studentId]: {
+                        ...prev[studentId],
+                        [subExamId]: score,
+                      },
+                    }));
+                    setSaveStatus((prev) => ({
+                      ...prev,
+                      [studentId]: {
+                        ...prev[studentId],
+                        [subExamId]: 'saved',
+                      },
+                    }));
+                  } else {
+                    setSaveStatus((prev) => ({
+                      ...prev,
+                      [studentId]: {
+                        ...prev[studentId],
+                        [subExamId]: 'unsaved',
+                      },
+                    }));
+                  }
+                  pendingSavesRef.current.delete(`${studentId}-${subExamId}`);
+                });
+              })
+              .catch(() => {
+                // Mark all as unsaved on error
+                marksData.forEach(({ studentId }) => {
+                  setSaveStatus((prev) => ({
+                    ...prev,
+                    [studentId]: {
+                      ...prev[studentId],
+                      [subExamId]: 'unsaved',
+                    },
+                  }));
+                  pendingSavesRef.current.delete(`${studentId}-${subExamId}`);
+                });
+              })
+          );
+        } else {
+          // Single save - use individual endpoint
+          const { studentId, score } = marksData[0];
+          savePromises.push(
+            recordMark
+              .mutateAsync({
+                studentId,
+                subExamId,
+                termId,
+                data: { score, notes: '' },
+              })
+              .then(() => {
+                setSavedMarks((prev) => ({
+                  ...prev,
+                  [studentId]: {
+                    ...prev[studentId],
+                    [subExamId]: score,
+                  },
+                }));
+                setSaveStatus((prev) => ({
+                  ...prev,
+                  [studentId]: {
+                    ...prev[studentId],
+                    [subExamId]: 'saved',
+                  },
+                }));
+                pendingSavesRef.current.delete(`${studentId}-${subExamId}`);
+              })
+              .catch(() => {
+                setSaveStatus((prev) => ({
+                  ...prev,
+                  [studentId]: {
+                    ...prev[studentId],
+                    [subExamId]: 'unsaved',
+                  },
+                }));
+                pendingSavesRef.current.delete(`${studentId}-${subExamId}`);
+              })
+          );
+        }
+      });
+
+      // Handle individual saves that were already pending
+      individualSaves.forEach(({ studentId, subExamId, score }) => {
+        const key = `${studentId}-${subExamId}`;
+        if (!pendingSavesRef.current.has(key)) {
+          pendingSavesRef.current.add(key);
+          savePromises.push(
+            recordMark
+              .mutateAsync({
+                studentId,
+                subExamId,
+                termId,
+                data: { score, notes: '' },
+              })
+              .then(() => {
+                setSavedMarks((prev) => ({
+                  ...prev,
+                  [studentId]: {
+                    ...prev[studentId],
+                    [subExamId]: score,
+                  },
+                }));
+                setSaveStatus((prev) => ({
+                  ...prev,
+                  [studentId]: {
+                    ...prev[studentId],
+                    [subExamId]: 'saved',
+                  },
+                }));
+                pendingSavesRef.current.delete(key);
+              })
+              .catch(() => {
+                setSaveStatus((prev) => ({
+                  ...prev,
+                  [studentId]: {
+                    ...prev[studentId],
+                    [subExamId]: 'unsaved',
+                  },
+                }));
+                pendingSavesRef.current.delete(key);
+              })
+          );
+        }
+      });
+
+      await Promise.allSettled(savePromises);
+      
+      // Refetch marks data to ensure UI is in sync with saved data
+      setTimeout(() => {
+        refetchMarks();
+      }, 500); // Small delay to ensure backend has processed
     },
-    2000 // 2 second delay
+    2500 // 2.5 second delay
   );
 
   const handleScoreChange = (studentId: string, subExamId: string, score: number, maxScore: number) => {
+    // Check if value exceeds max BEFORE processing
+    if (score > maxScore) {
+      // Show toast warning
+      toast.error("Value Exceeds Maximum", {
+        description: `Maximum allowed score is ${maxScore} points.`,
+        duration: 3000,
+      });
+      // Clear the value (set to 0)
+      setMarks((prev) => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          [subExamId]: 0,
+        },
+      }));
+      // Update saved marks to reflect cleared value
+      setSavedMarks((prev) => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          [subExamId]: 0,
+        },
+      }));
+      setSaveStatus((prev) => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          [subExamId]: 'unsaved',
+        },
+      }));
+      return; // Don't proceed with save
+    }
+    
+    // Normal validation (clamp to 0 if negative)
+    if (score < 0) {
+      score = 0;
+    }
+    
     setMarks((prev) => ({
       ...prev,
       [studentId]: {
@@ -228,36 +498,19 @@ export default function ContinuousResultsPage({
       },
     }));
     
-    // Mark as unsaved
-    setSaveStatus((prev) => ({
-      ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        [subExamId]: 'unsaved',
-      },
-    }));
-    
-    // Trigger debounced auto-save
-    debouncedSave(studentId, subExamId, score, maxScore);
+    // Add to batch and trigger debounced batch save
+    addToBatch(studentId, subExamId, score, maxScore);
+    debouncedBatchSave();
   };
 
-  // Calculate student total and average
+  // Calculate student total (for backward compatibility)
   const calculateStudentStats = (studentId: string) => {
-    let totalScore = 0;
-    let totalMaxScore = 0;
-    let count = 0;
-    
-    subExams.forEach((subExam) => {
-      const score = marks[studentId]?.[subExam.id] ?? savedMarks[studentId]?.[subExam.id] ?? 0;
-      if (score > 0 || savedMarks[studentId]?.[subExam.id] !== undefined) {
-        totalScore += score;
-        totalMaxScore += subExam.maxScore;
-        count++;
-      }
-    });
-    
-    const average = count > 0 ? (totalScore / totalMaxScore) * 100 : 0;
-    return { total: totalScore, maxTotal: totalMaxScore, average, count };
+    const subtotals = calculateStudentSubtotals(studentId);
+    return { 
+      total: subtotals.grandTotal.total, 
+      maxTotal: subtotals.grandTotal.max, 
+      count: orderedSubExams.all.length 
+    };
   };
 
   // Calculate class statistics for a sub-exam
@@ -284,71 +537,147 @@ export default function ContinuousResultsPage({
     };
   };
 
-  // Handle Save All
+  // Handle Save All - uses bulk endpoint grouped by subExamId
   const handleSaveAll = async () => {
-    const allSubExams = subExams;
-    const savePromises: Promise<void>[] = [];
-    
+    // Collect all unsaved marks
+    const unsavedMarks: Array<{
+      studentId: string;
+      subExamId: string;
+      score: number;
+      maxScore: number;
+    }> = [];
+
     sortedStudents.forEach((student) => {
-      allSubExams.forEach((subExam) => {
+      orderedSubExams.all.forEach((subExam) => {
         const score = marks[student.id]?.[subExam.id];
         const savedValue = savedMarks[student.id]?.[subExam.id];
         
         if (score !== undefined && score !== savedValue && score >= 0 && score <= subExam.maxScore) {
-          const key = `${student.id}-${subExam.id}`;
-          if (!pendingSavesRef.current.has(key)) {
-            pendingSavesRef.current.add(key);
-            setSaveStatus((prev) => ({
-              ...prev,
-              [student.id]: {
-                ...prev[student.id],
-                [subExam.id]: 'saving',
-              },
-            }));
-            
-            savePromises.push(
-              recordMark
-                .mutateAsync({
-                  studentId: student.id,
-                  subExamId: subExam.id,
-                  termId,
-                  data: { score, notes: '' },
-                })
-                .then(() => {
-                  setSavedMarks((prev) => ({
-                    ...prev,
-                    [student.id]: {
-                      ...prev[student.id],
-                      [subExam.id]: score,
-                    },
-                  }));
-                  setSaveStatus((prev) => ({
-                    ...prev,
-                    [student.id]: {
-                      ...prev[student.id],
-                      [subExam.id]: 'saved',
-                    },
-                  }));
-                })
-                .catch(() => {
-                  setSaveStatus((prev) => ({
-                    ...prev,
-                    [student.id]: {
-                      ...prev[student.id],
-                      [subExam.id]: 'unsaved',
-                    },
-                  }));
-                })
-                .finally(() => {
-                  pendingSavesRef.current.delete(key);
-                })
-            );
-          }
+          unsavedMarks.push({
+            studentId: student.id,
+            subExamId: subExam.id,
+            score,
+            maxScore: subExam.maxScore,
+          });
         }
       });
     });
-    
-    await Promise.all(savePromises);
+
+    if (unsavedMarks.length === 0) {
+      toast.info("All results are already saved");
+      return;
+    }
+
+    // Group by subExamId for bulk saves
+    const marksBySubExam = new Map<string, Array<{ studentId: string; score: number; notes?: string }>>();
+
+    unsavedMarks.forEach(({ studentId, subExamId, score }) => {
+      const key = `${studentId}-${subExamId}`;
+      if (pendingSavesRef.current.has(key)) return;
+
+      if (!marksBySubExam.has(subExamId)) {
+        marksBySubExam.set(subExamId, []);
+      }
+      marksBySubExam.get(subExamId)!.push({ studentId, score, notes: '' });
+      pendingSavesRef.current.add(key);
+
+      // Mark as saving
+      setSaveStatus((prev) => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          [subExamId]: 'saving',
+        },
+      }));
+    });
+
+    // Use bulk endpoint for each subExamId group
+    const savePromises = Array.from(marksBySubExam.entries()).map(([subExamId, marksData]) =>
+      recordBulkMarks
+        .mutateAsync({
+          subExamId,
+          termId,
+          marksData,
+        })
+        .then((results) => {
+          // Update saved marks and status for successful saves
+          marksData.forEach(({ studentId, score }, index) => {
+            const key = `${studentId}-${subExamId}`;
+            const result = Array.isArray(results) ? results[index] : results;
+            
+            if (result && result.success === true) {
+              setSavedMarks((prev) => ({
+                ...prev,
+                [studentId]: {
+                  ...prev[studentId],
+                  [subExamId]: score,
+                },
+              }));
+              setSaveStatus((prev) => ({
+                ...prev,
+                [studentId]: {
+                  ...prev[studentId],
+                  [subExamId]: 'saved',
+                },
+              }));
+            } else {
+              setSaveStatus((prev) => ({
+                ...prev,
+                [studentId]: {
+                  ...prev[studentId],
+                  [subExamId]: 'unsaved',
+                },
+              }));
+            }
+            pendingSavesRef.current.delete(key);
+          });
+        })
+        .catch((error) => {
+          // Mark all as unsaved on error
+          marksData.forEach(({ studentId }) => {
+            const key = `${studentId}-${subExamId}`;
+            setSaveStatus((prev) => ({
+              ...prev,
+              [studentId]: {
+                ...prev[studentId],
+                [subExamId]: 'unsaved',
+              },
+            }));
+            pendingSavesRef.current.delete(key);
+          });
+          throw error;
+        })
+    );
+
+    try {
+      const results = await Promise.allSettled(savePromises);
+      const successful = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      const totalSaved = unsavedMarks.length;
+
+      // Refetch marks data to ensure UI shows saved data
+      // Use a small delay to ensure backend has processed all saves
+      setTimeout(() => {
+        refetchMarks();
+      }, 300);
+
+      if (failed === 0) {
+        toast.success("All Results Saved", {
+          description: `Successfully saved ${totalSaved} result${totalSaved !== 1 ? 's' : ''}.`,
+          duration: 3000,
+        });
+      } else {
+        toast.warning("Some Results Failed to Save", {
+          description: `Saved ${successful} out of ${totalSaved} results. Please check and retry failed saves.`,
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      toast.error("Save All Failed", {
+        description: "Failed to save results. Please try again.",
+        duration: 5000,
+      });
+    }
   };
 
   // Calculate overall completion status
@@ -357,7 +686,7 @@ export default function ContinuousResultsPage({
     let completedMarks = 0;
     
     sortedStudents.forEach((student) => {
-      subExams.forEach((subExam) => {
+      orderedSubExams.all.forEach((subExam) => {
         totalMarks++;
         const score = marks[student.id]?.[subExam.id] ?? savedMarks[student.id]?.[subExam.id];
         if (score !== undefined && score !== null) {
@@ -371,10 +700,10 @@ export default function ContinuousResultsPage({
       total: totalMarks,
       percentage: totalMarks > 0 ? Math.round((completedMarks / totalMarks) * 100) : 0,
     };
-  }, [sortedStudents, subExams, marks, savedMarks]);
+  }, [sortedStudents, orderedSubExams.all, marks, savedMarks]);
 
   if (!classData?.data || !subject || !term) {
-    return <LoadingState rows={10} columns={5} />;
+    return <ErrorState message="Failed to load class, subject, or term data." />;
   }
 
   return (
@@ -395,18 +724,29 @@ export default function ContinuousResultsPage({
             size="sm"
             onClick={() => {
               // Export to CSV
-              const headers = ['No', 'Student Name', ...subExams.map(se => se.name), 'Total', 'Average (%)'];
+              const headers = [
+                'No', 
+                'Student Name', 
+                ...orderedSubExams.quizzes.map(se => se.name),
+                ...orderedSubExams.assignments.map(se => se.name),
+                ...orderedSubExams.midExams.map(se => se.name),
+                'Sub-Total (Quizzes+Assignments+Mid)',
+                ...orderedSubExams.generalTests.map(se => se.name),
+                'Grand Total'
+              ];
               const rows = sortedStudents.map((student, index) => {
-                const studentStats = calculateStudentStats(student.id);
+                const subtotals = calculateStudentSubtotals(student.id);
+                const getScore = (subExamId: string) => 
+                  marks[student.id]?.[subExamId] ?? savedMarks[student.id]?.[subExamId] ?? 0;
                 const row = [
                   index + 1,
                   formatFullName(student.firstName, student.lastName),
-                  ...subExams.map(subExam => {
-                    const score = marks[student.id]?.[subExam.id] ?? savedMarks[student.id]?.[subExam.id] ?? 0;
-                    return score.toFixed(2);
-                  }),
-                  studentStats.total.toFixed(2),
-                  studentStats.average > 0 ? studentStats.average.toFixed(2) : '-'
+                  ...orderedSubExams.quizzes.map(se => getScore(se.id).toFixed(2)),
+                  ...orderedSubExams.assignments.map(se => getScore(se.id).toFixed(2)),
+                  ...orderedSubExams.midExams.map(se => getScore(se.id).toFixed(2)),
+                  subtotals.subTotal.total.toFixed(2),
+                  ...orderedSubExams.generalTests.map(se => getScore(se.id).toFixed(2)),
+                  subtotals.grandTotal.total.toFixed(2)
                 ];
                 return row;
               });
@@ -439,26 +779,54 @@ export default function ContinuousResultsPage({
               const printWindow = window.open('', '_blank');
               if (!printWindow) return;
               
+              const getScore = (studentId: string, subExamId: string) => 
+                marks[studentId]?.[subExamId] ?? savedMarks[studentId]?.[subExamId] ?? 0;
+              
               const tableRows = sortedStudents.map((student, index) => {
-                const studentStats = calculateStudentStats(student.id);
+                const subtotals = calculateStudentSubtotals(student.id);
                 const studentName = formatFullName(student.firstName, student.lastName);
-                const subExamCells = subExams.map(subExam => {
-                  const score = marks[student.id]?.[subExam.id] ?? savedMarks[student.id]?.[subExam.id] ?? 0;
-                  return `<td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center;">${score.toFixed(2)}</td>`;
-                }).join('');
+                const quizCells = orderedSubExams.quizzes.map(se => 
+                  `<td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center;">${getScore(student.id, se.id).toFixed(2)}</td>`
+                ).join('');
+                const assignmentCells = orderedSubExams.assignments.map(se => 
+                  `<td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center;">${getScore(student.id, se.id).toFixed(2)}</td>`
+                ).join('');
+                const midExamCells = orderedSubExams.midExams.map(se => 
+                  `<td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center;">${getScore(student.id, se.id).toFixed(2)}</td>`
+                ).join('');
+                const generalTestCells = orderedSubExams.generalTests.map(se => 
+                  `<td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center;">${getScore(student.id, se.id).toFixed(2)}</td>`
+                ).join('');
                 
                 return `
                   <tr>
                     <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center;">${index + 1}</td>
                     <td style="padding: 8px; border: 1px solid #e5e7eb;">${studentName}</td>
-                    ${subExamCells}
-                    <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold;">${studentStats.total.toFixed(2)}</td>
-                    <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold;">${studentStats.average > 0 ? studentStats.average.toFixed(2) + '%' : '-'}</td>
+                    ${quizCells}
+                    ${assignmentCells}
+                    ${midExamCells}
+                    <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold; background-color: #dbeafe;">${subtotals.subTotal.total.toFixed(2)} / 60</td>
+                    ${generalTestCells}
+                    <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold; background-color: #dcfce7;">${subtotals.grandTotal.total.toFixed(2)} / 100</td>
                   </tr>
                 `;
               }).join('');
               
-              const subExamHeaders = subExams.map(se => `<th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">${se.name}</th>`).join('');
+              const quizHeaders = orderedSubExams.quizzes.map(se => 
+                `<th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">${se.name}</th>`
+              ).join('');
+              const assignmentHeaders = orderedSubExams.assignments.map(se => 
+                `<th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">${se.name}</th>`
+              ).join('');
+              const midExamHeaders = orderedSubExams.midExams.map(se => 
+                `<th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">${se.name}</th>`
+              ).join('');
+              const generalTestHeaders = orderedSubExams.generalTests.map(se => 
+                `<th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">${se.name}</th>`
+              ).join('');
+              const subExamHeaders = quizHeaders + assignmentHeaders + midExamHeaders + 
+                `<th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #dbeafe; font-weight: bold; text-align: center;">Sub-Total / 60</th>` +
+                generalTestHeaders;
               
               const htmlContent = `
                 <!DOCTYPE html>
@@ -492,8 +860,7 @@ export default function ContinuousResultsPage({
                           <th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">No</th>
                           <th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold;">Student Name</th>
                           ${subExamHeaders}
-                          <th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">Total</th>
-                          <th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">Average (%)</th>
+                          <th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #dcfce7; font-weight: bold; text-align: center;">Grand Total / 100</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -536,7 +903,12 @@ export default function ContinuousResultsPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {subExams.length === 0 ? (
+          {subExamsLoading || studentsLoading || marksLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-3 text-sm text-muted-foreground">Loading results...</span>
+            </div>
+          ) : orderedSubExams.all.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground">No sub-exams found for this subject.</p>
               <p className="text-sm text-muted-foreground mt-2">
@@ -548,42 +920,78 @@ export default function ContinuousResultsPage({
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50">
-                    <TableHead className="w-16 sticky left-0 bg-slate-50 z-20">NO</TableHead>
-                    <TableHead className="min-w-[200px] sticky left-16 bg-slate-50 z-20 border-r">
+                    <TableHead className="w-12 sticky left-0 bg-slate-50 z-20 text-center">NO</TableHead>
+                    <TableHead className="w-[140px] sticky left-12 bg-slate-50 z-20 border-r">
                       Student
                     </TableHead>
-                    {subExams.map((subExam) => {
+                    {/* Quizzes */}
+                    {orderedSubExams.quizzes.map((subExam) => {
                       const classStats = calculateClassStats(subExam.id);
-                      const typeInfo = getExamTypeInfo(subExam.examType);
                       return (
-                        <TableHead key={subExam.id} className="min-w-[160px] text-center">
-                          <div className="space-y-1.5 py-2">
-                            <div className="font-semibold text-sm">{subExam.name}</div>
-                            <div className="text-xs text-muted-foreground space-y-0.5">
-                              <div>Max: {subExam.maxScore} pts</div>
-                              <div className="text-[10px] capitalize text-muted-foreground/80">
-                                {typeInfo.name}
-                              </div>
-                            </div>
-                            <div className="text-xs pt-1 border-t mt-1">
-                              <div className="text-muted-foreground text-[10px]">
-                                {classStats.completed}/{classStats.total} entered
-                              </div>
+                        <TableHead key={subExam.id} className="w-[90px] text-center border-l">
+                          <div className="space-y-0.5 py-1">
+                            <div className="font-semibold text-xs leading-tight">{subExam.name}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              Max: {subExam.maxScore}
                             </div>
                           </div>
                         </TableHead>
                       );
                     })}
-                    <TableHead className="min-w-[120px] text-center bg-slate-50 sticky right-0">
-                      <div className="space-y-1.5 py-2">
-                        <div className="font-semibold">Total</div>
-                        <div className="text-xs text-muted-foreground">Score</div>
+                    {/* Assignments */}
+                    {orderedSubExams.assignments.map((subExam) => {
+                      const classStats = calculateClassStats(subExam.id);
+                      return (
+                        <TableHead key={subExam.id} className="w-[90px] text-center border-l">
+                          <div className="space-y-0.5 py-1">
+                            <div className="font-semibold text-xs leading-tight">{subExam.name}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              Max: {subExam.maxScore}
+                            </div>
+                          </div>
+                        </TableHead>
+                      );
+                    })}
+                    {/* Mid Exams */}
+                    {orderedSubExams.midExams.map((subExam) => {
+                      const classStats = calculateClassStats(subExam.id);
+                      return (
+                        <TableHead key={subExam.id} className="w-[90px] text-center border-l">
+                          <div className="space-y-0.5 py-1">
+                            <div className="font-semibold text-xs leading-tight">{subExam.name}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              Max: {subExam.maxScore}
+                            </div>
+                          </div>
+                        </TableHead>
+                      );
+                    })}
+                    {/* Sub-total (Quizzes + Assignments + Mid Exams) */}
+                    <TableHead className="w-[90px] text-center bg-blue-50/50 border-l-2 border-blue-300">
+                      <div className="space-y-0.5 py-1">
+                        <div className="font-semibold text-xs">Sub-Total</div>
+                        <div className="text-[10px] text-muted-foreground">/ 60</div>
                       </div>
                     </TableHead>
-                    <TableHead className="min-w-[120px] text-center bg-slate-50 sticky right-[120px]">
-                      <div className="space-y-1.5 py-2">
-                        <div className="font-semibold">Average</div>
-                        <div className="text-xs text-muted-foreground">%</div>
+                    {/* General Test */}
+                    {orderedSubExams.generalTests.map((subExam) => {
+                      const classStats = calculateClassStats(subExam.id);
+                      return (
+                        <TableHead key={subExam.id} className="w-[90px] text-center border-l">
+                          <div className="space-y-0.5 py-1">
+                            <div className="font-semibold text-xs leading-tight">{subExam.name}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              Max: {subExam.maxScore}
+                            </div>
+                          </div>
+                        </TableHead>
+                      );
+                    })}
+                    {/* Grand Total */}
+                    <TableHead className="w-[90px] text-center bg-green-50/50 sticky right-0 border-l-2 border-green-300">
+                      <div className="space-y-0.5 py-1">
+                        <div className="font-semibold text-xs">Total</div>
+                        <div className="text-[10px] text-muted-foreground">/ 100</div>
                       </div>
                     </TableHead>
                   </TableRow>
@@ -592,7 +1000,7 @@ export default function ContinuousResultsPage({
                   {sortedStudents.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={subExams.length + 4}
+                        colSpan={orderedSubExams.all.length + 4}
                         className="text-center py-12 text-gray-500 text-sm"
                       >
                         No students found in this class
@@ -610,111 +1018,108 @@ export default function ContinuousResultsPage({
                         return classData?.data?.name || 'Not Assigned';
                       };
                       const className = getClassName(student);
-                      const studentStats = calculateStudentStats(student.id);
+                      const subtotals = calculateStudentSubtotals(student.id);
                       const studentInitials = getInitials(student.firstName, student.lastName);
+                      
+                      const renderSubExamCell = (subExam: SubExam) => {
+                        const currentScore =
+                          marks[student.id]?.[subExam.id] ??
+                          savedMarks[student.id]?.[subExam.id] ??
+                          0;
+                        const status = saveStatus[student.id]?.[subExam.id] || 'saved';
+                        const isInvalid = currentScore > subExam.maxScore || currentScore < 0;
+                        return (
+                          <TableCell key={subExam.id} className="p-1 border-l">
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                min="0"
+                                max={subExam.maxScore}
+                                step="0.01"
+                                value={currentScore || ''}
+                                onChange={(e) => {
+                                  const rawValue = e.target.value;
+                                  // Allow empty string for clearing
+                                  if (rawValue === '') {
+                                    handleScoreChange(student.id, subExam.id, 0, subExam.maxScore);
+                                    return;
+                                  }
+                                  const value = parseFloat(rawValue) || 0;
+                                  handleScoreChange(student.id, subExam.id, value, subExam.maxScore);
+                                }}
+                                className={cn(
+                                  "w-full text-center font-medium text-xs h-8 px-1",
+                                  status === 'saved' && !isInvalid && "border-green-300 bg-green-50/50",
+                                  status === 'saving' && "border-yellow-300 bg-yellow-50/50",
+                                  status === 'unsaved' && !isInvalid && "border-orange-300 bg-orange-50/50",
+                                  isInvalid && "border-red-300 bg-red-50/50"
+                                )}
+                              />
+                              {status === 'saving' && (
+                                <div className="absolute -top-0.5 -right-0.5">
+                                  <div className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-yellow-600 border-t-transparent" />
+                                </div>
+                              )}
+                              {status === 'saved' && !isInvalid && (
+                                <div className="absolute -top-0.5 -right-0.5">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-green-600" />
+                                </div>
+                              )}
+                              {isInvalid && (
+                                <div className="absolute -top-0.5 -right-0.5">
+                                  <AlertCircle className="h-2.5 w-2.5 text-red-600" />
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        );
+                      };
                       
                       return (
                         <TableRow key={student.id} className="hover:bg-slate-50/50">
-                          <TableCell className="text-center font-medium sticky left-0 bg-background z-10">
+                          <TableCell className="text-center font-medium sticky left-0 bg-background z-10 text-xs">
                             {index + 1}
                           </TableCell>
-                          <TableCell className="sticky left-16 bg-background z-10 border-r">
-                            <div className="flex items-center gap-3">
-                              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                <span className="text-sm font-semibold text-blue-700">
+                          <TableCell className="sticky left-12 bg-background z-10 border-r">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                <span className="text-xs font-semibold text-blue-700">
                                   {studentInitials}
                                 </span>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-sm truncate">
+                                <h3 className="font-semibold text-xs leading-tight truncate">
                                   {formatFullName(student.firstName, student.lastName)}
                                 </h3>
-                                <p className="text-xs text-muted-foreground truncate">
+                                <p className="text-[10px] text-muted-foreground truncate">
                                   {className}
                                 </p>
                               </div>
                             </div>
                           </TableCell>
-                          {subExams.map((subExam) => {
-                            const currentScore =
-                              marks[student.id]?.[subExam.id] ??
-                              savedMarks[student.id]?.[subExam.id] ??
-                              0;
-                            const status = saveStatus[student.id]?.[subExam.id] || 'saved';
-                            const isInvalid = currentScore > subExam.maxScore || currentScore < 0;
-                            const percentage = subExam.maxScore > 0 
-                              ? (currentScore / subExam.maxScore) * 100 
-                              : 0;
-                            
-                            return (
-                              <TableCell key={subExam.id}>
-                                <div className="space-y-1">
-                                  <div className="relative">
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      max={subExam.maxScore}
-                                      step="0.01"
-                                      value={currentScore || ''}
-                                      onChange={(e) =>
-                                        handleScoreChange(
-                                          student.id,
-                                          subExam.id,
-                                          parseFloat(e.target.value) || 0,
-                                          subExam.maxScore
-                                        )
-                                      }
-                                      className={cn(
-                                        "w-full text-center font-medium",
-                                        status === 'saved' && !isInvalid && "border-green-300 bg-green-50/50",
-                                        status === 'saving' && "border-yellow-300 bg-yellow-50/50",
-                                        status === 'unsaved' && !isInvalid && "border-orange-300 bg-orange-50/50",
-                                        isInvalid && "border-red-300 bg-red-50/50"
-                                      )}
-                                    />
-                                    {status === 'saving' && (
-                                      <div className="absolute -top-1 -right-1">
-                                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-yellow-600 border-t-transparent" />
-                                      </div>
-                                    )}
-                                    {status === 'saved' && !isInvalid && (
-                                      <div className="absolute -top-1 -right-1">
-                                        <CheckCircle2 className="h-3 w-3 text-green-600" />
-                                      </div>
-                                    )}
-                                    {isInvalid && (
-                                      <div className="absolute -top-1 -right-1">
-                                        <AlertCircle className="h-3 w-3 text-red-600" />
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="text-xs text-center text-muted-foreground">
-                                    {percentage.toFixed(1)}%
-                                  </div>
-                                </div>
-                              </TableCell>
-                            );
-                          })}
-                          <TableCell className="text-center font-semibold bg-slate-50/50 sticky right-0">
-                            <div className="space-y-1">
-                              <div className="text-base">{studentStats.total.toFixed(1)}</div>
-                              <div className="text-xs text-muted-foreground">
-                                / {studentStats.maxTotal.toFixed(1)}
+                          {/* Quizzes - Editable */}
+                          {orderedSubExams.quizzes.map(renderSubExamCell)}
+                          {/* Assignments - Editable */}
+                          {orderedSubExams.assignments.map(renderSubExamCell)}
+                          {/* Mid Exams - Editable */}
+                          {orderedSubExams.midExams.map(renderSubExamCell)}
+                          {/* Sub-total - Read-only (Auto-calculated) */}
+                          <TableCell className="text-center font-semibold bg-blue-50/50 border-l-2 border-blue-300 p-1">
+                            <div className="space-y-0.5">
+                              <div className="text-sm font-bold">{subtotals.subTotal.total.toFixed(1)}</div>
+                              <div className="text-[10px] text-muted-foreground">
+                                / 60
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center font-semibold bg-slate-50/50 sticky right-[120px]">
-                            <div className="space-y-1">
-                              <div className={cn(
-                                "text-lg font-bold",
-                                studentStats.average >= 80 && "text-green-600",
-                                studentStats.average >= 60 && studentStats.average < 80 && "text-yellow-600",
-                                studentStats.average < 60 && studentStats.average > 0 && "text-red-600"
-                              )}>
-                                {studentStats.average > 0 ? `${studentStats.average.toFixed(1)}%` : '-'}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {studentStats.count} exams
+                          {/* General Test - Editable */}
+                          {orderedSubExams.generalTests.map(renderSubExamCell)}
+                          {/* Grand Total - Read-only (Auto-calculated) */}
+                          <TableCell className="text-center font-semibold bg-green-50/50 sticky right-0 border-l-2 border-green-300 p-1">
+                            <div className="space-y-0.5">
+                              <div className="text-sm font-bold">{subtotals.grandTotal.total.toFixed(1)}</div>
+                              <div className="text-[10px] text-muted-foreground">
+                                / 100
                               </div>
                             </div>
                           </TableCell>

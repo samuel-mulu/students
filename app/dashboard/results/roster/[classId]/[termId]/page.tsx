@@ -18,7 +18,6 @@ import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { formatFullName, getInitials } from '@/lib/utils/format';
 import { Download, Printer } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { BackButton } from '@/components/shared/BackButton';
 import { format } from 'date-fns';
 
@@ -64,11 +63,11 @@ export default function RosterResultsPage({
     return roster.students[0].subjects || [];
   }, [roster]);
 
-  // Calculate overall average for each student
+  // Calculate overall average for each student and sort alphabetically
   const studentsWithAverages = useMemo(() => {
     if (!roster?.students) return [];
     
-    return roster.students.map((student) => {
+    const students = roster.students.map((student) => {
       const validScores = student.subjects
         .filter((s) => s.termTotal > 0)
         .map((s) => s.termTotal);
@@ -77,38 +76,20 @@ export default function RosterResultsPage({
         ? validScores.reduce((sum, score) => sum + score, 0) / validScores.length
         : 0;
 
-      // Calculate overall grade
-      let overallGrade = 'F';
-      if (overallAverage >= 90) overallGrade = 'A';
-      else if (overallAverage >= 80) overallGrade = 'B';
-      else if (overallAverage >= 70) overallGrade = 'C';
-      else if (overallAverage >= 60) overallGrade = 'D';
-
       return {
         ...student,
         overallAverage,
-        overallGrade,
       };
+    });
+    
+    // Sort alphabetically by first name, then last name
+    return students.sort((a, b) => {
+      const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+      const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+      return nameA.localeCompare(nameB);
     });
   }, [roster]);
 
-  // Get grade color
-  const getGradeColor = (grade: string) => {
-    switch (grade.toUpperCase()) {
-      case 'A':
-        return 'text-green-600 font-bold';
-      case 'B':
-        return 'text-blue-600 font-bold';
-      case 'C':
-        return 'text-yellow-600 font-bold';
-      case 'D':
-        return 'text-orange-600 font-bold';
-      case 'F':
-        return 'text-red-600 font-bold';
-      default:
-        return 'text-gray-600';
-    }
-  };
 
   if (isLoading || !classData?.data || !term) {
     return <LoadingState rows={10} columns={5} />;
@@ -162,7 +143,7 @@ export default function RosterResultsPage({
             size="sm"
             onClick={() => {
               // Export to CSV
-              const headers = ['No', 'Student Name', ...subjects.map(s => s.subjectName), 'Overall Average', 'Overall Grade'];
+              const headers = ['No', 'Student Name', ...subjects.map(s => s.subjectName), 'Overall Average'];
               const rows = studentsWithAverages.map((student, index) => {
                 const row = [
                   index + 1,
@@ -170,10 +151,9 @@ export default function RosterResultsPage({
                   ...subjects.map(subject => {
                     const subjectData = student.subjects.find(s => s.subjectId === subject.subjectId);
                     if (!subjectData) return '-';
-                    return `${subjectData.termTotal.toFixed(2)} (${subjectData.grade})`;
+                    return subjectData.termTotal.toFixed(2);
                   }),
-                  student.overallAverage > 0 ? student.overallAverage.toFixed(2) : '-',
-                  student.overallGrade
+                  student.overallAverage > 0 ? student.overallAverage.toFixed(2) : '-'
                 ];
                 return row;
               });
@@ -213,20 +193,8 @@ export default function RosterResultsPage({
                   if (!subjectData) {
                     return '<td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center;">-</td>';
                   }
-                  const gradeColor = subjectData.grade === 'A' ? '#16a34a' : 
-                                   subjectData.grade === 'B' ? '#2563eb' :
-                                   subjectData.grade === 'C' ? '#ca8a04' :
-                                   subjectData.grade === 'D' ? '#ea580c' : '#dc2626';
-                  return `<td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center;">
-                    <div>${subjectData.termTotal.toFixed(2)}</div>
-                    <div style="color: ${gradeColor}; font-weight: bold;">${subjectData.grade}</div>
-                  </td>`;
+                  return `<td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold;">${subjectData.termTotal.toFixed(2)}</td>`;
                 }).join('');
-                
-                const overallColor = student.overallGrade === 'A' ? '#16a34a' : 
-                                    student.overallGrade === 'B' ? '#2563eb' :
-                                    student.overallGrade === 'C' ? '#ca8a04' :
-                                    student.overallGrade === 'D' ? '#ea580c' : '#dc2626';
                 
                 return `
                   <tr>
@@ -234,7 +202,6 @@ export default function RosterResultsPage({
                     <td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">${studentName}</td>
                     ${subjectCells}
                     <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold;">${student.overallAverage > 0 ? student.overallAverage.toFixed(2) : '-'}</td>
-                    <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; color: ${overallColor}; font-weight: bold;">${student.overallGrade}</td>
                   </tr>
                 `;
               }).join('');
@@ -273,7 +240,6 @@ export default function RosterResultsPage({
                           <th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold;">Student Name</th>
                           ${subjectHeaders}
                           <th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">Overall Average</th>
-                          <th style="padding: 10px; border: 1px solid #e5e7eb; background-color: #f3f4f6; font-weight: bold; text-align: center;">Overall Grade</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -317,22 +283,13 @@ export default function RosterResultsPage({
                   </TableHead>
                   {subjects.map((subject) => (
                     <TableHead key={subject.subjectId} className="min-w-[140px] text-center">
-                      <div className="space-y-1 py-2">
-                        <div className="font-semibold text-sm">{subject.subjectName}</div>
-                        <div className="text-xs text-muted-foreground">Score / Grade</div>
-                      </div>
+                      <div className="font-semibold text-sm py-2">{subject.subjectName}</div>
                     </TableHead>
                   ))}
-                  <TableHead className="min-w-[120px] text-center bg-slate-50 sticky right-[120px]">
+                  <TableHead className="min-w-[120px] text-center bg-slate-50 sticky right-0">
                     <div className="space-y-1 py-2">
                       <div className="font-semibold">Average</div>
                       <div className="text-xs text-muted-foreground">Score</div>
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[120px] text-center bg-slate-50 sticky right-0">
-                    <div className="space-y-1 py-2">
-                      <div className="font-semibold">Grade</div>
-                      <div className="text-xs text-muted-foreground">Overall</div>
                     </div>
                   </TableHead>
                 </TableRow>
@@ -372,23 +329,13 @@ export default function RosterResultsPage({
                         
                         return (
                           <TableCell key={subject.subjectId} className="text-center">
-                            <div className="space-y-1">
-                              <div className="font-medium">{subjectData.termTotal.toFixed(2)}</div>
-                              <div className={cn("text-sm font-bold", getGradeColor(subjectData.grade))}>
-                                {subjectData.grade}
-                              </div>
-                            </div>
+                            <div className="font-medium">{subjectData.termTotal.toFixed(2)}</div>
                           </TableCell>
                         );
                       })}
-                      <TableCell className="text-center font-semibold bg-slate-50/50 sticky right-[120px]">
+                      <TableCell className="text-center font-semibold bg-slate-50/50 sticky right-0">
                         <div className="text-base font-bold">
                           {student.overallAverage > 0 ? student.overallAverage.toFixed(2) : '-'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center font-semibold bg-slate-50/50 sticky right-0">
-                        <div className={cn("text-lg font-bold", getGradeColor(student.overallGrade))}>
-                          {student.overallGrade}
                         </div>
                       </TableCell>
                     </TableRow>

@@ -55,8 +55,13 @@ export const resultsApi = {
 
   getByClassAndTerm: async (classId: string, termId: string, subjectId?: string): Promise<Mark[]> => {
     const params = subjectId ? { subjectId } : {};
-    const response = await apiClient.get<Mark[]>(`/api/marks/class/${classId}/term/${termId}`, { params });
-    return response.data;
+    const response = await apiClient.get<{ class: any; term: any; marks: Mark[] } | Mark[]>(`/api/marks/class/${classId}/term/${termId}`, { params });
+    // Backend returns { class, term, marks } but we need just the marks array
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    // If it's an object with marks property, extract the marks array
+    return (response.data as any).marks || [];
   },
 
   calculateTermScore: async (

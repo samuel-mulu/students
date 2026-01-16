@@ -296,7 +296,7 @@ export default function SettingsPage() {
           success: false,
           error: error?.response?.data?.message || error?.message || "Failed to create",
         });
-      }
+    }
     }
 
     setBulkDialog(prev => ({ ...prev, loading: false, results }));
@@ -337,7 +337,7 @@ export default function SettingsPage() {
       if (existingMidExam) {
         toast.error("Mid Exam already exists", {
           description: "Only one mid exam can exist per subject. Please delete the existing one first.",
-        });
+    });
         return;
       }
     } else if (subExamFormData.examType === "general_test") {
@@ -614,7 +614,7 @@ export default function SettingsPage() {
                     value={selectedSubjectId}
                     onValueChange={setSelectedSubjectId}
                     disabled={!selectedGradeId || subjectsLoading}
-                  >
+                          >
                     <SelectTrigger id="subject-select" className="w-full">
                       <SelectValue 
                         placeholder={
@@ -686,7 +686,7 @@ export default function SettingsPage() {
                       <p className="text-muted-foreground">No sub-exams found</p>
                       <p className="text-sm text-muted-foreground mt-2">
                         Create sub-exams for this subject
-                      </p>
+                    </p>
                   {hasRole(["OWNER", "REGISTRAR"]) && (
                         <Button onClick={handleOpenCreateSubExam} className="mt-4">
                           <Plus className="mr-2 h-4 w-4" />
@@ -1231,8 +1231,8 @@ export default function SettingsPage() {
                     !selectedSubjectId ||
                     !bulkFormData.name ||
                     bulkFormData.maxScore <= 0
-                  }
-                >
+              }
+            >
                   {bulkDialog.loading ? (
                     <>
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
