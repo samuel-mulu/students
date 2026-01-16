@@ -491,28 +491,28 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div>
         <div>
-          <h1 className="text-xl font-semibold">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-lg sm:text-xl font-semibold">Settings</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Manage system configuration, results/exams, and payment types
           </p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="system">
-            <Sliders className="mr-2 h-4 w-4" />
-            System
+        <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsTrigger value="system" className="flex-col sm:flex-row gap-1 sm:gap-2 py-2 sm:py-1.5">
+            <Sliders className="h-4 w-4 sm:mr-2" />
+            <span className="text-xs sm:text-sm">System</span>
           </TabsTrigger>
-          <TabsTrigger value="marks">
-            <FileText className="mr-2 h-4 w-4" />
-            Results (Exam)
+          <TabsTrigger value="marks" className="flex-col sm:flex-row gap-1 sm:gap-2 py-2 sm:py-1.5">
+            <FileText className="h-4 w-4 sm:mr-2" />
+            <span className="text-xs sm:text-sm">Results (Exam)</span>
           </TabsTrigger>
-          <TabsTrigger value="payment-types">
-            <DollarSign className="mr-2 h-4 w-4" />
-            Payment Types
+          <TabsTrigger value="payment-types" className="flex-col sm:flex-row gap-1 sm:gap-2 py-2 sm:py-1.5">
+            <DollarSign className="h-4 w-4 sm:mr-2" />
+            <span className="text-xs sm:text-sm">Payment Types</span>
           </TabsTrigger>
         </TabsList>
 
@@ -662,16 +662,16 @@ export default function SettingsPage() {
                 </Card>
               ) : (
                 <>
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Sub-Exams</h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <h3 className="text-base sm:text-lg font-semibold">Sub-Exams</h3>
             {hasRole(["OWNER", "REGISTRAR"]) && (
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={handleOpenBulkCreate}>
-                <Plus className="mr-2 h-4 w-4" />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="outline" onClick={handleOpenBulkCreate} size="sm" className="text-xs sm:text-sm">
+                <Plus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                           Bulk Create
               </Button>
-                        <Button onClick={handleOpenCreateSubExam}>
-                          <Plus className="mr-2 h-4 w-4" />
+                        <Button onClick={handleOpenCreateSubExam} size="sm" className="text-xs sm:text-sm">
+                          <Plus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                           Add Sub-Exam
                         </Button>
                       </div>
@@ -720,14 +720,14 @@ export default function SettingsPage() {
                             {typeSubExams.map((subExam) => (
                               <div
                                 key={subExam.id}
-                                className="flex items-center justify-between p-3 border rounded-md hover:bg-slate-50"
+                                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 p-3 border rounded-md hover:bg-slate-50"
                               >
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
                                     <p className="font-semibold">{subExam.name}</p>
                                     <Badge variant="outline">{subExam.examType}</Badge>
                                   </div>
-                                  <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
+                                  <div className="flex flex-col sm:flex-row sm:gap-4 mt-1 text-xs sm:text-sm text-muted-foreground">
                                     <span>Max Score: {subExam.maxScore} points</span>
                                     <span className="text-xs text-muted-foreground/70">(Weight = Max Score)</span>
                                   </div>
@@ -778,16 +778,16 @@ export default function SettingsPage() {
 
         {/* Payment Types Tab */}
         <TabsContent value="payment-types" className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold">Payment Types</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-lg sm:text-xl font-semibold">Payment Types</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Manage payment types with fixed amounts for student payments
               </p>
             </div>
             {hasRole(["OWNER"]) && (
-              <Button onClick={handleOpenCreatePaymentType}>
-                <Plus className="mr-2 h-4 w-4" />
+              <Button onClick={handleOpenCreatePaymentType} size="sm" className="text-xs sm:text-sm">
+                <Plus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                 Add Payment Type
               </Button>
             )}
@@ -825,13 +825,13 @@ export default function SettingsPage() {
                   }`}
                 >
                   <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
+                    <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <DollarSign className="h-5 w-5" />
-                        {paymentType.name}
+                        <DollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <span className="text-base sm:text-lg">{paymentType.name}</span>
                       </div>
                       {!paymentType.isActive && (
-                        <Badge variant="secondary">Inactive</Badge>
+                        <Badge variant="secondary" className="text-xs">Inactive</Badge>
                       )}
                     </CardTitle>
                   </CardHeader>

@@ -127,17 +127,17 @@ export default function RosterResultsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <BackButton href="/dashboard/results" />
           <div>
-            <h1 className="text-xl font-semibold">Roster Results</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h1 className="text-lg sm:text-xl font-semibold">Roster Results</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               {roster.class.name} - {roster.term.name}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -273,8 +273,9 @@ export default function RosterResultsPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
+          <div className="rounded-md border overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50 hover:bg-slate-50">
                   <TableHead className="w-16 sticky left-0 bg-slate-50 z-20 text-center">NO</TableHead>
@@ -343,6 +344,7 @@ export default function RosterResultsPage({
                 })}
               </TableBody>
             </Table>
+            </div>
           </div>
         </CardContent>
       </Card>
