@@ -5,9 +5,27 @@ import {
   startOfMonth,
   endOfMonth,
 } from "date-fns";
+import { formatDateForUI } from "./date";
+import type { CalendarSystem } from "@/lib/context/calendar-context";
 
-export const formatDate = (date: string | Date): string => {
+/**
+ * Format date for display
+ * If calendarSystem is provided, respects Ethiopian/Gregorian calendar
+ * Otherwise defaults to Gregorian format
+ */
+export const formatDate = (
+  date: string | Date,
+  calendarSystem?: CalendarSystem
+): string => {
   try {
+    const dateISO = typeof date === "string" ? date : format(date, "yyyy-MM-dd");
+    
+    // If calendar system is specified, use formatDateForUI
+    if (calendarSystem) {
+      return formatDateForUI(dateISO, calendarSystem);
+    }
+    
+    // Default: Gregorian format using date-fns
     const dateObj = typeof date === "string" ? parseISO(date) : date;
     return format(dateObj, "MMM dd, yyyy");
   } catch {

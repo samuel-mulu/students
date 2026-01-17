@@ -56,11 +56,16 @@ import { ErrorState } from "@/components/shared/ErrorState";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
+import { DateField } from "@/components/shared/DateField";
+import { useCalendarSystem } from "@/lib/context/calendar-context";
+import { formatDateForUI } from "@/lib/utils/date";
+import { isNoClassDay } from "@/lib/utils/schoolCalendar";
 
 export default function AttendancePage() {
   const router = useRouter();
   const { hasRole, user } = useAuthStore();
   const { data: activeYearData } = useActiveAcademicYear();
+  const { calendarSystem } = useCalendarSystem();
   
   // Role-based access control
   const canMarkAttendance = hasRole(["TEACHER"]);
@@ -287,7 +292,7 @@ export default function AttendancePage() {
 
     if (attendanceArray.length > 0) {
       toast.warning("Attendance Already Recorded", {
-        description: `Attendance for ${formatDate(selectedDate)} has already been recorded.`,
+        description: `Attendance for ${formatDateForUI(selectedDate, calendarSystem)} has already been recorded.`,
         duration: 4000,
       });
       return;
@@ -315,7 +320,7 @@ export default function AttendancePage() {
       const lateCount = attendanceDataToSave.filter(a => a.status === 'late').length;
 
       toast.success("Attendance Saved Successfully", {
-        description: `Attendance for ${formatDate(selectedDate)} has been recorded. Present: ${presentCount}, Absent: ${absentCount}, Late: ${lateCount}`,
+        description: `Attendance for ${formatDateForUI(selectedDate, calendarSystem)} has been recorded. Present: ${presentCount}, Absent: ${absentCount}, Late: ${lateCount}`,
         duration: 5000,
       });
 
@@ -411,7 +416,7 @@ export default function AttendancePage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="date" className="text-slate-700 font-semibold">
+                <Label className="text-slate-700 font-semibold">
                   Date *
                 </Label>
                 <div className="flex items-center gap-2">
@@ -431,13 +436,11 @@ export default function AttendancePage() {
                     )}
                   </Button>
                   <div className="flex-1 relative">
-                    <Input
-                      id="date"
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
+                    <DateField
+                      valueISO={selectedDate}
+                      onChangeISO={setSelectedDate}
                       disabled={attendanceLoading}
-                      className="border-slate-200"
+                      className="flex-1"
                     />
                     {isAttendanceRecorded && (
                       <Badge
@@ -465,6 +468,37 @@ export default function AttendancePage() {
                     )}
                   </Button>
                 </div>
+                {/* Display formatted date and holiday/weekend info */}
+                {selectedDate && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-xs text-muted-foreground">
+                      {formatDateForUI(selectedDate, calendarSystem)}
+                    </p>
+                    {(() => {
+                      const noClassInfo = isNoClassDay(selectedDate);
+                      if (noClassInfo.isNoClass) {
+                        return (
+                          <Badge
+                            variant={noClassInfo.reason === "holiday" ? "default" : "outline"}
+                            className={cn(
+                              noClassInfo.reason === "holiday" && "bg-orange-100 text-orange-800 border-orange-300",
+                              noClassInfo.reason === "weekend" && "bg-gray-100 text-gray-800 border-gray-300",
+                              noClassInfo.reason === "weekend-holiday" && "bg-purple-100 text-purple-800 border-purple-300"
+                            )}
+                          >
+                            {noClassInfo.reason === "holiday" && "🎉"}
+                            {noClassInfo.reason === "weekend" && "📅"}
+                            {noClassInfo.reason === "weekend-holiday" && "📅🎉"}
+                            {noClassInfo.holidayName && (
+                              <span className="ml-1">{noClassInfo.holidayName}</span>
+                            )}
+                          </Badge>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                )}
                 {attendanceLoading && (
                   <p className="text-xs text-muted-foreground">
                     Loading attendance data...
