@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-type CalendarSystem = "gregorian" | "ethiopian";
+export type CalendarSystem = "gregorian" | "ethiopian";
 
 interface CalendarContextType {
   calendarSystem: CalendarSystem;
