@@ -6,7 +6,9 @@ import { useAcademicYears, useActiveAcademicYear } from '@/lib/hooks/use-academi
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
 import { useUsers } from '@/lib/hooks/use-users';
 import { useAuthStore } from '@/lib/store/auth-store';
-import { generateAllMonths } from '@/lib/utils/format';
+import { generateAllMonths, formatMonthYear, formatDate, formatDateTime } from '@/lib/utils/format';
+import { useCalendarSystem } from '@/lib/context/calendar-context';
+import { formatDateForUI } from '@/lib/utils/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -36,6 +38,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 export default function ReportsPage() {
   const { user } = useAuthStore();
+  const { calendarSystem } = useCalendarSystem();
   const isOwner = user?.role === 'OWNER';
   const isRegistrar = user?.role === 'REGISTRAR';
 
@@ -64,8 +67,8 @@ export default function ReportsPage() {
 
   // Generate month options
   const monthOptions = useMemo(() => {
-    return generateAllMonths(new Date().getFullYear());
-  }, []);
+    return generateAllMonths(new Date().getFullYear(), calendarSystem);
+  }, [calendarSystem]);
 
   // Set default academic year
   useEffect(() => {
@@ -236,7 +239,7 @@ export default function ReportsPage() {
     const rows = dailyTableData.rows.map(row => {
       const date = new Date(row.date);
       return [
-        format(date, 'MMM dd, yyyy'),
+        formatDate(date, calendarSystem),
         ...dailyTableData.paymentTypes.map(pt => {
           const amount = row.paymentTypeData.get(pt.id) || 0;
           return amount.toFixed(2);
@@ -278,9 +281,10 @@ export default function ReportsPage() {
       const totalStudents = monthData.totalStudents ?? 0;
       const paidStudents = monthData.paidStudents ?? 0;
       const unpaidStudents = monthData.unpaidStudents ?? 0;
+      const [year, month] = monthData.month.split('-');
       
       return [
-        format(monthDate, 'MMMM yyyy'),
+        formatMonthYear(monthData.month, parseInt(year), calendarSystem),
         totalStudents.toString(),
         paidStudents.toString(),
         unpaidStudents.toString(),
@@ -330,9 +334,10 @@ export default function ReportsPage() {
       const paidStudents = monthData.paidStudents ?? 0;
       const unpaidStudents = monthData.unpaidStudents ?? 0;
       
+      const [year, month] = monthData.month.split('-');
       return `
         <tr>
-          <td style="padding: 8px; border: 1px solid #ddd;">${format(monthDate, 'MMMM yyyy')}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${formatMonthYear(monthData.month, parseInt(year), calendarSystem)}</td>
           <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${totalStudents}</td>
           <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: #16a34a; font-weight: bold;">${paidStudents}</td>
           <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: #ea580c; font-weight: bold;">${unpaidStudents}</td>
@@ -399,7 +404,7 @@ export default function ReportsPage() {
         </head>
         <body>
           <h1>Monthly Student Payment Progress Report</h1>
-          <p><strong>Generated:</strong> ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
+          <p><strong>Generated:</strong> ${formatDateTime(new Date())}</p>
           
           <table>
             <thead>
@@ -480,7 +485,7 @@ export default function ReportsPage() {
 
       return `
         <tr>
-          <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${format(date, 'MMM dd, yyyy')}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${formatDateForUI(date.toISOString().split('T')[0], calendarSystem)}</td>
           ${paymentTypeCells}
           <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${formatCurrency(row.totalAmount)}</td>
         </tr>
@@ -552,7 +557,7 @@ export default function ReportsPage() {
         </head>
         <body>
           <h1>Day-by-Day Payment Tracking Report</h1>
-          <p><strong>Generated:</strong> ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
+          <p><strong>Generated:</strong> ${formatDateTime(new Date())}</p>
           
           <table>
             <thead>
@@ -820,10 +825,11 @@ export default function ReportsPage() {
                           const paidStudents = monthData.paidStudents ?? 0;
                           const unpaidStudents = monthData.unpaidStudents ?? 0;
                           
+                          const [year, month] = monthData.month.split('-');
                           return (
                             <TableRow key={monthData.month}>
                               <TableCell className="font-medium">
-                                {format(monthDate, 'MMMM yyyy')}
+                                {formatMonthYear(monthData.month, parseInt(year), calendarSystem)}
                               </TableCell>
                               <TableCell className="text-right">{totalStudents}</TableCell>
                               <TableCell className="text-right text-green-600 font-semibold">
@@ -907,7 +913,7 @@ export default function ReportsPage() {
                           {formatCurrency(dailyReports.summary.todayRevenue)}
                         </p>
                         <p className="text-xs text-blue-600 mt-1">
-                          {format(new Date(), 'MMM dd, yyyy')}
+                          {formatDate(new Date(), calendarSystem)}
                         </p>
                       </div>
                       <Calendar className="h-8 w-8 text-blue-600" />
@@ -1063,7 +1069,7 @@ export default function ReportsPage() {
                           return (
                             <TableRow key={row.date}>
                               <TableCell className="sticky left-0 bg-background z-10 font-medium">
-                                {format(date, 'MMM dd, yyyy')}
+                                {formatDate(date, calendarSystem)}
                               </TableCell>
                               {dailyTableData.paymentTypes.map((pt) => {
                                 const amount = row.paymentTypeData.get(pt.id) || 0;
@@ -1414,10 +1420,11 @@ export default function ReportsPage() {
                         const paidStudents = monthData.paidStudents ?? 0;
                         const unpaidStudents = monthData.unpaidStudents ?? 0;
                         
+                        const [year, month] = monthData.month.split('-');
                         return (
                           <TableRow key={monthData.month}>
                             <TableCell className="font-medium">
-                              {format(monthDate, 'MMMM yyyy')}
+                              {formatMonthYear(monthData.month, parseInt(year), calendarSystem)}
                             </TableCell>
                             <TableCell className="text-right">{totalStudents}</TableCell>
                             <TableCell className="text-right text-green-600 font-semibold">
@@ -1498,7 +1505,7 @@ export default function ReportsPage() {
                         {formatCurrency(dailyReports.summary.todayRevenue)}
                       </p>
                       <p className="text-xs text-blue-600 mt-1">
-                        {format(new Date(), 'MMM dd, yyyy')}
+                        {formatDate(new Date(), calendarSystem)}
                       </p>
                     </div>
                     <Calendar className="h-8 w-8 text-blue-600" />
@@ -1683,7 +1690,7 @@ export default function ReportsPage() {
                         return (
                           <TableRow key={row.date}>
                             <TableCell className="sticky left-0 bg-background z-10 font-medium">
-                              {format(date, 'MMM dd, yyyy')}
+                              {formatDate(date, calendarSystem)}
                             </TableCell>
                             {dailyTableData.paymentTypes.map((pt) => {
                               const amount = row.paymentTypeData.get(pt.id) || 0;

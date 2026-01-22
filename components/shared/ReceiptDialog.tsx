@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Printer, Image as ImageIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { ImageViewerDialog } from './ImageViewerDialog';
+import { useCalendarSystem } from '@/lib/context/calendar-context';
 
 interface ReceiptDialogProps {
   open: boolean;
@@ -25,6 +26,7 @@ interface ReceiptDialogProps {
 }
 
 export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading }: ReceiptDialogProps) {
+  const { calendarSystem } = useCalendarSystem();
   const printRef = useRef<HTMLDivElement>(null);
   const [proofImageViewer, setProofImageViewer] = useState<{
     open: boolean;
@@ -115,8 +117,8 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
     : displayPayment.amount;
   
   const paidMonths = isBulkPayment && payments
-    ? payments.map(p => formatMonthYear(p.month, p.year)).join(', ')
-    : formatMonthYear(displayPayment.month, displayPayment.year);
+    ? payments.map(p => formatMonthYear(p.month, p.year, calendarSystem)).join(', ')
+    : formatMonthYear(displayPayment.month, displayPayment.year, calendarSystem);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -197,7 +199,7 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
               {!isBulkPayment && (
                 <div className="receipt-row">
                   <span className="font-medium text-muted-foreground">Payment Period:</span>
-                  <span>{formatMonthYear(displayPayment.month, displayPayment.year)}</span>
+                  <span>{formatMonthYear(displayPayment.month, displayPayment.year, calendarSystem)}</span>
                 </div>
               )}
 

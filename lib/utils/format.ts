@@ -5,7 +5,7 @@ import {
   startOfMonth,
   endOfMonth,
 } from "date-fns";
-import { formatDateForUI } from "./date";
+import { formatDateForUI, getEthiopianMonthNameAmharic, gregorianMonthToEthiopianMonth } from "./date";
 import type { CalendarSystem } from "@/lib/context/calendar-context";
 
 /**
@@ -49,13 +49,37 @@ export const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
-export const formatMonthYear = (month: string, year: number): string => {
+export const formatMonthYear = (month: string, year: number, calendarSystem?: CalendarSystem): string => {
   try {
+    if (calendarSystem === "ethiopian") {
+      // Convert Gregorian month to Ethiopian month and return Amharic name
+      const ethiopianMonth = gregorianMonthToEthiopianMonth(month);
+      return getEthiopianMonthNameAmharic(ethiopianMonth);
+    }
+    
+    // Gregorian calendar - return English month name
     const [yearPart, monthPart] = month.split("-");
     const date = new Date(parseInt(yearPart), parseInt(monthPart) - 1);
-    return format(date, "MMMM yyyy");
+    return format(date, "MMMM");
   } catch {
-    return `${month} ${year}`;
+    // Fallback: try to extract month name from month string
+    if (calendarSystem === "ethiopian") {
+      // Try to get Ethiopian month even in error case
+      try {
+        const ethiopianMonth = gregorianMonthToEthiopianMonth(month);
+        return getEthiopianMonthNameAmharic(ethiopianMonth);
+      } catch {
+        return month;
+      }
+    }
+    
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthIndex = parseInt(month.split("-")[1]) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) {
+      return monthNames[monthIndex];
+    }
+    return month;
   }
 };
 
@@ -91,7 +115,7 @@ export const generateMonthsFromAcademicYear = (
 
     return months.map((month) => ({
       value: format(month, "yyyy-MM"),
-      label: format(month, "MMMM yyyy"),
+      label: format(month, "MMMM"),
     }));
   } catch {
     return [];
@@ -100,19 +124,46 @@ export const generateMonthsFromAcademicYear = (
 
 /**
  * Generate all 12 months for a given year
- * Returns array of objects with { value: 'YYYY-MM', label: 'Month Year' }
+ * Returns array of objects with { value: 'YYYY-MM' (Gregorian), label: 'Month Name' }
+ * If calendarSystem is Ethiopian, labels will be in Amharic and sorted starting from Meskerem (September)
  */
-export const generateAllMonths = (year?: number): Array<{ value: string; label: string }> => {
+export const generateAllMonths = (year?: number, calendarSystem?: CalendarSystem): Array<{ value: string; label: string }> => {
   try {
     const targetYear = year || new Date().getFullYear();
     const months: Array<{ value: string; label: string }> = [];
 
+    // Generate all 12 months in Gregorian order (January to December)
     for (let month = 0; month < 12; month++) {
       const date = new Date(targetYear, month, 1);
+      const monthValue = format(date, "yyyy-MM");
+      
+      let label: string;
+      if (calendarSystem === "ethiopian") {
+        // Convert Gregorian month to Ethiopian month and get Amharic name
+        const ethiopianMonth = gregorianMonthToEthiopianMonth(monthValue);
+        label = getEthiopianMonthNameAmharic(ethiopianMonth);
+      } else {
+        // Gregorian calendar - use English month name
+        label = format(date, "MMMM");
+      }
+      
       months.push({
-        value: format(date, "yyyy-MM"),
-        label: format(date, "MMMM yyyy"),
+        value: monthValue,
+        label: label,
       });
+    }
+
+    // If Ethiopian calendar, reorder to start from Meskerem (September = month index 8)
+    if (calendarSystem === "ethiopian") {
+      // Ethiopian calendar starts from Meskerem (September)
+      // Reorder: September (8), October (9), November (10), December (11), 
+      //          January (0), February (1), March (2), April (3), May (4), 
+      //          June (5), July (6), August (7)
+      const reordered = [
+        ...months.slice(8),  // September to December (indices 8-11)
+        ...months.slice(0, 8), // January to August (indices 0-7)
+      ];
+      return reordered;
     }
 
     return months;

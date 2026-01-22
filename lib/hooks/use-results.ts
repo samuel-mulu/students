@@ -11,13 +11,22 @@ export function useResults(params?: {
   subExamId?: string;
   page?: number;
   limit?: number;
+  enabled?: boolean;
 }) {
+  const { enabled, ...queryParams } = params || {};
+  
+  // Default enabled to true if not specified, but allow explicit control
+  const isEnabled = enabled !== undefined ? enabled : true;
+  
   return useQuery({
-    queryKey: ['results', params],
+    queryKey: ['results', queryParams],
     queryFn: async () => {
-      const results = await resultsApi.getAll(params);
+      const results = await resultsApi.getAll(queryParams);
       return { data: results };
     },
+    enabled: isEnabled,
+    refetchOnMount: isEnabled ? 'always' : false,
+    staleTime: 0,
   });
 }
 

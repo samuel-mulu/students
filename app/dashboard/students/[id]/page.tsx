@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssignClassDialog } from '@/components/forms/AssignClassDialog';
 import { TransferClassDialog } from '@/components/forms/TransferClassDialog';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { BackButton } from '@/components/shared/BackButton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ImageViewerDialog } from '@/components/shared/ImageViewerDialog';
@@ -41,6 +42,7 @@ import { useRouter } from 'next/navigation';
 export default function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { hasRole } = useAuthStore();
+  const { calendarSystem } = useCalendarSystem();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('personal');
   const [assignDialog, setAssignDialog] = useState(false);
@@ -67,12 +69,16 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const { data: paymentsData, isLoading: paymentsLoading } = usePayments(
     activeTab === 'payments' ? { studentId: id } : undefined
   );
-  const { data: attendanceData, isLoading: attendanceLoading } = useAttendance(
-    activeTab === 'attendance' ? { studentId: id, limit: 40 } : undefined
-  );
-  const { data: marksData, isLoading: marksLoading } = useResults(
-    activeTab === 'marks' ? { studentId: id, limit: 40 } : undefined
-  );
+  const { data: attendanceData, isLoading: attendanceLoading, error: attendanceError } = useAttendance({
+    studentId: id,
+    limit: 40,
+    enabled: activeTab === 'attendance',
+  });
+  const { data: marksData, isLoading: marksLoading, error: marksError } = useResults({
+    studentId: id,
+    limit: 40,
+    enabled: activeTab === 'marks',
+  });
 
   const assignClass = useAssignClass();
   const transferClass = useTransferClass();
@@ -145,8 +151,28 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
   // Process attendance data
   const attendance = useMemo(() => {
-    if (!attendanceData?.data) return [];
-    return Array.isArray(attendanceData.data) ? attendanceData.data : [];
+    if (!attendanceData?.data) {
+      return [];
+    }
+    
+    // Handle different response structures
+    let result: any[] = [];
+    const data = attendanceData.data as any;
+    
+    if (Array.isArray(data)) {
+      // Direct array response
+      result = data;
+    } else if (data && typeof data === 'object') {
+      // Paginated response with attendance property
+      if (Array.isArray(data.attendance)) {
+        result = data.attendance;
+      } else if (Array.isArray(data.data)) {
+        // Nested data property
+        result = data.data;
+      }
+    }
+    
+    return result;
   }, [attendanceData?.data]);
 
   const attendanceStats = useMemo(() => {
@@ -186,8 +212,30 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
   // Process marks data
   const marks = useMemo(() => {
-    if (!marksData?.data) return [];
-    return Array.isArray(marksData.data) ? marksData.data : [];
+    if (!marksData?.data) {
+      return [];
+    }
+    
+    // Handle different response structures
+    let result: any[] = [];
+    const data = marksData.data as any;
+    
+    if (Array.isArray(data)) {
+      // Direct array response
+      result = data;
+    } else if (data && typeof data === 'object') {
+      // Paginated response with marks/results property
+      if (Array.isArray(data.marks)) {
+        result = data.marks;
+      } else if (Array.isArray(data.results)) {
+        result = data.results;
+      } else if (Array.isArray(data.data)) {
+        // Nested data property
+        result = data.data;
+      }
+    }
+    
+    return result;
   }, [marksData?.data]);
 
   const marksBySubject = useMemo(() => {
@@ -601,7 +649,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                                 )}
                               </div>
                               <p className="text-xs text-muted-foreground mt-2 text-center transform -rotate-45 origin-top-left whitespace-nowrap">
-                                {format(monthDate, 'MMM')}
+                                {formatMonthYear(monthData.month, parseInt(monthData.month.split('-')[0]), calendarSystem)}
                               </p>
                             </div>
                           );
@@ -651,7 +699,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                           {payments.map((payment) => (
                             <TableRow key={payment.id}>
                               <TableCell>
-                                {formatMonthYear(payment.month, payment.year)}
+                                {formatMonthYear(payment.month, payment.year, calendarSystem)}
                               </TableCell>
                               <TableCell>
                                 {payment.paymentType?.name || 'N/A'}

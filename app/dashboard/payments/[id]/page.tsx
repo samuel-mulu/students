@@ -11,10 +11,12 @@ import { formatCurrency, formatMonthYear, formatDate } from '@/lib/utils/format'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { useCalendarSystem } from '@/lib/context/calendar-context';
 
 export default function PaymentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { hasRole } = useAuthStore();
+  const { calendarSystem } = useCalendarSystem();
   const { data, isLoading, error } = usePayment(id);
   const confirmPayment = useConfirmPayment();
   const generateReceipt = useGenerateReceipt();
@@ -45,7 +47,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
         <div>
           <h1 className="text-xl font-semibold">Payment Details</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {formatMonthYear(payment.month, payment.year)}
+            {formatMonthYear(payment.month, payment.year, calendarSystem)}
           </p>
         </div>
         <Badge variant={payment.status === 'confirmed' ? 'default' : 'secondary'}>
@@ -72,7 +74,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">Month/Year</p>
-            <p className="text-sm">{formatMonthYear(payment.month, payment.year)}</p>
+            <p className="text-sm">{formatMonthYear(payment.month, payment.year, calendarSystem)}</p>
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">Status</p>

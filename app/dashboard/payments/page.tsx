@@ -38,12 +38,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Student, Payment, CreatePaymentRequest, CreateBulkPaymentRequest } from '@/lib/types';
-import { generateAllMonths, hasPaymentForMonth } from '@/lib/utils/format';
+import { generateAllMonths, hasPaymentForMonth, formatMonthYear } from '@/lib/utils/format';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { CheckCircle2, DollarSign, FileText, AlertCircle, Image as ImageIcon } from 'lucide-react';
 
 export default function PaymentsPage() {
   const { user, hasRole } = useAuthStore();
+  const { calendarSystem } = useCalendarSystem();
   const isOwner = user?.role === 'OWNER';
   const isTeacherOrRegistrar = user?.role === 'TEACHER' || user?.role === 'REGISTRAR';
 
@@ -117,8 +119,8 @@ export default function PaymentsPage() {
 
   // Generate all 12 months for current year (allow selecting future months)
   const monthOptions = useMemo(() => {
-    return generateAllMonths(new Date().getFullYear());
-  }, []);
+    return generateAllMonths(new Date().getFullYear(), calendarSystem);
+  }, [calendarSystem]);
 
   // Set default month when months are generated
   useEffect(() => {

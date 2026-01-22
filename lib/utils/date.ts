@@ -93,7 +93,7 @@ export function formatEthiopianDateWithWeekday(dateISO: string): string {
 }
 
 /**
- * Get Ethiopian month names
+ * Get Ethiopian month names (English)
  */
 export function getEthiopianMonthName(month: number): string {
   const months = [
@@ -112,6 +112,45 @@ export function getEthiopianMonthName(month: number): string {
     "Pagume",
   ];
   return months[month - 1] || `Month ${month}`;
+}
+
+/**
+ * Get Ethiopian month names in Amharic script
+ */
+export function getEthiopianMonthNameAmharic(month: number): string {
+  const months = [
+    "መስከርም",    // Meskerem (September)
+    "ጥቅምት",      // Tikimt (October)
+    "ሕዳር",        // Hidar (November)
+    "ታኅሣሥ",       // Tahsas (December)
+    "ጥር",          // Tir (January)
+    "የካቲት",       // Yekatit (February)
+    "መጋቢት",       // Megabit (March)
+    "ሚያዝያ",       // Miazia (April)
+    "ግንቦት",       // Ginbot (May)
+    "ሰኔ",          // Sene (June)
+    "ሐምሌ",         // Hamle (July)
+    "ነሐሴ",         // Nehase (August)
+    "ጳጉሜ",         // Pagume (September 6-10)
+  ];
+  return months[month - 1] || `Month ${month}`;
+}
+
+/**
+ * Convert Gregorian month (YYYY-MM format) to Ethiopian month number
+ */
+export function gregorianMonthToEthiopianMonth(monthStr: string): number {
+  try {
+    const [yearPart, monthPart] = monthStr.split("-");
+    // Use the 15th day of the month for conversion (middle of month)
+    const date = new Date(parseInt(yearPart), parseInt(monthPart) - 1, 15);
+    const kenat = new Kenat(date);
+    const ethiopian = kenat.getEthiopian();
+    return ethiopian.month;
+  } catch (error) {
+    console.error("Error converting Gregorian month to Ethiopian:", error);
+    return 1; // Fallback to Meskerem
+  }
 }
 
 /**

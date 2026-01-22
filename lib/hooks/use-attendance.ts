@@ -15,13 +15,22 @@ export function useAttendance(params?: {
   endDate?: string;
   page?: number;
   limit?: number;
+  enabled?: boolean;
 }) {
+  const { enabled, ...queryParams } = params || {};
+  
+  // Default enabled to true if not specified, but allow explicit control
+  const isEnabled = enabled !== undefined ? enabled : true;
+  
   return useQuery({
-    queryKey: ['attendance', params],
+    queryKey: ['attendance', queryParams],
     queryFn: async () => {
-      const attendance = await attendanceApi.getAll(params);
+      const attendance = await attendanceApi.getAll(queryParams);
       return { data: attendance };
     },
+    enabled: isEnabled,
+    refetchOnMount: isEnabled ? 'always' : false,
+    staleTime: 0,
   });
 }
 
