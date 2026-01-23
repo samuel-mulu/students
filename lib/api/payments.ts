@@ -20,12 +20,37 @@ interface PaymentsBackendResponse {
 
 export const paymentsApi = {
   create: async (data: CreatePaymentRequest): Promise<Payment> => {
-    const response = await apiClient.post<Payment>('/api/payments', data);
+    const proofImageUrl =
+      typeof data.proofImageUrl === "string" ? data.proofImageUrl.trim() : undefined;
+    // Don't send empty-string proofImageUrl; backend validates strict URL when present.
+    const payload: CreatePaymentRequest = {
+      ...data,
+      ...(proofImageUrl ? { proofImageUrl } : {}),
+    };
+    if (!proofImageUrl) {
+      delete (payload as any).proofImageUrl;
+    }
+
+    const response = await apiClient.post<Payment>("/api/payments", payload);
     return response.data;
   },
 
   createBulk: async (data: CreateBulkPaymentRequest): Promise<Payment[]> => {
-    const response = await apiClient.post<{ payments: Payment[] }>('/api/payments/bulk', data);
+    const proofImageUrl =
+      typeof data.proofImageUrl === "string" ? data.proofImageUrl.trim() : undefined;
+    // Don't send empty-string proofImageUrl; backend validates strict URL when present.
+    const payload: CreateBulkPaymentRequest = {
+      ...data,
+      ...(proofImageUrl ? { proofImageUrl } : {}),
+    };
+    if (!proofImageUrl) {
+      delete (payload as any).proofImageUrl;
+    }
+
+    const response = await apiClient.post<{ payments: Payment[] }>(
+      "/api/payments/bulk",
+      payload
+    );
     return response.data.payments || [];
   },
 
@@ -52,15 +77,41 @@ export const paymentsApi = {
   },
 
   confirm: async (id: string, data?: ConfirmPaymentRequest): Promise<Payment> => {
-    const response = await apiClient.post<Payment>(`/api/payments/${id}/confirm`, data);
+    const proofImageUrl =
+      typeof data?.proofImageUrl === "string" ? data.proofImageUrl.trim() : undefined;
+    const payload: ConfirmPaymentRequest | undefined = data
+      ? ({
+          ...data,
+          ...(proofImageUrl ? { proofImageUrl } : {}),
+        } as ConfirmPaymentRequest)
+      : undefined;
+    if (payload && !proofImageUrl) {
+      delete (payload as any).proofImageUrl;
+    }
+
+    const response = await apiClient.post<Payment>(
+      `/api/payments/${id}/confirm`,
+      payload
+    );
     return response.data;
   },
 
   confirmBulk: async (paymentIds: string[], data?: ConfirmPaymentRequest): Promise<{ receipt: Receipt; payments: Payment[] }> => {
-    const response = await apiClient.post<{ receipt: Receipt; payments: Payment[] }>('/api/payments/bulk/confirm', {
+    const proofImageUrl =
+      typeof data?.proofImageUrl === "string" ? data.proofImageUrl.trim() : undefined;
+    const payload: any = {
       paymentIds,
-      ...data,
-    });
+      ...(data || {}),
+      ...(proofImageUrl ? { proofImageUrl } : {}),
+    };
+    if (!proofImageUrl) {
+      delete payload.proofImageUrl;
+    }
+
+    const response = await apiClient.post<{ receipt: Receipt; payments: Payment[] }>(
+      "/api/payments/bulk/confirm",
+      payload
+    );
     return response.data;
   },
 
