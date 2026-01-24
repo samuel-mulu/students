@@ -180,10 +180,10 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
                 <>
                   <div className="receipt-row">
                     <span className="font-medium text-muted-foreground">Number of Payments:</span>
-                    <span className="font-semibold">{payments.length} months</span>
+                    <span className="font-semibold">{payments.length} payment{payments.length !== 1 ? 's' : ''}</span>
                   </div>
                   <div className="receipt-row">
-                    <span className="font-medium text-muted-foreground">Paid Months:</span>
+                    <span className="font-medium text-muted-foreground">Paid For:</span>
                     <span className="font-semibold text-sm">{paidMonths}</span>
                   </div>
                 </>

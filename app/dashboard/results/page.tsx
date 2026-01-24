@@ -158,10 +158,8 @@ export default function ResultsPage() {
         );
       }
     } else if (activeTab === 'roster') {
-      if (selectedClassId && selectedTermId) {
-        router.push(
-          `/dashboard/results/roster/${selectedClassId}/${selectedTermId}`
-        );
+      if (selectedClassId) {
+        router.push(`/dashboard/results/roster/${selectedClassId}`);
       }
     }
   };
@@ -297,8 +295,8 @@ export default function ResultsPage() {
         <TabsContent value="roster" className="space-y-6 mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Select Class and Term</CardTitle>
-              <CardDescription>Choose a class and term to view roster results</CardDescription>
+              <CardTitle>Select Class</CardTitle>
+              <CardDescription>Choose a class to view roster results (Term 1, Term 2, and Average)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-3">
@@ -355,29 +353,10 @@ export default function ResultsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="roster-term">Term *</Label>
-                  <Select
-                    value={selectedTermId}
-                    onValueChange={setSelectedTermId}
-                    disabled={!effectiveAcademicYearId && !selectedClassId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a term" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableTerms.map((term) => (
-                        <SelectItem key={term.id} value={term.id}>
-                          {term.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
               <Button
                 onClick={handleContinue}
-                disabled={!selectedClassId || !selectedTermId}
+                disabled={!selectedClassId}
               >
                 Continue
               </Button>

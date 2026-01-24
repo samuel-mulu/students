@@ -59,6 +59,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { BackButton } from "@/components/shared/BackButton";
+import { useCalendarSystem } from "@/lib/context/calendar-context";
+import { formatDateForUI } from "@/lib/utils/date";
 
 export default function AttendanceBulkPage({
   params,
@@ -69,6 +71,7 @@ export default function AttendanceBulkPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasRole } = useAuthStore();
+  const { calendarSystem } = useCalendarSystem();
 
   // Get date from URL or default to today
   const today = new Date();
@@ -498,7 +501,7 @@ export default function AttendanceBulkPage({
                 {isHistory ? "Attendance History" : "Mark Attendance"}
               </h1>
               <p className="text-sm text-slate-600 mt-1">
-                {classData.data.name} • {formatDate(selectedDate)}
+                {classData.data.name} • {formatDateForUI(selectedDate, calendarSystem)}
               </p>
             </div>
           </div>
@@ -833,7 +836,7 @@ export default function AttendanceBulkPage({
                                 <TableCell className="font-medium">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="h-4 w-4 text-slate-500" />
-                                    <span>{formatDate(date)}</span>
+                                    <span>{formatDateForUI(date, calendarSystem)}</span>
                                     {isSelected && (
                                       <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs border-blue-200">
                                         Viewing
@@ -931,7 +934,7 @@ export default function AttendanceBulkPage({
                   <p className="text-sm text-muted-foreground">
                     Selected Date:{" "}
                     <span className="font-semibold text-slate-900">
-                      {formatDate(selectedDate)}
+                      {formatDateForUI(selectedDate, calendarSystem)}
                     </span>
                   </p>
                 </div>

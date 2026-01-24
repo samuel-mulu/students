@@ -29,6 +29,11 @@ import { useEffect, useState, useMemo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle2, Check, Loader2 } from 'lucide-react';
 import { PaymentProofUpload } from './PaymentProofUpload';
+import {
+  getRegisterFeeSentinelMonth,
+  isRegisterFeePaymentTypeName,
+  isRegisterFeeSentinelMonth,
+} from '@/lib/utils/paymentType';
 
 const paymentSchema = z.object({
   studentId: z.string().min(1, 'Student is required'),
@@ -118,6 +123,23 @@ export function PaymentDialog({
   const proofImageUrl = watch('proofImageUrl');
   const transactionNumber = watch('transactionNumber');
 
+  const isRegisterFeeSelected = isRegisterFeePaymentTypeName(selectedPaymentType?.name);
+  const hasExistingRegisterFee = useMemo(() => {
+    return existingPayments.some((p: any) => {
+      return (
+        p.paymentTypeId === selectedPaymentTypeId &&
+        (isRegisterFeeSentinelMonth(p.month) || isRegisterFeePaymentTypeName(p.paymentType?.name))
+      );
+    });
+  }, [existingPayments, selectedPaymentTypeId]);
+
+  // When Register Fee is selected, force sentinel month (YYYY-13).
+  useEffect(() => {
+    if (!open) return;
+    if (!isRegisterFeeSelected) return;
+    setValue('months', [getRegisterFeeSentinelMonth(currentYear)], { shouldValidate: true });
+  }, [open, isRegisterFeeSelected, currentYear, setValue]);
+
   // Reset form when student changes or dialog opens/closes
   useEffect(() => {
     if (open && student) {
@@ -134,6 +156,7 @@ export function PaymentDialog({
   }, [open, student, defaultMonth, reset, currentMonth]);
 
   const handleMonthToggle = (monthValue: string) => {
+    if (isRegisterFeeSelected) return;
     // Don't allow toggling already paid (confirmed) months
     const isPaid = paidMonthsMap.has(monthValue) && paidMonthsMap.get(monthValue)?.confirmed;
     if (isPaid) {
@@ -232,91 +255,107 @@ export function PaymentDialog({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label>Select Months *</Label>
-            <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[240px] overflow-y-auto overscroll-contain">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {monthOptions.map((month) => {
-                  const isSelected = selectedMonths.includes(month.value);
-                  const isPaid = paidMonthsMap.has(month.value) && paidMonthsMap.get(month.value)?.confirmed;
-                  const isPending = paidMonthsMap.has(month.value) && !paidMonthsMap.get(month.value)?.confirmed;
-                  
-                  return (
-                    <div
-                      key={month.value}
-                      className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all ${
-                        isPaid 
-                          ? 'bg-green-50 border-green-200 cursor-not-allowed' 
-                          : isPending && isSelected
-                          ? 'bg-yellow-100 border-yellow-300 hover:bg-yellow-200 cursor-pointer'
-                          : isPending
-                          ? 'bg-yellow-50 border-yellow-200 hover:border-yellow-300 cursor-pointer'
-                          : isSelected
-                          ? 'bg-blue-50 border-blue-300 hover:bg-blue-100 cursor-pointer'
-                          : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
-                      }`}
-                      onClick={() => !isPaid && handleMonthToggle(month.value)}
-                    >
-                      {isPaid ? (
-                        <CheckCircle2 className="h-6 w-6 text-green-700 flex-shrink-0" fill="currentColor" />
-                      ) : (
-                        <div className="relative h-5 w-5 flex items-center justify-center">
-                          {isSelected && isLoading ? (
-                            <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                          ) : (
-                            <>
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => handleMonthToggle(month.value)}
-                                disabled={isPaid || isLoading}
-                                className={`h-5 w-5 rounded-sm border-2 cursor-pointer appearance-none transition-all ${
-                                  isSelected 
-                                    ? 'bg-blue-600 border-blue-600' 
-                                    : 'bg-white border-gray-300 hover:border-blue-500'
-                                } ${isPaid || isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              />
-                              {isSelected && (
-                                <Check className="absolute h-4 w-4 text-white pointer-events-none left-0.5 top-0.5" strokeWidth={3} />
-                              )}
-                            </>
+          {!isRegisterFeeSelected && (
+            <div className="space-y-2">
+              <Label>Select Months *</Label>
+              <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[240px] overflow-y-auto overscroll-contain">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {monthOptions.map((month) => {
+                    const isSelected = selectedMonths.includes(month.value);
+                    const isPaid = paidMonthsMap.has(month.value) && paidMonthsMap.get(month.value)?.confirmed;
+                    const isPending = paidMonthsMap.has(month.value) && !paidMonthsMap.get(month.value)?.confirmed;
+                    
+                    return (
+                      <div
+                        key={month.value}
+                        className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all ${
+                          isPaid 
+                            ? 'bg-green-50 border-green-200 cursor-not-allowed' 
+                            : isPending && isSelected
+                            ? 'bg-yellow-100 border-yellow-300 hover:bg-yellow-200 cursor-pointer'
+                            : isPending
+                            ? 'bg-yellow-50 border-yellow-200 hover:border-yellow-300 cursor-pointer'
+                            : isSelected
+                            ? 'bg-blue-50 border-blue-300 hover:bg-blue-100 cursor-pointer'
+                            : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
+                        }`}
+                        onClick={() => !isPaid && handleMonthToggle(month.value)}
+                      >
+                        {isPaid ? (
+                          <CheckCircle2 className="h-6 w-6 text-green-700 flex-shrink-0" fill="currentColor" />
+                        ) : (
+                          <div className="relative h-5 w-5 flex items-center justify-center">
+                            {isSelected && isLoading ? (
+                              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                            ) : (
+                              <>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleMonthToggle(month.value)}
+                                  disabled={isPaid || isLoading}
+                                  className={`h-5 w-5 rounded-sm border-2 cursor-pointer appearance-none transition-all ${
+                                    isSelected 
+                                      ? 'bg-blue-600 border-blue-600' 
+                                      : 'bg-white border-gray-300 hover:border-blue-500'
+                                  } ${isPaid || isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                />
+                                {isSelected && (
+                                  <Check className="absolute h-4 w-4 text-white pointer-events-none left-0.5 top-0.5" strokeWidth={3} />
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                        <div className="flex-1 flex flex-col">
+                          <Label 
+                            className={`text-sm font-medium ${
+                              isPaid ? 'cursor-not-allowed text-gray-600' : 'cursor-pointer'
+                            }`}
+                          >
+                            {month.label}
+                          </Label>
+                          {isPaid && (
+                            <span className="text-xs text-green-600 font-semibold mt-0.5">✓ Paid</span>
+                          )}
+                          {isPending && (
+                            <span className="text-xs text-yellow-600 font-semibold mt-0.5">
+                              {isSelected ? '⏳ Will Confirm' : '⏳ Pending'}
+                            </span>
                           )}
                         </div>
-                      )}
-                      <div className="flex-1 flex flex-col">
-                        <Label 
-                          className={`text-sm font-medium ${
-                            isPaid ? 'cursor-not-allowed text-gray-600' : 'cursor-pointer'
-                          }`}
-                        >
-                          {month.label}
-                        </Label>
-                        {isPaid && (
-                          <span className="text-xs text-green-600 font-semibold mt-0.5">✓ Paid</span>
-                        )}
-                        {isPending && (
-                          <span className="text-xs text-yellow-600 font-semibold mt-0.5">
-                            {isSelected ? '⏳ Will Confirm' : '⏳ Pending'}
-                          </span>
-                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
+              {errors.months && (
+                <p className="text-sm text-destructive">{errors.months.message}</p>
+              )}
+              {selectedMonths.length > 0 && (
+                <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                  <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                  <p className="text-sm font-medium text-blue-900">
+                    {selectedMonths.length} month{selectedMonths.length !== 1 ? 's' : ''} selected
+                  </p>
+                </div>
+              )}
             </div>
-            {errors.months && (
-              <p className="text-sm text-destructive">{errors.months.message}</p>
-            )}
-            {selectedMonths.length > 0 && (
-              <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
-                <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                <p className="text-sm font-medium text-blue-900">
-                  {selectedMonths.length} month{selectedMonths.length !== 1 ? 's' : ''} selected
+          )}
+
+          {isRegisterFeeSelected && (
+            <div className="rounded-md border bg-muted/40 p-3 text-sm">
+              <p className="font-medium">Register Fee (one-time)</p>
+              <p className="text-muted-foreground">
+                This payment doesn’t use months.
+              </p>
+              {hasExistingRegisterFee && (
+                <p className="mt-2 text-destructive font-medium">
+                  This student already has a Register Fee payment.
                 </p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {selectedPaymentType && selectedMonths.length > 0 && (
             <div className="space-y-2 p-3 bg-muted rounded-md">
@@ -380,8 +419,13 @@ export function PaymentDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading || selectedMonths.length === 0}>
-              {isLoading ? 'Creating...' : `Create Payment${selectedMonths.length > 1 ? `s (${selectedMonths.length})` : ''}`}
+            <Button
+              type="submit"
+              disabled={isLoading || selectedMonths.length === 0 || (isRegisterFeeSelected && hasExistingRegisterFee)}
+            >
+              {isLoading
+                ? 'Creating...'
+                : `Create Payment${!isRegisterFeeSelected && selectedMonths.length > 1 ? `s (${selectedMonths.length})` : ''}`}
             </Button>
           </DialogFooter>
         </form>

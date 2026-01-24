@@ -42,6 +42,8 @@ import { generateAllMonths, hasPaymentForMonth, formatMonthYear } from '@/lib/ut
 import { useAuthStore } from '@/lib/store/auth-store';
 import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { CheckCircle2, DollarSign, FileText, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
+import { isRegisterFeePaymentTypeName, isRegisterFeeSentinelMonth } from '@/lib/utils/paymentType';
 
 export default function PaymentsPage() {
   const { user, hasRole } = useAuthStore();
@@ -56,6 +58,7 @@ export default function PaymentsPage() {
   const [classFilter, setClassFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [monthFilter, setMonthFilter] = useState<string>('');
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
   const [showGradeClasses, setShowGradeClasses] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState<{
     open: boolean;
@@ -86,10 +89,19 @@ export default function PaymentsPage() {
   const { data: academicYearsData } = useAcademicYears();
   const { data: activeYearData } = useActiveAcademicYear();
   const { data: gradesData } = useGrades();
+  const { data: paymentTypesData } = usePaymentTypes();
 
   const academicYears = Array.isArray(academicYearsData?.data) ? academicYearsData.data : [];
   const grades = Array.isArray(gradesData?.data) ? gradesData.data : [];
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
+  const paymentTypes = Array.isArray(paymentTypesData?.data) ? paymentTypesData.data.filter(pt => pt.isActive) : [];
+
+  const selectedPaymentType = useMemo(() => {
+    if (paymentTypeFilter === 'all') return null;
+    return paymentTypes.find(pt => pt.id === paymentTypeFilter) || null;
+  }, [paymentTypeFilter, paymentTypes]);
+
+  const isRegisterFeeFilter = isRegisterFeePaymentTypeName(selectedPaymentType?.name);
 
   // Set default academic year to active for Teacher/Registrar, or latest for OWNER
   useEffect(() => {
@@ -219,17 +231,41 @@ export default function PaymentsPage() {
       });
     }
 
-    // Filter by payment status if month is selected
-    if (statusFilter !== 'all' && monthFilter) {
-      const year = monthFilter ? parseInt(monthFilter.split('-')[0]) : undefined;
+    // Filter by payment status (optionally scoped to a payment type)
+    if (statusFilter !== 'all') {
       result = result.filter((student: Student) => {
         const studentPayments = payments.filter((p: Payment) => p.studentId === student.id);
-        const paymentInfo = hasPaymentForMonth(studentPayments, monthFilter, year);
-        if (statusFilter === 'confirmed') {
-          return paymentInfo.exists && paymentInfo.status === 'confirmed';
-        } else if (statusFilter === 'pending') {
-          return !paymentInfo.exists || paymentInfo.status === 'pending';
+
+        // If filtering by a specific payment type:
+        if (paymentTypeFilter !== 'all') {
+          const typed = studentPayments.filter((p) => p.paymentTypeId === paymentTypeFilter);
+
+          if (isRegisterFeeFilter) {
+            const hasConfirmed = typed.some(
+              (p) => p.status === 'confirmed' && isRegisterFeeSentinelMonth(p.month)
+            );
+            if (statusFilter === 'confirmed') return hasConfirmed;
+            if (statusFilter === 'pending') return !hasConfirmed;
+            return true;
+          }
+
+          // Normal payment type: only evaluate if a month is selected
+          if (!monthFilter) return true;
+          const year = parseInt(monthFilter.split('-')[0]);
+          const payment = typed.find((p) => p.month === monthFilter && p.year === year);
+          const exists = !!payment;
+          const status = payment?.status;
+          if (statusFilter === 'confirmed') return exists && status === 'confirmed';
+          if (statusFilter === 'pending') return !exists || status === 'pending';
+          return true;
         }
+
+        // All payment types (existing behavior): only evaluate if a month is selected
+        if (!monthFilter) return true;
+        const year = parseInt(monthFilter.split('-')[0]);
+        const paymentInfo = hasPaymentForMonth(studentPayments, monthFilter, year);
+        if (statusFilter === 'confirmed') return paymentInfo.exists && paymentInfo.status === 'confirmed';
+        if (statusFilter === 'pending') return !paymentInfo.exists || paymentInfo.status === 'pending';
         return true;
       });
     }
@@ -238,7 +274,7 @@ export default function PaymentsPage() {
     return result.sort((a, b) => {
       return (a.firstName || '').localeCompare(b.firstName || '');
     });
-  }, [students, gradeFilter, classFilter, gradeClasses, statusFilter, monthFilter, payments]);
+  }, [students, gradeFilter, classFilter, gradeClasses, statusFilter, monthFilter, payments, paymentTypeFilter, isRegisterFeeFilter]);
 
   // Check if filters are fully applied (class is selected, meaning we have a specific filtered list)
   const isFullyFiltered =
@@ -280,12 +316,26 @@ export default function PaymentsPage() {
 
   // Get payment status for a student
   const getStudentPaymentStatus = (student: Student): { paid: boolean; payment?: Payment } => {
+    const studentPayments = payments.filter((p: Payment) => p.studentId === student.id);
+
+    if (paymentTypeFilter !== 'all') {
+      const typed = studentPayments.filter((p) => p.paymentTypeId === paymentTypeFilter);
+
+      if (isRegisterFeeFilter) {
+        const payment = typed.find((p) => p.status === 'confirmed' && isRegisterFeeSentinelMonth(p.month));
+        return payment ? { paid: true, payment } : { paid: false };
+      }
+
+      if (!monthFilter) return { paid: false };
+      const year = parseInt(monthFilter.split('-')[0]);
+      const payment = typed.find((p) => p.month === monthFilter && p.year === year && p.status === 'confirmed');
+      return payment ? { paid: true, payment } : { paid: false };
+    }
+
     if (!monthFilter) return { paid: false };
     const year = parseInt(monthFilter.split('-')[0]);
-    const studentPayments = payments.filter((p: Payment) => p.studentId === student.id);
     const paymentInfo = hasPaymentForMonth(studentPayments, monthFilter, year);
     if (paymentInfo.exists && paymentInfo.status === 'confirmed') {
-      // Find the payment that matches the month and year, and includes receipt
       const payment = studentPayments.find(
         (p: Payment) => p.month === monthFilter && p.year === year && p.status === 'confirmed'
       );
@@ -296,12 +346,12 @@ export default function PaymentsPage() {
 
   // Calculate unpaid students count for selected month
   const unpaidCount = useMemo(() => {
-    if (!monthFilter) return null; // No count if no month selected
+    if (!monthFilter && !isRegisterFeeFilter) return null; // No count if no month selected (unless register fee)
     return finalStudents.filter((student: Student) => {
       const paymentStatus = getStudentPaymentStatus(student);
       return !paymentStatus.paid;
     }).length;
-  }, [finalStudents, monthFilter, payments]);
+  }, [finalStudents, monthFilter, payments, paymentTypeFilter, isRegisterFeeFilter]);
 
   const handleCreatePayment = async (data: CreatePaymentRequest | CreateBulkPaymentRequest) => {
     try {
@@ -406,7 +456,7 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
-      {monthFilter && unpaidCount !== null ? (
+      {(monthFilter || isRegisterFeeFilter) && unpaidCount !== null ? (
         <Card className="border-orange-200 bg-orange-50">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -425,7 +475,7 @@ export default function PaymentsPage() {
           <CardTitle>Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
             {/* Search Bar */}
             <Input
               placeholder="Search students..."
@@ -499,11 +549,26 @@ export default function PaymentsPage() {
               </SelectContent>
             </Select>
 
+            {/* Payment Type Filter */}
+            <Select value={paymentTypeFilter} onValueChange={setPaymentTypeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Payment Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {paymentTypes.map((pt) => (
+                  <SelectItem key={pt.id} value={pt.id}>
+                    {pt.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             {/* Month Filter */}
             <Select
               value={monthFilter}
               onValueChange={setMonthFilter}
-              disabled={monthOptions.length === 0}
+              disabled={monthOptions.length === 0 || isRegisterFeeFilter}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select month" />

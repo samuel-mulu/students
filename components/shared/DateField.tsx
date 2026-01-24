@@ -14,7 +14,7 @@ import { useCalendarSystem } from "@/lib/context/calendar-context";
 import {
   gregorianToEthiopian,
   ecToGregorianISO,
-  getEthiopianMonthName,
+  getEthiopianMonthNameAmharic,
   isEthiopianLeapYear,
 } from "@/lib/utils/date";
 
@@ -119,6 +119,7 @@ export function DateField({
           onChange={(e) => onChangeISO(e.target.value)}
           disabled={disabled}
           required={required}
+          className="h-10"
         />
       </div>
     );
@@ -134,10 +135,7 @@ export function DateField({
       )}
       <div className="grid grid-cols-3 gap-2">
         {/* Year input */}
-        <div className="space-y-1">
-          <Label htmlFor="ec-year" className="text-xs text-muted-foreground">
-            Year
-          </Label>
+        <div>
           <Input
             id="ec-year"
             type="number"
@@ -153,14 +151,13 @@ export function DateField({
             min={1}
             max={9999}
             placeholder="Year"
+            aria-label="Ethiopian year"
+            className="h-10"
           />
         </div>
 
         {/* Month select */}
-        <div className="space-y-1">
-          <Label htmlFor="ec-month" className="text-xs text-muted-foreground">
-            Month
-          </Label>
+        <div>
           <Select
             value={ethiopianDate.month?.toString() || "1"}
             onValueChange={(value) => {
@@ -169,13 +166,13 @@ export function DateField({
             disabled={disabled}
             required={required}
           >
-            <SelectTrigger id="ec-month">
+            <SelectTrigger id="ec-month" className="h-10">
               <SelectValue placeholder="Month" />
             </SelectTrigger>
             <SelectContent>
               {Array.from({ length: 13 }, (_, i) => i + 1).map((month) => (
                 <SelectItem key={month} value={month.toString()}>
-                  {month}. {getEthiopianMonthName(month)}
+                  {getEthiopianMonthNameAmharic(month)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -183,10 +180,7 @@ export function DateField({
         </div>
 
         {/* Day input */}
-        <div className="space-y-1">
-          <Label htmlFor="ec-day" className="text-xs text-muted-foreground">
-            Day
-          </Label>
+        <div>
           <Input
             id="ec-day"
             type="number"
@@ -202,6 +196,8 @@ export function DateField({
             min={1}
             max={maxDays}
             placeholder="Day"
+            aria-label="Ethiopian day"
+            className="h-10"
           />
         </div>
       </div>

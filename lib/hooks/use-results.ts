@@ -193,6 +193,17 @@ export function useRosterResults(classId: string, termId: string) {
   });
 }
 
+export function useRosterResultsSemesters(classId: string) {
+  return useQuery({
+    queryKey: ['results', 'roster', 'semesters', classId],
+    queryFn: async () => {
+      const data = await resultsApi.getRosterSemesters(classId);
+      return { data };
+    },
+    enabled: !!classId,
+  });
+}
+
 // Legacy exports for backward compatibility (can be removed later)
 export const useMarks = useResults;
 export const useMarksByClassAndTerm = useResultsByClassAndTerm;

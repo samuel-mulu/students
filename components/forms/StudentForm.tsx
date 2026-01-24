@@ -26,6 +26,10 @@ import { usePaymentTypes } from "@/lib/hooks/use-payment-types";
 import { generateAllMonths, formatCurrency } from "@/lib/utils/format";
 import { CheckCircle2, Check } from "lucide-react";
 import { ImageUpload } from "@/components/shared/ImageUpload";
+import {
+  getRegisterFeeSentinelMonth,
+  isRegisterFeePaymentTypeName,
+} from "@/lib/utils/paymentType";
 
 const studentSchema = z.object({
   // Personal
@@ -200,9 +204,16 @@ export function StudentForm({
   const selectedPaymentTypeId = watch("paymentTypeId");
   const selectedMonths = watch("months") || [];
   const selectedPaymentType = paymentTypes.find(pt => pt.id === selectedPaymentTypeId);
+  const isRegisterFeeSelected = isRegisterFeePaymentTypeName(selectedPaymentType?.name);
   const totalAmount = selectedPaymentType && selectedMonths.length > 0
     ? selectedPaymentType.amount * selectedMonths.length
     : 0;
+
+  useEffect(() => {
+    if (!isCreating) return;
+    if (!isRegisterFeeSelected) return;
+    setValue("months", [getRegisterFeeSentinelMonth(new Date().getFullYear())], { shouldValidate: true });
+  }, [isCreating, isRegisterFeeSelected, setValue]);
   
   // Handle month toggle
   const handleMonthToggle = (monthValue: string) => {
@@ -723,60 +734,69 @@ export function StudentForm({
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label>Select Months *</Label>
-                <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[280px] overflow-y-auto">
-                  <div className="grid grid-cols-3 gap-3">
-                    {monthOptions.map((month) => {
-                      const isSelected = selectedMonths.includes(month.value);
-                      
-                      return (
-                        <div
-                          key={month.value}
-                          className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all ${
-                            isSelected
-                              ? "bg-blue-50 border-blue-300 hover:bg-blue-100 cursor-pointer"
-                              : "bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer"
-                          }`}
-                          onClick={() => handleMonthToggle(month.value)}
-                        >
-                          <div className="relative h-5 w-5 flex items-center justify-center">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleMonthToggle(month.value)}
-                              className={`h-5 w-5 rounded-sm border-2 cursor-pointer appearance-none transition-all ${
-                                isSelected
-                                  ? "bg-blue-600 border-blue-600"
-                                  : "bg-white border-gray-300 hover:border-blue-500"
-                              }`}
-                            />
-                            {isSelected && (
-                              <Check className="absolute h-4 w-4 text-white pointer-events-none left-0.5 top-0.5" strokeWidth={3} />
-                            )}
+              {!isRegisterFeeSelected && (
+                <div className="space-y-2">
+                  <Label>Select Months *</Label>
+                  <div className="border-2 rounded-lg p-4 bg-slate-50 max-h-[280px] overflow-y-auto">
+                    <div className="grid grid-cols-3 gap-3">
+                      {monthOptions.map((month) => {
+                        const isSelected = selectedMonths.includes(month.value);
+                        
+                        return (
+                          <div
+                            key={month.value}
+                            className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all ${
+                              isSelected
+                                ? "bg-blue-50 border-blue-300 hover:bg-blue-100 cursor-pointer"
+                                : "bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer"
+                            }`}
+                            onClick={() => handleMonthToggle(month.value)}
+                          >
+                            <div className="relative h-5 w-5 flex items-center justify-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleMonthToggle(month.value)}
+                                className={`h-5 w-5 rounded-sm border-2 cursor-pointer appearance-none transition-all ${
+                                  isSelected
+                                    ? "bg-blue-600 border-blue-600"
+                                    : "bg-white border-gray-300 hover:border-blue-500"
+                                }`}
+                              />
+                              {isSelected && (
+                                <Check className="absolute h-4 w-4 text-white pointer-events-none left-0.5 top-0.5" strokeWidth={3} />
+                              )}
+                            </div>
+                            <div className="flex-1 flex flex-col">
+                              <Label className="text-sm font-medium cursor-pointer">
+                                {month.label}
+                              </Label>
+                            </div>
                           </div>
-                          <div className="flex-1 flex flex-col">
-                            <Label className="text-sm font-medium cursor-pointer">
-                              {month.label}
-                            </Label>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
+                  {errors.months && (
+                    <p className="text-sm text-destructive">{errors.months.message}</p>
+                  )}
+                  {selectedMonths.length > 0 && (
+                    <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                      <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                      <p className="text-sm font-medium text-blue-900">
+                        {selectedMonths.length} month{selectedMonths.length !== 1 ? "s" : ""} selected
+                      </p>
+                    </div>
+                  )}
                 </div>
-                {errors.months && (
-                  <p className="text-sm text-destructive">{errors.months.message}</p>
-                )}
-                {selectedMonths.length > 0 && (
-                  <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
-                    <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                    <p className="text-sm font-medium text-blue-900">
-                      {selectedMonths.length} month{selectedMonths.length !== 1 ? "s" : ""} selected
-                    </p>
-                  </div>
-                )}
-              </div>
+              )}
+
+              {isRegisterFeeSelected && (
+                <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                  <p className="font-medium">Register Fee (one-time)</p>
+                  <p className="text-muted-foreground">This payment doesn’t use months.</p>
+                </div>
+              )}
 
               {selectedPaymentType && selectedMonths.length > 0 && (
                 <div className="space-y-2 p-3 bg-muted rounded-md">

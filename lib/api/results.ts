@@ -122,6 +122,49 @@ export const resultsApi = {
     return response.data;
   },
 
+  getRosterSemesters: async (classId: string): Promise<{
+    class: { id: string; name: string };
+    terms: {
+      term1: { id: string; name: string };
+      term2: { id: string; name: string };
+    };
+    students: Array<{
+      studentId: string;
+      firstName: string;
+      lastName: string;
+      subjects: Array<{
+        subjectId: string;
+        subjectName: string;
+        subjectCode: string | null;
+        term1Total: number;
+        term2Total: number;
+        averageTotal: number;
+      }>;
+    }>;
+  }> => {
+    const response = await apiClient.get<{
+      class: { id: string; name: string };
+      terms: {
+        term1: { id: string; name: string };
+        term2: { id: string; name: string };
+      };
+      students: Array<{
+        studentId: string;
+        firstName: string;
+        lastName: string;
+        subjects: Array<{
+          subjectId: string;
+          subjectName: string;
+          subjectCode: string | null;
+          term1Total: number;
+          term2Total: number;
+          averageTotal: number;
+        }>;
+      }>;
+    }>(`/api/results/roster/class/${classId}/semesters`);
+    return response.data;
+  },
+
   update: async (id: string, data: UpdateMarkRequest): Promise<Mark> => {
     const response = await apiClient.patch<Mark>(`/api/marks/${id}`, data);
     return response.data;

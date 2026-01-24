@@ -51,6 +51,12 @@ export const formatCurrency = (amount: number): string => {
 
 export const formatMonthYear = (month: string, year: number, calendarSystem?: CalendarSystem): string => {
   try {
+    // Sentinel month for one-time Register Fee (YYYY-13)
+    const sentinelMonthPart = month.split("-")[1];
+    if (sentinelMonthPart === "13") {
+      return "Register Fee";
+    }
+
     if (calendarSystem === "ethiopian") {
       // Convert Gregorian month to Ethiopian month and return Amharic name
       const ethiopianMonth = gregorianMonthToEthiopianMonth(month);
