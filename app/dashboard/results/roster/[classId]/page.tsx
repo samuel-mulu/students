@@ -42,10 +42,13 @@ interface RosterSemestersResponse {
   }>;
 }
 
-const buildSemesters = (term1Name: string, term2Name: string) => [
-  { key: 'term1', label: term1Name as const },
-  { key: 'term2', label: term2Name as const },
-  { key: 'avg', label: 'Average' as const },
+type SemesterKey = 'term1' | 'term2' | 'avg';
+type SemesterRow = { key: SemesterKey; label: string };
+
+const buildSemesters = (term1Name: string, term2Name: string): SemesterRow[] => [
+  { key: 'term1', label: term1Name },
+  { key: 'term2', label: term2Name },
+  { key: 'avg', label: 'Average' },
 ];
 
 export default function RosterResultsSemestersPage({
