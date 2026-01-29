@@ -1,12 +1,12 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { studentsApi } from "@/lib/api/students";
 import {
-  CreateStudentRequest,
-  UpdateStudentRequest,
-  AssignClassRequest,
-  TransferClassRequest,
-  PaginationParams,
+    AssignClassRequest,
+    CreateStudentRequest,
+    PaginationParams,
+    TransferClassRequest,
+    UpdateStudentRequest,
 } from "@/lib/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 export function useStudents(
@@ -14,6 +14,10 @@ export function useStudents(
     classStatus?: "new" | "assigned";
     paymentStatus?: "pending" | "confirmed";
     classId?: string;
+    gradeId?: string;
+    search?: string;
+    month?: string;
+    year?: number;
   }
 ) {
   return useQuery({

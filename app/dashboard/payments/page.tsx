@@ -1,13 +1,21 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useStudents } from '@/lib/hooks/use-students';
-import { useClasses } from '@/lib/hooks/use-classes';
-import { useAcademicYears, useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
-import { useGrades } from '@/lib/hooks/use-grades';
-import { usePayments, useCreatePayment, useCreateBulkPayment, useConfirmPayment, useConfirmBulkPayments } from '@/lib/hooks/use-payments';
+import { PaymentDialog } from '@/components/forms/PaymentDialog';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorState } from '@/components/shared/ErrorState';
+import { LoadingState } from '@/components/shared/LoadingState';
+import { ReceiptDialog } from '@/components/shared/ReceiptDialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -15,8 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -25,25 +31,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { LoadingState } from '@/components/shared/LoadingState';
-import { ErrorState } from '@/components/shared/ErrorState';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { PaymentDialog } from '@/components/forms/PaymentDialog';
-import { ReceiptDialog } from '@/components/shared/ReceiptDialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Student, Payment, CreatePaymentRequest, CreateBulkPaymentRequest } from '@/lib/types';
-import { generateAllMonths, hasPaymentForMonth, formatMonthYear } from '@/lib/utils/format';
-import { useAuthStore } from '@/lib/store/auth-store';
 import { useCalendarSystem } from '@/lib/context/calendar-context';
-import { CheckCircle2, DollarSign, FileText, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { useAcademicYears, useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
+import { useClasses } from '@/lib/hooks/use-classes';
+import { useGrades } from '@/lib/hooks/use-grades';
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
+import { useConfirmBulkPayments, useConfirmPayment, useCreateBulkPayment, useCreatePayment, usePayments } from '@/lib/hooks/use-payments';
+import { useStudents } from '@/lib/hooks/use-students';
+import { useAuthStore } from '@/lib/store/auth-store';
+import { CreateBulkPaymentRequest, CreatePaymentRequest, Payment, Student } from '@/lib/types';
+import { generateAllMonths, hasPaymentForMonth } from '@/lib/utils/format';
 import { isRegisterFeePaymentTypeName, isRegisterFeeSentinelMonth } from '@/lib/utils/paymentType';
+import { AlertCircle, CheckCircle2, DollarSign, FileText, Image as ImageIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 export default function PaymentsPage() {
   const { user, hasRole } = useAuthStore();
@@ -60,6 +60,8 @@ export default function PaymentsPage() {
   const [monthFilter, setMonthFilter] = useState<string>('');
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
   const [showGradeClasses, setShowGradeClasses] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(40);
   const [paymentDialog, setPaymentDialog] = useState<{
     open: boolean;
     student: Student | null;
@@ -143,6 +145,11 @@ export default function PaymentsPage() {
     }
   }, [monthOptions, monthFilter]);
 
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, academicYearFilter, gradeFilter, classFilter, statusFilter, monthFilter, paymentTypeFilter]);
+
   // Filter classes by academic year
   const classesByAcademicYear = useMemo(() => {
     if (!academicYearFilter) return allClasses;
@@ -169,11 +176,36 @@ export default function PaymentsPage() {
     }
   }, [academicYearFilter]);
 
-  // Fetch students based on filters
+  // Fetch students based on filters (now including search and gradeId for backend-side filtering)
   const { data: studentsData, isLoading: studentsLoading, error: studentsError, refetch: refetchStudents } = useStudents({
+    page,
+    limit,
+    search: search.trim(),
+    gradeId: gradeFilter !== 'all' ? gradeFilter : undefined,
     classId: classFilter !== 'all' ? classFilter : undefined,
     classStatus: 'assigned', // Only show assigned students
   });
+
+  // Calculate unpaid students count for selected month (properly fixed with search/gradeId)
+  const isMonthSelected = !!monthFilter || isRegisterFeeFilter;
+  const monthYearObj = useMemo(() => {
+    if (!monthFilter) return { month: undefined, year: undefined };
+    const [year, month] = monthFilter.split('-');
+    return { month: monthFilter, year: parseInt(year) };
+  }, [monthFilter]);
+
+  const { data: unpaidStudentsData } = useStudents({
+    limit: 1, // We only care about the total count
+    search: search.trim(),
+    gradeId: gradeFilter !== 'all' ? gradeFilter : undefined,
+    classId: classFilter !== 'all' ? classFilter : undefined,
+    classStatus: 'assigned',
+    paymentStatus: 'pending',
+    month: isRegisterFeeFilter ? 'register_fee' : monthFilter,
+    year: monthYearObj.year,
+  });
+
+  const unpaidCount = unpaidStudentsData?.pagination?.total ?? null;
 
   // Fetch payments for all students (we'll filter client-side by month)
   // Don't filter by month on backend to ensure we have all payments for status checking
@@ -192,44 +224,11 @@ export default function PaymentsPage() {
     return className.replace(/\s*\([^)]*\)\s*$/, '').trim();
   };
 
-  // Filter students by grade/class
+  // The backend already handles search, grade, class, and classStatus filtering.
+  // We only keep the statusFilter logic client-side because it's month-dependent
+  // and we fetch all payments separately to avoid complex backend joins for now.
   const filteredStudents = useMemo(() => {
     let result = students;
-
-    // If grade is selected but no specific class, filter by grade classes
-    if (gradeFilter !== 'all' && classFilter === 'all' && gradeClasses.length > 0) {
-      const gradeClassIds = new Set(gradeClasses.map((cls) => cls.id));
-      result = result.filter((student: Student) => {
-        let studentClassId: string | null = null;
-        if ('classHistory' in student && Array.isArray(student.classHistory)) {
-          const activeClass = student.classHistory.find((ch: any) => !ch.endDate);
-          if (activeClass) {
-            studentClassId =
-              activeClass.class?.id ||
-              activeClass.classId ||
-              (typeof activeClass.class === 'string' ? activeClass.class : null);
-          }
-        }
-        return studentClassId && gradeClassIds.has(studentClassId);
-      });
-    }
-
-    // If specific class is selected, filter by that class
-    if (classFilter !== 'all') {
-      result = result.filter((student: Student) => {
-        let studentClassId: string | null = null;
-        if ('classHistory' in student && Array.isArray(student.classHistory)) {
-          const activeClass = student.classHistory.find((ch: any) => !ch.endDate);
-          if (activeClass) {
-            studentClassId =
-              activeClass.class?.id ||
-              activeClass.classId ||
-              (typeof activeClass.class === 'string' ? activeClass.class : null);
-          }
-        }
-        return studentClassId === classFilter;
-      });
-    }
 
     // Filter by payment status (optionally scoped to a payment type)
     if (statusFilter !== 'all') {
@@ -270,22 +269,21 @@ export default function PaymentsPage() {
       });
     }
 
-    // Sort by name (always sort by name when filtered by class)
-    return result.sort((a, b) => {
-      return (a.firstName || '').localeCompare(b.firstName || '');
-    });
-  }, [students, gradeFilter, classFilter, gradeClasses, statusFilter, monthFilter, payments, paymentTypeFilter, isRegisterFeeFilter]);
+    // Students are already sorted by the backend and filtered by core criteria.
+    return result;
+  }, [students, statusFilter, monthFilter, payments, paymentTypeFilter, isRegisterFeeFilter]);
 
   // Check if filters are fully applied (class is selected, meaning we have a specific filtered list)
   const isFullyFiltered =
     classFilter !== 'all' || (academicYearFilter && gradeFilter !== 'all');
 
-  // Apply search filter (text search and number search like students page)
+  // Handle number search: when filters are fully applied and search is a number, find student by row number
   const finalStudents = useMemo(() => {
     // Check if search is a number and filters are fully applied
-    const searchAsNumber = parseInt(search.trim());
+    const searchTrimmed = search.trim();
+    const searchAsNumber = parseInt(searchTrimmed);
     const isNumberSearch =
-      !isNaN(searchAsNumber) && search.trim() !== '' && isFullyFiltered;
+      !isNaN(searchAsNumber) && searchTrimmed !== '' && isFullyFiltered;
 
     if (isNumberSearch && searchAsNumber > 0) {
       // Find student at that position (1-indexed)
@@ -297,21 +295,8 @@ export default function PaymentsPage() {
       return [];
     }
 
-    // If search is not a number or filters not fully applied, use text search on sorted list
-    if (search.trim() === '') {
-      return filteredStudents;
-    }
-
-    // Apply text search on already sorted and filtered students
-    const searchLower = search.toLowerCase();
-    return filteredStudents.filter((student: Student) => {
-      return (
-        student.firstName.toLowerCase().includes(searchLower) ||
-        student.lastName.toLowerCase().includes(searchLower) ||
-        student.email?.toLowerCase().includes(searchLower) ||
-        student.phone?.toLowerCase().includes(searchLower)
-      );
-    });
+    // Text search is already handled by the backend
+    return filteredStudents;
   }, [filteredStudents, search, isFullyFiltered]);
 
   // Get payment status for a student
@@ -344,14 +329,8 @@ export default function PaymentsPage() {
     return { paid: false };
   };
 
-  // Calculate unpaid students count for selected month
-  const unpaidCount = useMemo(() => {
-    if (!monthFilter && !isRegisterFeeFilter) return null; // No count if no month selected (unless register fee)
-    return finalStudents.filter((student: Student) => {
-      const paymentStatus = getStudentPaymentStatus(student);
-      return !paymentStatus.paid;
-    }).length;
-  }, [finalStudents, monthFilter, payments, paymentTypeFilter, isRegisterFeeFilter]);
+  // No longer needed: calculate unpaid students count for selected month
+  // We use the unpaidStudentsData hook instead
 
   const handleCreatePayment = async (data: CreatePaymentRequest | CreateBulkPaymentRequest) => {
     try {
@@ -360,15 +339,15 @@ export default function PaymentsPage() {
         // Handle bulk payment (works for both single and multiple months)
         const bulkData = data as CreateBulkPaymentRequest;
         const payments = await createBulkPayment.mutateAsync(bulkData);
-        
+
         // Show loading state for receipt
-        setReceiptDialog({ 
-          open: true, 
-          payment: null, 
-          payments: undefined, 
-          isLoading: true 
+        setReceiptDialog({
+          open: true,
+          payment: null,
+          payments: undefined,
+          isLoading: true
         });
-        
+
         // Auto-confirm all payments with one shared receipt
         const paymentIds = payments.map(p => p.id);
         const confirmResult = await confirmBulkPayments.mutateAsync({
@@ -376,17 +355,17 @@ export default function PaymentsPage() {
           paymentDate: new Date().toISOString(),
           paymentMethod: bulkData.paymentMethod || 'cash',
         });
-        
+
         // Close payment dialog
         setPaymentDialog({ open: false, student: null });
-        
+
         // Refetch payments and students to update the UI
         await Promise.all([refetchPayments(), refetchStudents()]);
-        
+
         // Show receipt dialog with all payments and shared receipt
         if (confirmResult.receipt && confirmResult.payments.length > 0) {
-          setReceiptDialog({ 
-            open: true, 
+          setReceiptDialog({
+            open: true,
             payment: confirmResult.payments[0],
             payments: confirmResult.payments.length > 1 ? confirmResult.payments : undefined,
             isLoading: false
@@ -398,35 +377,35 @@ export default function PaymentsPage() {
         // Handle single payment (backward compatibility for old PaymentForm)
         const singleData = data as CreatePaymentRequest;
         const payment = await createPayment.mutateAsync(singleData);
-        
+
         // Show loading state for receipt
-        setReceiptDialog({ 
-          open: true, 
-          payment: null, 
-          payments: undefined, 
-          isLoading: true 
+        setReceiptDialog({
+          open: true,
+          payment: null,
+          payments: undefined,
+          isLoading: true
         });
-        
+
         // Auto-confirm the payment immediately since it's being created as paid
         if (payment?.id) {
-          const confirmedPayment = await confirmPayment.mutateAsync({ 
+          const confirmedPayment = await confirmPayment.mutateAsync({
             id: payment.id,
             data: {
               paymentDate: new Date().toISOString(),
               paymentMethod: singleData.paymentMethod || 'cash',
             }
           });
-          
+
           // Close payment dialog
           setPaymentDialog({ open: false, student: null });
-          
+
           // Refetch payments and students to update the UI
           await Promise.all([refetchPayments(), refetchStudents()]);
-          
+
           // Show receipt dialog after payment is confirmed
           if (confirmedPayment?.receipt) {
-            setReceiptDialog({ 
-              open: true, 
+            setReceiptDialog({
+              open: true,
               payment: confirmedPayment,
               payments: undefined,
               isLoading: false
@@ -663,8 +642,8 @@ export default function PaymentsPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setReceiptDialog({ 
-                              open: true, 
+                            onClick={() => setReceiptDialog({
+                              open: true,
                               payment: paymentStatus.payment!,
                               payments: undefined,
                               isLoading: false
@@ -708,6 +687,41 @@ export default function PaymentsPage() {
         </div>
       )}
 
+      {/* Pagination Controls */}
+      {studentsData?.pagination && studentsData.pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-sm text-muted-foreground">
+            Showing {(page - 1) * limit + 1} to{" "}
+            {Math.min(page * limit, studentsData.pagination.total)} of{" "}
+            {studentsData.pagination.total} students
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPage((p) => Math.max(1, p - 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={page === 1}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPage((p) => Math.min(studentsData.pagination!.totalPages, p + 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={page === studentsData.pagination!.totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
       <PaymentDialog
         open={paymentDialog.open}
         onOpenChange={(open) => setPaymentDialog({ open, student: paymentDialog.student })}
@@ -721,8 +735,8 @@ export default function PaymentsPage() {
 
       <ReceiptDialog
         open={receiptDialog.open}
-        onOpenChange={(open) => setReceiptDialog({ 
-          open, 
+        onOpenChange={(open) => setReceiptDialog({
+          open,
           payment: receiptDialog.payment,
           payments: receiptDialog.payments,
           isLoading: false

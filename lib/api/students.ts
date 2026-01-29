@@ -1,12 +1,12 @@
-import apiClient from './client';
 import {
-  Student,
-  CreateStudentRequest,
-  UpdateStudentRequest,
   AssignClassRequest,
+  CreateStudentRequest,
+  PaginationParams,
+  Student,
   TransferClassRequest,
-  PaginationParams
+  UpdateStudentRequest
 } from '@/lib/types';
+import apiClient from './client';
 
 // Backend returns { students: Student[], pagination: {...} }
 interface StudentsBackendResponse {
@@ -24,6 +24,10 @@ export const studentsApi = {
     classStatus?: 'new' | 'assigned';
     paymentStatus?: 'pending' | 'confirmed';
     classId?: string;
+    gradeId?: string;
+    search?: string;
+    month?: string;
+    year?: number;
   }): Promise<StudentsBackendResponse> => {
     const response = await apiClient.get<StudentsBackendResponse>('/api/students', { params });
     // Response interceptor extracts data, backend returns { students, pagination }
