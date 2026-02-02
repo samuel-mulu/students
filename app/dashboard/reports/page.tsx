@@ -1,16 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { usePaymentReports, useRegistrarPaymentReports } from '@/lib/hooks/use-reports';
-import { useAcademicYears, useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
-import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
-import { useUsers } from '@/lib/hooks/use-users';
-import { useAuthStore } from '@/lib/store/auth-store';
-import { generateAllMonths, formatMonthYear, formatDate, formatDateTime } from '@/lib/utils/format';
-import { useCalendarSystem } from '@/lib/context/calendar-context';
-import { formatDateForUI } from '@/lib/utils/date';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorState } from '@/components/shared/ErrorState';
+import { LoadingState } from '@/components/shared/LoadingState';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -18,8 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -28,13 +22,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { LoadingState } from '@/components/shared/LoadingState';
-import { ErrorState } from '@/components/shared/ErrorState';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { formatCurrency } from '@/lib/utils/format';
-import { DollarSign, TrendingUp, FileText, Download, Printer, RefreshCw, Users, UserCheck, UserX, RotateCcw, Calendar } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useCalendarSystem } from '@/lib/context/calendar-context';
+import { useAcademicYears, useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
+import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
+import { usePaymentReports, useRegistrarPaymentReports } from '@/lib/hooks/use-reports';
+import { useUsers } from '@/lib/hooks/use-users';
+import { useAuthStore } from '@/lib/store/auth-store';
+import { formatDateForUI } from '@/lib/utils/date';
+import { formatCurrency, formatDate, formatDateTime, formatMonthYear, generateAllMonths } from '@/lib/utils/format';
 import { format } from 'date-fns';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Calendar, DollarSign, Download, FileText, Printer, RefreshCw, TrendingUp, UserCheck, Users, UserX } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 export default function ReportsPage() {
   const { user } = useAuthStore();
@@ -60,8 +59,8 @@ export default function ReportsPage() {
   const { data: usersData } = useUsers('REGISTRAR');
 
   const academicYears = Array.isArray(academicYearsData?.data) ? academicYearsData.data : [];
-  const paymentTypes = Array.isArray(paymentTypesData?.data) 
-    ? paymentTypesData.data.filter(pt => pt.isActive) 
+  const paymentTypes = Array.isArray(paymentTypesData?.data)
+    ? paymentTypesData.data.filter(pt => pt.isActive)
     : [];
   const registrars = Array.isArray(usersData?.data) ? usersData.data : [];
 
@@ -113,12 +112,12 @@ export default function ReportsPage() {
 
   // Build API params for Daily View (both Owner and Registrar use getRegistrarPaymentReports)
   const dailyReportParams = useMemo(() => {
-    const academicYearId = isRegistrar 
-      ? activeYearData?.data?.id 
+    const academicYearId = isRegistrar
+      ? activeYearData?.data?.id
       : academicYearFilter;
-    
+
     if (!academicYearId) return null;
-    
+
     const params: any = {
       academicYearId,
     };
@@ -189,7 +188,7 @@ export default function ReportsPage() {
     // Get all unique payment types from all dates
     const paymentTypeSet = new Set<string>();
     const paymentTypeMap = new Map<string, string>(); // paymentTypeId -> paymentTypeName
-    
+
     dailyReports.byDate.forEach(dateReport => {
       dateReport.breakdown.forEach(breakdown => {
         paymentTypeSet.add(breakdown.paymentTypeId);
@@ -235,7 +234,7 @@ export default function ReportsPage() {
     if (!dailyTableData || !dailyReports) return;
 
     const headers = ['Date', ...dailyTableData.paymentTypes.map(pt => pt.name), 'Total'];
-    
+
     const rows = dailyTableData.rows.map(row => {
       const date = new Date(row.date);
       return [
@@ -274,7 +273,7 @@ export default function ReportsPage() {
     if (!monthlyReports) return;
 
     const headers = ['Month', 'Total Students', 'Paid Students', 'Unpaid Students', 'Progress %', 'Revenue'];
-    
+
     const rows = monthlyReports.byMonth.map(monthData => {
       const monthDate = new Date(monthData.month + '-01');
       const progress = monthData.paymentProgress ?? 0;
@@ -282,7 +281,7 @@ export default function ReportsPage() {
       const paidStudents = monthData.paidStudents ?? 0;
       const unpaidStudents = monthData.unpaidStudents ?? 0;
       const [year, month] = monthData.month.split('-');
-      
+
       return [
         formatMonthYear(monthData.month, parseInt(year), calendarSystem),
         totalStudents.toString(),
@@ -333,7 +332,7 @@ export default function ReportsPage() {
       const totalStudents = monthData.totalStudents ?? 0;
       const paidStudents = monthData.paidStudents ?? 0;
       const unpaidStudents = monthData.unpaidStudents ?? 0;
-      
+
       const [year, month] = monthData.month.split('-');
       return `
         <tr>
@@ -472,7 +471,7 @@ export default function ReportsPage() {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const paymentTypeHeaders = dailyTableData.paymentTypes.map(pt => 
+    const paymentTypeHeaders = dailyTableData.paymentTypes.map(pt =>
       `<th style="text-align: right;">${pt.name}</th>`
     ).join('');
 
@@ -633,8 +632,8 @@ export default function ReportsPage() {
           <div>
             <h1 className="text-xl font-semibold">Payment Reports</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {viewMode === 'monthly' 
-                ? 'Track student payment progress by month' 
+              {viewMode === 'monthly'
+                ? 'Track student payment progress by month'
                 : 'Day-by-day payment tracking for active academic year'}
             </p>
           </div>
@@ -762,7 +761,8 @@ export default function ReportsPage() {
                       <SelectContent>
                         <SelectItem value="all">All Payment Methods</SelectItem>
                         <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="bank_transfer">Mobile Banking</SelectItem>
+                        <SelectItem value="mobile_banking">Mobile Banking</SelectItem>
+                        <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                         <SelectItem value="card">Card</SelectItem>
                       </SelectContent>
                     </Select>
@@ -783,19 +783,19 @@ export default function ReportsPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle>Monthly Student Payment Progress</CardTitle>
                     <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={handleMonthlyExport} 
+                        onClick={handleMonthlyExport}
                         disabled={!monthlyReports}
                       >
                         <Download className="mr-2 h-4 w-4" />
                         Export
                       </Button>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={handlePrint} 
+                        onClick={handlePrint}
                         disabled={!monthlyReports}
                       >
                         <Printer className="mr-2 h-4 w-4" />
@@ -824,7 +824,7 @@ export default function ReportsPage() {
                           const totalStudents = monthData.totalStudents ?? 0;
                           const paidStudents = monthData.paidStudents ?? 0;
                           const unpaidStudents = monthData.unpaidStudents ?? 0;
-                          
+
                           const [year, month] = monthData.month.split('-');
                           return (
                             <TableRow key={monthData.month}>
@@ -1007,7 +1007,8 @@ export default function ReportsPage() {
                       <SelectContent>
                         <SelectItem value="all">All Payment Methods</SelectItem>
                         <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="bank_transfer">Mobile Banking</SelectItem>
+                        <SelectItem value="mobile_banking">Mobile Banking</SelectItem>
+                        <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                         <SelectItem value="card">Card</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1028,19 +1029,19 @@ export default function ReportsPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle>Day-by-Day Payment Tracking</CardTitle>
                     <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={handleDailyExport} 
+                        onClick={handleDailyExport}
                         disabled={!dailyReports}
                       >
                         <Download className="mr-2 h-4 w-4" />
                         Export
                       </Button>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={handleDailyPrint} 
+                        onClick={handleDailyPrint}
                         disabled={!dailyReports}
                       >
                         <Printer className="mr-2 h-4 w-4" />
@@ -1147,8 +1148,8 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-xl font-semibold">Financial Reports</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {viewMode === 'monthly' 
-              ? 'Track student payment progress by month' 
+            {viewMode === 'monthly'
+              ? 'Track student payment progress by month'
               : 'Day-by-day payment tracking'}
           </p>
         </div>
@@ -1339,7 +1340,8 @@ export default function ReportsPage() {
                     <SelectContent>
                       <SelectItem value="all">All Payment Methods</SelectItem>
                       <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="bank_transfer">Mobile Banking</SelectItem>
+                      <SelectItem value="mobile_banking">Mobile Banking</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                       <SelectItem value="card">Card</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1378,19 +1380,19 @@ export default function ReportsPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle>Monthly Student Payment Progress</CardTitle>
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      onClick={handleMonthlyExport} 
+                      onClick={handleMonthlyExport}
                       disabled={!monthlyReports}
                     >
                       <Download className="mr-2 h-4 w-4" />
                       Export
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      onClick={handleMonthlyPrint} 
+                      onClick={handleMonthlyPrint}
                       disabled={!monthlyReports}
                     >
                       <Printer className="mr-2 h-4 w-4" />
@@ -1419,7 +1421,7 @@ export default function ReportsPage() {
                         const totalStudents = monthData.totalStudents ?? 0;
                         const paidStudents = monthData.paidStudents ?? 0;
                         const unpaidStudents = monthData.unpaidStudents ?? 0;
-                        
+
                         const [year, month] = monthData.month.split('-');
                         return (
                           <TableRow key={monthData.month}>
@@ -1610,7 +1612,8 @@ export default function ReportsPage() {
                     <SelectContent>
                       <SelectItem value="all">All Payment Methods</SelectItem>
                       <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="bank_transfer">Mobile Banking</SelectItem>
+                      <SelectItem value="mobile_banking">Mobile Banking</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                       <SelectItem value="card">Card</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1649,19 +1652,19 @@ export default function ReportsPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle>Day-by-Day Payment Tracking</CardTitle>
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      onClick={handleDailyExport} 
+                      onClick={handleDailyExport}
                       disabled={!dailyReports}
                     >
                       <Download className="mr-2 h-4 w-4" />
                       Export
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      onClick={handleDailyPrint} 
+                      onClick={handleDailyPrint}
                       disabled={!dailyReports}
                     >
                       <Printer className="mr-2 h-4 w-4" />
