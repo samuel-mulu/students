@@ -1,23 +1,16 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import {
-  useStudents,
-  useDeleteStudent,
-  useAssignClass,
-  useTransferClass,
-} from "@/lib/hooks/use-students";
-import { useClasses } from "@/lib/hooks/use-classes";
-import {
-  useAcademicYears,
-  useActiveAcademicYear,
-} from "@/lib/hooks/use-academicYears";
-import { useGrades } from "@/lib/hooks/use-grades";
-import { StudentsTable } from "@/components/tables/StudentsTable";
 import { AssignClassDialog } from "@/components/forms/AssignClassDialog";
 import { TransferClassDialog } from "@/components/forms/TransferClassDialog";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { ErrorState } from "@/components/shared/ErrorState";
+import { LoadingState } from "@/components/shared/LoadingState";
+import { StudentsTable } from "@/components/tables/StudentsTable";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -25,16 +18,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LoadingState } from "@/components/shared/LoadingState";
-import { ErrorState } from "@/components/shared/ErrorState";
-import { EmptyState } from "@/components/shared/EmptyState";
-import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import {
+  useAcademicYears,
+  useActiveAcademicYear,
+} from "@/lib/hooks/use-academicYears";
+import { useClasses } from "@/lib/hooks/use-classes";
+import { useGrades } from "@/lib/hooks/use-grades";
+import {
+  useAssignClass,
+  useDeleteStudent,
+  useStudents,
+  useTransferClass,
+} from "@/lib/hooks/use-students";
+import { useAuthStore } from "@/lib/store/auth-store";
 import { Student } from "@/lib/types";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
-import { useAuthStore } from "@/lib/store/auth-store";
+import { useEffect, useMemo, useState } from "react";
 
 export default function StudentsPage() {
   const { hasRole } = useAuthStore();
@@ -127,14 +127,10 @@ export default function StudentsPage() {
     return classesByAcademicYear.filter((cls) => cls.gradeId === gradeFilter);
   }, [classesByAcademicYear, gradeFilter, academicYearFilter]);
 
-  // When academic year changes, reset grade and class filters
+  // Reset page to 1 when filters change
   useEffect(() => {
-    if (academicYearFilter) {
-      setGradeFilter("all");
-      setClassFilter("all");
-      setShowGradeClasses(false);
-    }
-  }, [academicYearFilter]);
+    setPage(1);
+  }, [search, academicYearFilter, gradeFilter, classFilter, classStatusFilter]);
 
   // Determine if we need to fetch all students (for grade filtering) or filter by classId
   const shouldFetchAllStudents = gradeFilter !== "all" && classFilter === "all";
@@ -142,6 +138,7 @@ export default function StudentsPage() {
   const { data, isLoading, error, refetch } = useStudents({
     page,
     limit,
+    search: search.trim(),
     classStatus:
       classStatusFilter !== "all"
         ? (classStatusFilter as "new" | "assigned")
@@ -149,6 +146,7 @@ export default function StudentsPage() {
     // Only filter by classId if a specific class is selected
     // If "All Classes in Grade" is selected, fetch all students and filter client-side
     classId: classFilter !== "all" ? classFilter : undefined,
+    gradeId: gradeFilter !== "all" ? gradeFilter : undefined,
   });
 
   const deleteStudent = useDeleteStudent();
@@ -182,91 +180,17 @@ export default function StudentsPage() {
     }
   };
 
-  // Filter students by search term, academic year, grade, and class
+  // Backend already handles search, grade, class, and classStatus filtering.
+  // We keep client-side sorting/filtering logic minimal.
   const students = Array.isArray(data?.data) ? data.data : [];
-  const filteredStudents = useMemo(() => {
-    // Determine what filtering is needed
-    // If a specific class is selected, the API already filtered by classId (which includes academic year)
-    const needsGradeFiltering =
-      gradeFilter !== "all" && classFilter === "all" && gradeClasses.length > 0;
-    const needsAcademicYearFiltering =
-      academicYearFilter &&
-      classFilter === "all" &&
-      classesByAcademicYear.length > 0;
-    const needsAnyFiltering = needsGradeFiltering || needsAcademicYearFiltering;
 
-    if (!needsAnyFiltering) {
-      // No client-side filtering needed
-      return students;
-    }
-
-    // Create sets of class IDs for filtering
-    const gradeClassIds = needsGradeFiltering
-      ? new Set(gradeClasses.map((cls) => cls.id))
-      : null;
-    const academicYearClassIds = needsAcademicYearFiltering
-      ? new Set(classesByAcademicYear.map((cls) => cls.id))
-      : null;
-
-    return students.filter((student: Student) => {
-      // Get student's current class from classHistory
-      let studentClassId: string | null = null;
-      if ("classHistory" in student && Array.isArray(student.classHistory)) {
-        const activeClass = student.classHistory.find((ch: any) => !ch.endDate);
-        if (activeClass) {
-          // Check different possible structures
-          studentClassId =
-            activeClass.class?.id ||
-            activeClass.classId ||
-            (typeof activeClass.class === "string" ? activeClass.class : null);
-        }
-      }
-
-      // If we can't find class info, exclude the student when filtering is needed
-      if (
-        !studentClassId &&
-        (needsGradeFiltering || needsAcademicYearFiltering)
-      ) {
-        return false;
-      }
-
-      // Filter by academic year (if no specific class is selected)
-      // This ensures students are only from classes in the selected academic year
-      if (
-        needsAcademicYearFiltering &&
-        academicYearClassIds &&
-        studentClassId
-      ) {
-        if (!academicYearClassIds.has(studentClassId)) {
-          return false;
-        }
-      }
-
-      // Filter by grade (if grade is selected and "all classes" is selected)
-      // Note: gradeClasses are already filtered by academic year, so this also respects academic year
-      if (needsGradeFiltering && gradeClassIds && studentClassId) {
-        if (!gradeClassIds.has(studentClassId)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [
-    students,
-    academicYearFilter,
-    gradeFilter,
-    classFilter,
-    gradeClasses,
-    classesByAcademicYear,
-  ]);
-
-  // Sort filtered students alphabetically by first name (A, B, C...)
-  const sortedFilteredStudents = useMemo(() => {
-    return [...filteredStudents].sort((a, b) => {
+  // Sort students alphabetically by first name (A, B, C...)
+  // Note: This is per-page unless the backend also sorts by firstName
+  const sortedStudents = useMemo(() => {
+    return [...students].sort((a, b) => {
       return (a.firstName || "").localeCompare(b.firstName || "");
     });
-  }, [filteredStudents]);
+  }, [students]);
 
   // Check if filters are fully applied (class is selected, meaning we have a specific filtered list)
   const isFullyFiltered =
@@ -275,36 +199,23 @@ export default function StudentsPage() {
   // Handle number search: when filters are fully applied and search is a number, find student by row number
   const finalStudents = useMemo(() => {
     // Check if search is a number and filters are fully applied
-    const searchAsNumber = parseInt(search.trim());
+    const searchTrimmed = search.trim();
+    const searchAsNumber = parseInt(searchTrimmed);
     const isNumberSearch =
-      !isNaN(searchAsNumber) && search.trim() !== "" && isFullyFiltered;
+      !isNaN(searchAsNumber) && searchTrimmed !== "" && isFullyFiltered;
 
     if (isNumberSearch && searchAsNumber > 0) {
-      // Find student at that position (1-indexed)
+      // Find student at that position (1-indexed) within the current sorted list
       const studentIndex = searchAsNumber - 1;
-      if (studentIndex >= 0 && studentIndex < sortedFilteredStudents.length) {
-        return [sortedFilteredStudents[studentIndex]];
+      if (studentIndex >= 0 && studentIndex < sortedStudents.length) {
+        return [sortedStudents[studentIndex]];
       }
       // If number is out of range, return empty array
       return [];
     }
 
-    // If search is not a number or filters not fully applied, use text search on sorted list
-    if (search.trim() === "") {
-      return sortedFilteredStudents;
-    }
-
-    // Apply text search on already sorted and filtered students
-    const searchLower = search.toLowerCase();
-    return sortedFilteredStudents.filter((student) => {
-      return (
-        student.firstName.toLowerCase().includes(searchLower) ||
-        student.lastName.toLowerCase().includes(searchLower) ||
-        student.email?.toLowerCase().includes(searchLower) ||
-        student.phone?.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [sortedFilteredStudents, search, isFullyFiltered]);
+    return sortedStudents;
+  }, [sortedStudents, search, isFullyFiltered]);
 
   if (isLoading) {
     return <LoadingState rows={5} columns={6} />;
@@ -453,10 +364,10 @@ export default function StudentsPage() {
           action={
             hasRole(["OWNER", "REGISTRAR"])
               ? {
-                  label: "Add Student",
-                  onClick: () =>
-                    (window.location.href = "/dashboard/students/new"),
-                }
+                label: "Add Student",
+                onClick: () =>
+                  (window.location.href = "/dashboard/students/new"),
+              }
               : undefined
           }
         />
@@ -464,6 +375,7 @@ export default function StudentsPage() {
         <>
           <StudentsTable
             students={finalStudents}
+            offset={(page - 1) * limit}
             onDelete={
               hasRole(["OWNER"])
                 ? (student) => setDeleteDialog({ open: true, student })
@@ -518,11 +430,10 @@ export default function StudentsPage() {
           setDeleteDialog({ open, student: deleteDialog.student })
         }
         title="Delete Student"
-        description={`Are you sure you want to delete ${
-          deleteDialog.student
+        description={`Are you sure you want to delete ${deleteDialog.student
             ? `${deleteDialog.student.firstName} ${deleteDialog.student.lastName}`
             : "this student"
-        }? This action cannot be undone.`}
+          }? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={handleDelete}

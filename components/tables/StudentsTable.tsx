@@ -1,7 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { ImageViewerDialog } from '@/components/shared/ImageViewerDialog';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -10,19 +18,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Student } from '@/lib/types';
 import { formatFullName } from '@/lib/utils/format';
-import { MoreHorizontal, Edit, Trash2, UserPlus, Eye, ArrowRightLeft, IdCard } from 'lucide-react';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { ImageViewerDialog } from '@/components/shared/ImageViewerDialog';
+import { ArrowRightLeft, Edit, Eye, IdCard, MoreHorizontal, Trash2, UserPlus } from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
 
 interface StudentsTableProps {
   students: Student[];
@@ -31,6 +31,7 @@ interface StudentsTableProps {
   onAssignClass?: (student: Student) => void;
   onTransferClass?: (student: Student) => void;
   showActions?: boolean;
+  offset?: number;
 }
 
 export function StudentsTable({
@@ -40,6 +41,7 @@ export function StudentsTable({
   onAssignClass,
   onTransferClass,
   showActions = true,
+  offset = 0,
 }: StudentsTableProps) {
   const [imageViewer, setImageViewer] = useState<{
     open: boolean;
@@ -89,8 +91,8 @@ export function StudentsTable({
         <TableBody>
           {students.length === 0 ? (
             <TableRow>
-              <TableCell 
-                colSpan={showActions ? 5 : 4} 
+              <TableCell
+                colSpan={showActions ? 5 : 4}
                 className="text-center py-12 text-gray-500 text-sm"
               >
                 No students found
@@ -100,9 +102,9 @@ export function StudentsTable({
             students.map((student, index) => {
               const currentClassName = getCurrentClassName(student);
               const initials = `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
-              
+
               return (
-                <TableRow 
+                <TableRow
                   key={student.id}
                 >
                   <TableCell>
@@ -122,7 +124,7 @@ export function StudentsTable({
                     </button>
                   </TableCell>
                   <TableCell className="text-center font-medium">
-                    {index + 1}
+                    {offset + index + 1}
                   </TableCell>
                   <TableCell>
                     <h3 className="font-semibold">{formatFullName(student.firstName, student.lastName)}</h3>
@@ -152,7 +154,7 @@ export function StudentsTable({
                           </button>
                         </Link>
                         {onDelete && (
-                          <button 
+                          <button
                             onClick={() => onDelete(student)}
                             className="w-7 h-7 flex items-center justify-center rounded-full bg-[#CFCEFF]"
                           >

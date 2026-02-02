@@ -176,6 +176,14 @@ export default function PaymentsPage() {
     }
   }, [academicYearFilter]);
 
+  // Calculate unpaid students count for selected month (properly fixed with search/gradeId)
+  const isMonthSelected = !!monthFilter || isRegisterFeeFilter;
+  const monthYearObj = useMemo(() => {
+    if (!monthFilter) return { month: undefined, year: undefined };
+    const [year, month] = monthFilter.split('-');
+    return { month: monthFilter, year: parseInt(year) };
+  }, [monthFilter]);
+
   // Fetch students based on filters (now including search and gradeId for backend-side filtering)
   const { data: studentsData, isLoading: studentsLoading, error: studentsError, refetch: refetchStudents } = useStudents({
     page,
@@ -184,15 +192,10 @@ export default function PaymentsPage() {
     gradeId: gradeFilter !== 'all' ? gradeFilter : undefined,
     classId: classFilter !== 'all' ? classFilter : undefined,
     classStatus: 'assigned', // Only show assigned students
+    paymentStatus: statusFilter !== 'all' ? (statusFilter as 'pending' | 'confirmed') : undefined,
+    month: isRegisterFeeFilter ? 'register_fee' : monthFilter,
+    year: monthYearObj.year,
   });
-
-  // Calculate unpaid students count for selected month (properly fixed with search/gradeId)
-  const isMonthSelected = !!monthFilter || isRegisterFeeFilter;
-  const monthYearObj = useMemo(() => {
-    if (!monthFilter) return { month: undefined, year: undefined };
-    const [year, month] = monthFilter.split('-');
-    return { month: monthFilter, year: parseInt(year) };
-  }, [monthFilter]);
 
   const { data: unpaidStudentsData } = useStudents({
     limit: 1, // We only care about the total count
@@ -224,54 +227,8 @@ export default function PaymentsPage() {
     return className.replace(/\s*\([^)]*\)\s*$/, '').trim();
   };
 
-  // The backend already handles search, grade, class, and classStatus filtering.
-  // We only keep the statusFilter logic client-side because it's month-dependent
-  // and we fetch all payments separately to avoid complex backend joins for now.
-  const filteredStudents = useMemo(() => {
-    let result = students;
-
-    // Filter by payment status (optionally scoped to a payment type)
-    if (statusFilter !== 'all') {
-      result = result.filter((student: Student) => {
-        const studentPayments = payments.filter((p: Payment) => p.studentId === student.id);
-
-        // If filtering by a specific payment type:
-        if (paymentTypeFilter !== 'all') {
-          const typed = studentPayments.filter((p) => p.paymentTypeId === paymentTypeFilter);
-
-          if (isRegisterFeeFilter) {
-            const hasConfirmed = typed.some(
-              (p) => p.status === 'confirmed' && isRegisterFeeSentinelMonth(p.month)
-            );
-            if (statusFilter === 'confirmed') return hasConfirmed;
-            if (statusFilter === 'pending') return !hasConfirmed;
-            return true;
-          }
-
-          // Normal payment type: only evaluate if a month is selected
-          if (!monthFilter) return true;
-          const year = parseInt(monthFilter.split('-')[0]);
-          const payment = typed.find((p) => p.month === monthFilter && p.year === year);
-          const exists = !!payment;
-          const status = payment?.status;
-          if (statusFilter === 'confirmed') return exists && status === 'confirmed';
-          if (statusFilter === 'pending') return !exists || status === 'pending';
-          return true;
-        }
-
-        // All payment types (existing behavior): only evaluate if a month is selected
-        if (!monthFilter) return true;
-        const year = parseInt(monthFilter.split('-')[0]);
-        const paymentInfo = hasPaymentForMonth(studentPayments, monthFilter, year);
-        if (statusFilter === 'confirmed') return paymentInfo.exists && paymentInfo.status === 'confirmed';
-        if (statusFilter === 'pending') return !paymentInfo.exists || paymentInfo.status === 'pending';
-        return true;
-      });
-    }
-
-    // Students are already sorted by the backend and filtered by core criteria.
-    return result;
-  }, [students, statusFilter, monthFilter, payments, paymentTypeFilter, isRegisterFeeFilter]);
+  // Backend already handles search, grade, class, classStatus, and paymentStatus filtering.
+  const filteredStudents = students;
 
   // Check if filters are fully applied (class is selected, meaning we have a specific filtered list)
   const isFullyFiltered =
@@ -620,7 +577,7 @@ export default function PaymentsPage() {
                 return (
                   <TableRow key={student.id}>
                     <TableCell className="text-center font-medium">
-                      {index + 1}
+                      {(page - 1) * limit + index + 1}
                     </TableCell>
                     <TableCell>
                       {student.firstName} {student.lastName}
