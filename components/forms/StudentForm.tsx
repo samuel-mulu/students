@@ -1,35 +1,36 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { ImageUpload } from "@/components/shared/ImageUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
-import {
-  Student,
-  CreateStudentRequest,
-  UpdateStudentRequest,
-} from "@/lib/types";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useClasses } from "@/lib/hooks/use-classes";
 import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
+import { useClasses } from "@/lib/hooks/use-classes";
 import { usePaymentTypes } from "@/lib/hooks/use-payment-types";
-import { generateAllMonths, formatCurrency } from "@/lib/utils/format";
-import { CheckCircle2, Check } from "lucide-react";
-import { ImageUpload } from "@/components/shared/ImageUpload";
 import {
-  getRegisterFeeSentinelMonth,
-  isRegisterFeePaymentTypeName,
+    CreateStudentRequest,
+    Student,
+    UpdateStudentRequest,
+} from "@/lib/types";
+import { formatCurrency, generateAllMonths } from "@/lib/utils/format";
+import {
+    getRegisterFeeSentinelMonth,
+    isRegisterFeePaymentTypeName,
 } from "@/lib/utils/paymentType";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Check, CheckCircle2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 const studentSchema = z.object({
   // Personal
@@ -69,11 +70,15 @@ const studentSchema = z.object({
   assignClassReason: z.string().optional(),
   // Payment fields (optional, only for new students)
   paymentTypeId: z.string().uuid().optional(),
-  months: z.array(z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format")).optional(),
+  months: z
+    .array(z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"))
+    .optional(),
   paymentMethod: z.string().optional(),
   paymentNotes: z.string().optional(),
   // Profile image
   profileImageUrl: z.string().url().optional().or(z.literal("")),
+  // Parents portal access
+  parentsPortal: z.boolean().default(true),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -81,7 +86,7 @@ type StudentFormData = z.infer<typeof studentSchema>;
 interface StudentFormProps {
   student?: Student;
   onSubmit: (
-    data: CreateStudentRequest | UpdateStudentRequest
+    data: CreateStudentRequest | UpdateStudentRequest,
   ) => Promise<void>;
   onCancel?: () => void;
   isLoading?: boolean;
@@ -98,17 +103,17 @@ export function StudentForm({
   const { data: paymentTypesData } = usePaymentTypes();
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
   const activeYear = activeYearData?.data;
-  const paymentTypes = Array.isArray(paymentTypesData?.data) 
-    ? paymentTypesData.data.filter(pt => pt.isActive) 
+  const paymentTypes = Array.isArray(paymentTypesData?.data)
+    ? paymentTypesData.data.filter((pt) => pt.isActive)
     : [];
   const isCreating = !student;
   const [activeTab, setActiveTab] = useState("personal");
-  
+
   // Generate month options for current year
   const monthOptions = useMemo(() => {
     return generateAllMonths(new Date().getFullYear());
   }, []);
-  
+
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   // Filter classes to show only classes from active academic year when creating student
@@ -199,29 +204,44 @@ export function StudentForm({
           profileImageUrl: "",
         },
   });
-  
+
   // Watch payment-related fields
   const selectedPaymentTypeId = watch("paymentTypeId");
   const selectedMonths = watch("months") || [];
-  const selectedPaymentType = paymentTypes.find(pt => pt.id === selectedPaymentTypeId);
-  const isRegisterFeeSelected = isRegisterFeePaymentTypeName(selectedPaymentType?.name);
-  const totalAmount = selectedPaymentType && selectedMonths.length > 0
-    ? selectedPaymentType.amount * selectedMonths.length
-    : 0;
+  const selectedPaymentType = paymentTypes.find(
+    (pt) => pt.id === selectedPaymentTypeId,
+  );
+  const isRegisterFeeSelected = isRegisterFeePaymentTypeName(
+    selectedPaymentType?.name,
+  );
+  const totalAmount =
+    selectedPaymentType && selectedMonths.length > 0
+      ? selectedPaymentType.amount * selectedMonths.length
+      : 0;
 
   useEffect(() => {
     if (!isCreating) return;
     if (!isRegisterFeeSelected) return;
-    setValue("months", [getRegisterFeeSentinelMonth(new Date().getFullYear())], { shouldValidate: true });
+    setValue(
+      "months",
+      [getRegisterFeeSentinelMonth(new Date().getFullYear())],
+      { shouldValidate: true },
+    );
   }, [isCreating, isRegisterFeeSelected, setValue]);
-  
+
   // Handle month toggle
   const handleMonthToggle = (monthValue: string) => {
     const currentMonths = watch("months") || [];
     if (currentMonths.includes(monthValue)) {
-      setValue("months", currentMonths.filter(m => m !== monthValue), { shouldValidate: true });
+      setValue(
+        "months",
+        currentMonths.filter((m) => m !== monthValue),
+        { shouldValidate: true },
+      );
     } else {
-      setValue("months", [...currentMonths, monthValue], { shouldValidate: true });
+      setValue("months", [...currentMonths, monthValue], {
+        shouldValidate: true,
+      });
     }
   };
 
@@ -285,9 +305,9 @@ export function StudentForm({
       Object.entries(data).map(([key, value]) => [
         key,
         value === "" ? undefined : value,
-      ])
+      ]),
     ) as CreateStudentRequest | UpdateStudentRequest;
-    
+
     await onSubmit(cleaned);
   };
 
@@ -319,7 +339,7 @@ export function StudentForm({
             onRemove={() => setValue("profileImageUrl", "")}
             disabled={isLoading}
           />
-          
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="firstName">First Name *</Label>
@@ -485,6 +505,24 @@ export function StudentForm({
                   {errors.parentEmail.message}
                 </p>
               )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="parentsPortal">Parents Portal Access</Label>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="parentsPortal"
+                  checked={watch("parentsPortal") ?? true}
+                  onCheckedChange={(checked) =>
+                    setValue("parentsPortal", checked)
+                  }
+                />
+                <Label
+                  htmlFor="parentsPortal"
+                  className="text-sm text-gray-600"
+                >
+                  Enable parent portal access
+                </Label>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="emergencyName">Emergency Contact Name *</Label>
@@ -703,7 +741,8 @@ export function StudentForm({
                     ) : (
                       paymentTypes.map((paymentType) => (
                         <SelectItem key={paymentType.id} value={paymentType.id}>
-                          {paymentType.name} - {formatCurrency(paymentType.amount)}
+                          {paymentType.name} -{" "}
+                          {formatCurrency(paymentType.amount)}
                         </SelectItem>
                       ))
                     )}
@@ -741,7 +780,7 @@ export function StudentForm({
                     <div className="grid grid-cols-3 gap-3">
                       {monthOptions.map((month) => {
                         const isSelected = selectedMonths.includes(month.value);
-                        
+
                         return (
                           <div
                             key={month.value}
@@ -764,7 +803,10 @@ export function StudentForm({
                                 }`}
                               />
                               {isSelected && (
-                                <Check className="absolute h-4 w-4 text-white pointer-events-none left-0.5 top-0.5" strokeWidth={3} />
+                                <Check
+                                  className="absolute h-4 w-4 text-white pointer-events-none left-0.5 top-0.5"
+                                  strokeWidth={3}
+                                />
                               )}
                             </div>
                             <div className="flex-1 flex flex-col">
@@ -778,13 +820,16 @@ export function StudentForm({
                     </div>
                   </div>
                   {errors.months && (
-                    <p className="text-sm text-destructive">{errors.months.message}</p>
+                    <p className="text-sm text-destructive">
+                      {errors.months.message}
+                    </p>
                   )}
                   {selectedMonths.length > 0 && (
                     <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
                       <CheckCircle2 className="h-4 w-4 text-blue-600" />
                       <p className="text-sm font-medium text-blue-900">
-                        {selectedMonths.length} month{selectedMonths.length !== 1 ? "s" : ""} selected
+                        {selectedMonths.length} month
+                        {selectedMonths.length !== 1 ? "s" : ""} selected
                       </p>
                     </div>
                   )}
@@ -794,7 +839,9 @@ export function StudentForm({
               {isRegisterFeeSelected && (
                 <div className="rounded-md border bg-muted/40 p-3 text-sm">
                   <p className="font-medium">Register Fee (one-time)</p>
-                  <p className="text-muted-foreground">This payment doesn’t use months.</p>
+                  <p className="text-muted-foreground">
+                    This payment doesn’t use months.
+                  </p>
                 </div>
               )}
 
@@ -802,10 +849,14 @@ export function StudentForm({
                 <div className="space-y-2 p-3 bg-muted rounded-md">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Total Amount:</span>
-                    <span className="text-lg font-bold">{formatCurrency(totalAmount)}</span>
+                    <span className="text-lg font-bold">
+                      {formatCurrency(totalAmount)}
+                    </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {formatCurrency(selectedPaymentType.amount)} × {selectedMonths.length} month{selectedMonths.length !== 1 ? "s" : ""}
+                    {formatCurrency(selectedPaymentType.amount)} ×{" "}
+                    {selectedMonths.length} month
+                    {selectedMonths.length !== 1 ? "s" : ""}
                   </p>
                 </div>
               )}
@@ -858,8 +909,8 @@ export function StudentForm({
           {isLoading
             ? "Saving..."
             : student
-            ? "Update Student"
-            : "Create Student"}
+              ? "Update Student"
+              : "Create Student"}
         </Button>
       </div>
     </form>

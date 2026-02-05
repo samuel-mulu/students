@@ -65,6 +65,7 @@ export interface Student {
   profileImageUrl?: string;
   classStatus: ClassStatus;
   paymentStatus: PaymentStatus;
+  parentsPortal: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,6 +100,7 @@ export interface CreateStudentRequest {
   classId?: string;
   assignClassReason?: string;
   profileImageUrl?: string;
+  parentsPortal?: boolean;
 }
 
 export interface UpdateStudentRequest {
@@ -129,6 +131,7 @@ export interface UpdateStudentRequest {
   previousClass?: string;
   transferReason?: string;
   profileImageUrl?: string;
+  parentsPortal?: boolean;
 }
 
 export interface AssignClassRequest {

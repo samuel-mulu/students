@@ -1,25 +1,25 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
 import {
-  Users,
-  GraduationCap,
-  Calendar,
-  FileText,
-  DollarSign,
-  BarChart3,
-  LayoutDashboard,
-  UserCog,
-  Settings,
-  School,
-  ArrowUpCircle,
-  ChevronLeft,
-  ChevronRight,
+    ArrowUpCircle,
+    BarChart3,
+    Calendar,
+    ChevronLeft,
+    ChevronRight,
+    DollarSign,
+    FileText,
+    GraduationCap,
+    LayoutDashboard,
+    School,
+    Settings,
+    UserCog,
+    Users,
 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 interface MenuItem {
   label: string;
@@ -108,13 +108,28 @@ export function Sidebar() {
       <div
         className={cn(
           "border-r bg-sidebar h-screen sticky top-0 transition-all duration-300",
-          isCollapsed ? "w-16" : "w-64"
+          isCollapsed ? "w-16" : "w-64",
         )}
       >
         <div className="p-6 border-b">
-          <h1 className={cn("text-lg font-semibold", isCollapsed && "hidden")}>
-            School System
-          </h1>
+          <div className="flex flex-col items-center gap-3 w-full">
+            <img
+              src="/logo.jpg"
+              alt="Digital KG Logo"
+              className={cn(
+                "transition-all duration-300",
+                isCollapsed ? "w-10 h-10" : "w-16 h-16",
+              )}
+            />
+            <span
+              className={cn(
+                "text-lg font-bold text-center transition-opacity",
+                isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100",
+              )}
+            >
+              DIGITAL KG
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -127,23 +142,33 @@ export function Sidebar() {
     <div
       className={cn(
         "border-r bg-sidebar h-screen sticky top-0 transition-all duration-300 flex flex-col",
-        isCollapsed ? "w-16" : "w-64"
+        isCollapsed ? "w-16" : "w-64",
       )}
     >
       <div className="p-6 border-b flex items-center justify-between">
-        <h1
-          className={cn(
-            "text-lg font-semibold transition-opacity",
-            isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
-          )}
-        >
-          School System
-        </h1>
+        <div className="flex flex-col items-center gap-3 w-full">
+          <img
+            src="/logo.jpg"
+            alt="Digital KG Logo"
+            className={cn(
+              "transition-all duration-300",
+              isCollapsed ? "w-10 h-10" : "w-16 h-16",
+            )}
+          />
+          <span
+            className={cn(
+              "text-lg font-bold text-center transition-opacity",
+              isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100",
+            )}
+          >
+            DIGITAL KG
+          </span>
+        </div>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className={cn(
             "p-1.5 rounded-md hover:bg-sidebar-accent transition-colors",
-            isCollapsed && "mx-auto"
+            isCollapsed && "mx-auto",
           )}
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
@@ -169,7 +194,7 @@ export function Sidebar() {
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                isCollapsed && "justify-center"
+                isCollapsed && "justify-center",
               )}
               title={isCollapsed ? item.label : undefined}
             >
@@ -177,7 +202,7 @@ export function Sidebar() {
               <span
                 className={cn(
                   "transition-opacity",
-                  isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+                  isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100",
                 )}
               >
                 {item.label}

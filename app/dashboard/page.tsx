@@ -1,105 +1,107 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { useAuthStore } from '@/lib/store/auth-store';
-import { useActiveAcademicYear, useAcademicYears } from '@/lib/hooks/use-academicYears';
-import { useStudents } from '@/lib/hooks/use-students';
-import { useClasses } from '@/lib/hooks/use-classes';
-import { useTeachers } from '@/lib/hooks/use-users';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { LoadingState } from '@/components/shared/LoadingState';
-import { ErrorState } from '@/components/shared/ErrorState';
-import { EmptyState } from '@/components/shared/EmptyState';
-import Link from 'next/link';
+import { ArchivedYearsModal } from "@/components/shared/ArchivedYearsModal";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { LoadingState } from "@/components/shared/LoadingState";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Users,
-  GraduationCap,
-  UserCog,
-  Calendar,
-  DollarSign,
-  BarChart3,
-  Archive,
-  ChevronRight,
-} from 'lucide-react';
-import { ArchivedYearsModal } from '@/components/shared/ArchivedYearsModal';
+    useAcademicYears,
+    useActiveAcademicYear,
+} from "@/lib/hooks/use-academicYears";
+import { useClasses } from "@/lib/hooks/use-classes";
+import { useStudents } from "@/lib/hooks/use-students";
+import { useTeachers } from "@/lib/hooks/use-users";
+import { useAuthStore } from "@/lib/store/auth-store";
+import {
+    Archive,
+    BarChart3,
+    Calendar,
+    ChevronRight,
+    DollarSign,
+    GraduationCap,
+    UserCog,
+    Users,
+} from "lucide-react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const isOwner = user?.role === 'OWNER';
-  const isTeacher = user?.role === 'TEACHER';
+  const isOwner = user?.role === "OWNER";
+  const isTeacher = user?.role === "TEACHER";
 
   // Data hooks
-  const { data: activeYearData, isLoading: activeYearLoading } = useActiveAcademicYear();
+  const { data: activeYearData, isLoading: activeYearLoading } =
+    useActiveAcademicYear();
   const { data: academicYearsData } = useAcademicYears();
   const { data: studentsData, isLoading: studentsLoading } = useStudents({
-    classStatus: 'assigned',
+    classStatus: "assigned",
   });
   const { data: classesData, isLoading: classesLoading } = useClasses();
   const { data: teachersData, isLoading: teachersLoading } = useTeachers();
 
   const activeYear = activeYearData?.data;
-  const academicYears = Array.isArray(academicYearsData?.data) ? academicYearsData.data : [];
-  const allStudents = Array.isArray(studentsData?.data) ? studentsData.data : [];
+  const academicYears = Array.isArray(academicYearsData?.data)
+    ? academicYearsData.data
+    : [];
+  const allStudents = Array.isArray(studentsData?.data)
+    ? studentsData.data
+    : [];
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
-  const allTeachers = Array.isArray(teachersData?.data) ? teachersData.data : [];
+  const allTeachers = Array.isArray(teachersData?.data)
+    ? teachersData.data
+    : [];
 
   // Filter data by active academic year
   const activeYearDataFiltered = useMemo(() => {
     if (!activeYear) return null;
 
-    // Filter students in classes from active academic year
-    const activeClassIds = new Set(
-      allClasses
-        .filter(cls => cls.academicYearId === activeYear.id)
-        .map(cls => cls.id)
-    );
-
-    const activeStudents = allStudents.filter(student => {
-      if (!('classHistory' in student) || !Array.isArray(student.classHistory)) {
-        return false;
-      }
-      const activeClass = student.classHistory.find((ch: any) => !ch.endDate);
-      if (!activeClass) return false;
-      const studentClassId = activeClass.class?.id || activeClass.classId || (typeof activeClass.class === 'string' ? activeClass.class : null);
-      return studentClassId && activeClassIds.has(studentClassId);
-    });
-
     // Filter classes from active academic year
-    const activeClasses = allClasses.filter(cls => cls.academicYearId === activeYear.id);
+    const activeClasses = allClasses.filter(
+      (cls) => cls.academicYearId === activeYear.id,
+    );
 
     // Filter teachers who are head teachers of classes in active academic year
     const activeTeacherIds = new Set(
       activeClasses
-        .filter(cls => cls.headTeacherId)
-        .map(cls => cls.headTeacherId!)
+        .filter((cls) => cls.headTeacherId)
+        .map((cls) => cls.headTeacherId!),
     );
-    const activeTeachers = allTeachers.filter(teacher => activeTeacherIds.has(teacher.id));
+    const activeTeachers = allTeachers.filter((teacher) =>
+      activeTeacherIds.has(teacher.id),
+    );
+
+    // For students, use the total count from pagination since we need all active students
+    // The backend already filters by classStatus: 'assigned' which means active students
+    const totalActiveStudents = studentsData?.pagination?.total || 0;
 
     return {
-      studentsCount: activeStudents.length,
+      studentsCount: totalActiveStudents,
       classesCount: activeClasses.length,
       teachersCount: activeTeachers.length,
     };
-  }, [activeYear, allStudents, allClasses, allTeachers]);
+  }, [activeYear, allClasses, allTeachers, studentsData]);
 
   // Get archived academic years
   const archivedYears = useMemo(() => {
-    return academicYears.filter(year => year.status === 'CLOSED');
+    return academicYears.filter((year) => year.status === "CLOSED");
   }, [academicYears]);
 
   // Get teacher's classes (for Teacher dashboard)
   const teacherClasses = useMemo(() => {
     if (!isTeacher || !user?.id || !activeYear) return [];
     return allClasses.filter(
-      cls => cls.headTeacherId === user.id && cls.academicYearId === activeYear.id
+      (cls) =>
+        cls.headTeacherId === user.id && cls.academicYearId === activeYear.id,
     );
   }, [isTeacher, user?.id, activeYear, allClasses]);
 
   const [archivedModalOpen, setArchivedModalOpen] = useState(false);
 
-  const isLoading = activeYearLoading || studentsLoading || classesLoading || teachersLoading;
+  const isLoading =
+    activeYearLoading || studentsLoading || classesLoading || teachersLoading;
 
   if (isLoading) {
     return <LoadingState rows={5} columns={4} />;
@@ -122,9 +124,11 @@ export default function DashboardPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-blue-700">Total Active Students</p>
+                  <p className="text-sm font-medium text-blue-700">
+                    Total Active Students
+                  </p>
                   <p className="text-2xl font-bold text-blue-900 mt-1">
-                    {activeYearDataFiltered?.studentsCount ?? '-'}
+                    {activeYearDataFiltered?.studentsCount ?? "-"}
                   </p>
                   {activeYear && (
                     <p className="text-xs text-blue-600 mt-1">
@@ -141,9 +145,11 @@ export default function DashboardPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-green-700">Active Classes</p>
+                  <p className="text-sm font-medium text-green-700">
+                    Active Classes
+                  </p>
                   <p className="text-2xl font-bold text-green-900 mt-1">
-                    {activeYearDataFiltered?.classesCount ?? '-'}
+                    {activeYearDataFiltered?.classesCount ?? "-"}
                   </p>
                   {activeYear && (
                     <p className="text-xs text-green-600 mt-1">
@@ -160,9 +166,11 @@ export default function DashboardPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-purple-700">Teachers</p>
+                  <p className="text-sm font-medium text-purple-700">
+                    Teachers
+                  </p>
                   <p className="text-2xl font-bold text-purple-900 mt-1">
-                    {activeYearDataFiltered?.teachersCount ?? '-'}
+                    {activeYearDataFiltered?.teachersCount ?? "-"}
                   </p>
                   {activeYear && (
                     <p className="text-xs text-purple-600 mt-1">
@@ -179,9 +187,11 @@ export default function DashboardPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-orange-700">Academic Year</p>
+                  <p className="text-sm font-medium text-orange-700">
+                    Academic Year
+                  </p>
                   <p className="text-lg font-bold text-orange-900 mt-1">
-                    {activeYear ? activeYear.name : 'No active year'}
+                    {activeYear ? activeYear.name : "No active year"}
                   </p>
                   {activeYear && (
                     <Badge className="mt-1 bg-orange-600 text-white">
@@ -209,7 +219,9 @@ export default function DashboardPage() {
                       <Users className="h-6 w-6 text-blue-600" />
                       <div>
                         <p className="font-medium">Students</p>
-                        <p className="text-xs text-muted-foreground">Manage students</p>
+                        <p className="text-xs text-muted-foreground">
+                          Manage students
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -223,7 +235,9 @@ export default function DashboardPage() {
                       <GraduationCap className="h-6 w-6 text-green-600" />
                       <div>
                         <p className="font-medium">Classes</p>
-                        <p className="text-xs text-muted-foreground">Manage classes</p>
+                        <p className="text-xs text-muted-foreground">
+                          Manage classes
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -237,7 +251,9 @@ export default function DashboardPage() {
                       <DollarSign className="h-6 w-6 text-yellow-600" />
                       <div>
                         <p className="font-medium">Payments</p>
-                        <p className="text-xs text-muted-foreground">Manage payments</p>
+                        <p className="text-xs text-muted-foreground">
+                          Manage payments
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -251,7 +267,9 @@ export default function DashboardPage() {
                       <BarChart3 className="h-6 w-6 text-purple-600" />
                       <div>
                         <p className="font-medium">Reports</p>
-                        <p className="text-xs text-muted-foreground">View reports</p>
+                        <p className="text-xs text-muted-foreground">
+                          View reports
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -319,12 +337,18 @@ export default function DashboardPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {teacherClasses.map((classItem) => {
-              const studentCount = 'studentClasses' in classItem && Array.isArray(classItem.studentClasses)
-                ? classItem.studentClasses.filter((sc: any) => !sc.endDate).length
-                : 0;
+              const studentCount =
+                "studentClasses" in classItem &&
+                Array.isArray(classItem.studentClasses)
+                  ? classItem.studentClasses.filter((sc: any) => !sc.endDate)
+                      .length
+                  : 0;
 
               return (
-                <Link key={classItem.id} href={`/dashboard/classes/${classItem.id}`}>
+                <Link
+                  key={classItem.id}
+                  href={`/dashboard/classes/${classItem.id}`}
+                >
                   <Card className="hover:bg-accent cursor-pointer transition-colors h-full">
                     <CardHeader>
                       <CardTitle className="flex items-center justify-between">
@@ -336,7 +360,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm text-muted-foreground">
-                          {studentCount} student{studentCount !== 1 ? 's' : ''}
+                          {studentCount} student{studentCount !== 1 ? "s" : ""}
                         </span>
                       </div>
                       {classItem.description && (

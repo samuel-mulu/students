@@ -1,10 +1,10 @@
 import { studentsApi } from "@/lib/api/students";
 import {
-    AssignClassRequest,
-    CreateStudentRequest,
-    PaginationParams,
-    TransferClassRequest,
-    UpdateStudentRequest,
+  AssignClassRequest,
+  CreateStudentRequest,
+  PaginationParams,
+  TransferClassRequest,
+  UpdateStudentRequest,
 } from "@/lib/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -18,7 +18,7 @@ export function useStudents(
     search?: string;
     month?: string;
     year?: number;
-  }
+  },
 ) {
   return useQuery({
     queryKey: ["students", params],
@@ -60,12 +60,13 @@ export function useCreateStudent() {
     },
     onError: (error: any) => {
       // Get error message from API client interceptor or fallback to response
-      const errorMessage = error.errorMessage || 
-                          error.response?.data?.error || 
-                          error.response?.data?.message || 
-                          error.message ||
-                          "Failed to create student. Please try again.";
-      
+      const errorMessage =
+        error.errorMessage ||
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to create student. Please try again.";
+
       toast.error("Create Student Failed", {
         description: errorMessage,
         duration: 5000,
@@ -89,11 +90,12 @@ export function useUpdateStudent() {
       });
     },
     onError: (error: any) => {
-      const errorMessage = error.errorMessage || 
-                          error.response?.data?.error || 
-                          error.response?.data?.message || 
-                          error.message ||
-                          "Failed to update student. Please try again.";
+      const errorMessage =
+        error.errorMessage ||
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to update student. Please try again.";
       toast.error("Update Student Failed", {
         description: errorMessage,
         duration: 5000,
@@ -117,11 +119,12 @@ export function useAssignClass() {
       });
     },
     onError: (error: any) => {
-      const errorMessage = error.errorMessage || 
-                          error.response?.data?.error || 
-                          error.response?.data?.message || 
-                          error.message ||
-                          "Failed to assign class. Please try again.";
+      const errorMessage =
+        error.errorMessage ||
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to assign class. Please try again.";
       toast.error("Assign Class Failed", {
         description: errorMessage,
         duration: 5000,
@@ -145,11 +148,12 @@ export function useTransferClass() {
       });
     },
     onError: (error: any) => {
-      const errorMessage = error.errorMessage || 
-                          error.response?.data?.error || 
-                          error.response?.data?.message || 
-                          error.message ||
-                          "Failed to transfer class. Please try again.";
+      const errorMessage =
+        error.errorMessage ||
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to transfer class. Please try again.";
       toast.error("Transfer Class Failed", {
         description: errorMessage,
         duration: 5000,
@@ -171,12 +175,47 @@ export function useDeleteStudent() {
       });
     },
     onError: (error: any) => {
-      const errorMessage = error.errorMessage || 
-                          error.response?.data?.error || 
-                          error.response?.data?.message || 
-                          error.message ||
-                          "Failed to delete student. Please try again.";
+      const errorMessage =
+        error.errorMessage ||
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to delete student. Please try again.";
       toast.error("Delete Student Failed", {
+        description: errorMessage,
+        duration: 5000,
+      });
+    },
+  });
+}
+
+export function useToggleParentsPortal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      parentsPortal,
+    }: {
+      id: string;
+      parentsPortal: boolean;
+    }) => studentsApi.toggleParentsPortal(id, parentsPortal),
+    onSuccess: (student, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.setQueryData(["students", student.id], { data: student });
+      toast.success("Parents Portal Updated", {
+        description: `${student.firstName} ${student.lastName}'s portal access has been ${variables.parentsPortal ? "enabled" : "disabled"}.`,
+        duration: 3000,
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error.errorMessage ||
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to update parents portal access. Please try again.";
+      toast.error("Update Failed", {
         description: errorMessage,
         duration: 5000,
       });

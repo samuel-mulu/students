@@ -1,64 +1,98 @@
-'use client';
+"use client";
 
-import { PaymentDialog } from '@/components/forms/PaymentDialog';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { ErrorState } from '@/components/shared/ErrorState';
-import { LoadingState } from '@/components/shared/LoadingState';
-import { ReceiptDialog } from '@/components/shared/ReceiptDialog';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PaymentDialog } from "@/components/forms/PaymentDialog";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { ErrorState } from "@/components/shared/ErrorState";
+import { LoadingState } from "@/components/shared/LoadingState";
+import { ReceiptDialog } from "@/components/shared/ReceiptDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { useCalendarSystem } from '@/lib/context/calendar-context';
-import { useAcademicYears, useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
-import { useClasses } from '@/lib/hooks/use-classes';
-import { useGrades } from '@/lib/hooks/use-grades';
-import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
-import { useConfirmBulkPayments, useConfirmPayment, useCreateBulkPayment, useCreatePayment, usePayments } from '@/lib/hooks/use-payments';
-import { useStudents } from '@/lib/hooks/use-students';
-import { useAuthStore } from '@/lib/store/auth-store';
-import { CreateBulkPaymentRequest, CreatePaymentRequest, Payment, Student } from '@/lib/types';
-import { generateAllMonths, hasPaymentForMonth } from '@/lib/utils/format';
-import { isRegisterFeePaymentTypeName, isRegisterFeeSentinelMonth } from '@/lib/utils/paymentType';
-import { AlertCircle, CheckCircle2, DollarSign, FileText, Image as ImageIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { useCalendarSystem } from "@/lib/context/calendar-context";
+import {
+    useAcademicYears,
+    useActiveAcademicYear,
+} from "@/lib/hooks/use-academicYears";
+import { useClasses } from "@/lib/hooks/use-classes";
+import { useGrades } from "@/lib/hooks/use-grades";
+import { usePaymentTypes } from "@/lib/hooks/use-payment-types";
+import {
+    useConfirmBulkPayments,
+    useConfirmPayment,
+    useCreateBulkPayment,
+    useCreatePayment,
+    usePayments,
+} from "@/lib/hooks/use-payments";
+import { useStudents } from "@/lib/hooks/use-students";
+import { useAuthStore } from "@/lib/store/auth-store";
+import {
+    CreateBulkPaymentRequest,
+    CreatePaymentRequest,
+    Payment,
+    Student,
+} from "@/lib/types";
+import { generateAllMonths, hasPaymentForMonth } from "@/lib/utils/format";
+import {
+    isRegisterFeePaymentTypeName,
+    isRegisterFeeSentinelMonth,
+} from "@/lib/utils/paymentType";
+import {
+    AlertCircle,
+    CheckCircle2,
+    DollarSign,
+    FileText,
+    Image as ImageIcon,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function PaymentsPage() {
   const { user, hasRole } = useAuthStore();
   const { calendarSystem } = useCalendarSystem();
-  const isOwner = user?.role === 'OWNER';
-  const isTeacherOrRegistrar = user?.role === 'TEACHER' || user?.role === 'REGISTRAR';
+  const isOwner = user?.role === "OWNER";
+  const isTeacherOrRegistrar =
+    user?.role === "TEACHER" || user?.role === "REGISTRAR";
 
   // Filters state
-  const [search, setSearch] = useState<string>('');
-  const [academicYearFilter, setAcademicYearFilter] = useState<string>('');
-  const [gradeFilter, setGradeFilter] = useState<string>('all');
-  const [classFilter, setClassFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [monthFilter, setMonthFilter] = useState<string>('');
-  const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
+  const [search, setSearch] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
+
+  // Simple debounce implementation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+  const [academicYearFilter, setAcademicYearFilter] = useState<string>("");
+  const [gradeFilter, setGradeFilter] = useState<string>("all");
+  const [classFilter, setClassFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [monthFilter, setMonthFilter] = useState<string>("");
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>("all");
   const [showGradeClasses, setShowGradeClasses] = useState(false);
   const [page, setPage] = useState(1);
   const [limit] = useState(40);
@@ -93,17 +127,23 @@ export default function PaymentsPage() {
   const { data: gradesData } = useGrades();
   const { data: paymentTypesData } = usePaymentTypes();
 
-  const academicYears = Array.isArray(academicYearsData?.data) ? academicYearsData.data : [];
+  const academicYears = Array.isArray(academicYearsData?.data)
+    ? academicYearsData.data
+    : [];
   const grades = Array.isArray(gradesData?.data) ? gradesData.data : [];
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
-  const paymentTypes = Array.isArray(paymentTypesData?.data) ? paymentTypesData.data.filter(pt => pt.isActive) : [];
+  const paymentTypes = Array.isArray(paymentTypesData?.data)
+    ? paymentTypesData.data.filter((pt) => pt.isActive)
+    : [];
 
   const selectedPaymentType = useMemo(() => {
-    if (paymentTypeFilter === 'all') return null;
-    return paymentTypes.find(pt => pt.id === paymentTypeFilter) || null;
+    if (paymentTypeFilter === "all") return null;
+    return paymentTypes.find((pt) => pt.id === paymentTypeFilter) || null;
   }, [paymentTypeFilter, paymentTypes]);
 
-  const isRegisterFeeFilter = isRegisterFeePaymentTypeName(selectedPaymentType?.name);
+  const isRegisterFeeFilter = isRegisterFeePaymentTypeName(
+    selectedPaymentType?.name,
+  );
 
   // Set default academic year to active for Teacher/Registrar, or latest for OWNER
   useEffect(() => {
@@ -116,7 +156,8 @@ export default function PaymentsPage() {
           setAcademicYearFilter(activeYearData.data.id);
         } else {
           const latest = academicYears.sort(
-            (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+            (a, b) =>
+              new Date(b.startDate).getTime() - new Date(a.startDate).getTime(),
           )[0];
           if (latest) {
             setAcademicYearFilter(latest.id);
@@ -124,7 +165,13 @@ export default function PaymentsPage() {
         }
       }
     }
-  }, [academicYears, activeYearData, academicYearFilter, isOwner, isTeacherOrRegistrar]);
+  }, [
+    academicYears,
+    activeYearData,
+    academicYearFilter,
+    isOwner,
+    isTeacherOrRegistrar,
+  ]);
 
   // Get selected academic year
   const selectedAcademicYear = useMemo(() => {
@@ -148,7 +195,15 @@ export default function PaymentsPage() {
   // Reset page to 1 when filters change
   useEffect(() => {
     setPage(1);
-  }, [search, academicYearFilter, gradeFilter, classFilter, statusFilter, monthFilter, paymentTypeFilter]);
+  }, [
+    debouncedSearch,
+    academicYearFilter,
+    gradeFilter,
+    classFilter,
+    statusFilter,
+    monthFilter,
+    paymentTypeFilter,
+  ]);
 
   // Filter classes by academic year
   const classesByAcademicYear = useMemo(() => {
@@ -156,22 +211,23 @@ export default function PaymentsPage() {
     return allClasses.filter(
       (cls) =>
         cls.academicYearId === academicYearFilter ||
-        (typeof cls.academicYear === 'object' && cls.academicYear?.id === academicYearFilter) ||
-        cls.academicYear === academicYearFilter
+        (typeof cls.academicYear === "object" &&
+          cls.academicYear?.id === academicYearFilter) ||
+        cls.academicYear === academicYearFilter,
     );
   }, [allClasses, academicYearFilter]);
 
   // Get classes for selected grade
   const gradeClasses = useMemo(() => {
-    if (gradeFilter === 'all' || !academicYearFilter) return [];
+    if (gradeFilter === "all" || !academicYearFilter) return [];
     return classesByAcademicYear.filter((cls) => cls.gradeId === gradeFilter);
   }, [classesByAcademicYear, gradeFilter, academicYearFilter]);
 
   // Reset grade and class filters when academic year changes
   useEffect(() => {
     if (academicYearFilter) {
-      setGradeFilter('all');
-      setClassFilter('all');
+      setGradeFilter("all");
+      setClassFilter("all");
       setShowGradeClasses(false);
     }
   }, [academicYearFilter]);
@@ -180,31 +236,39 @@ export default function PaymentsPage() {
   const isMonthSelected = !!monthFilter || isRegisterFeeFilter;
   const monthYearObj = useMemo(() => {
     if (!monthFilter) return { month: undefined, year: undefined };
-    const [year, month] = monthFilter.split('-');
+    const [year, month] = monthFilter.split("-");
     return { month: monthFilter, year: parseInt(year) };
   }, [monthFilter]);
 
   // Fetch students based on filters (now including search and gradeId for backend-side filtering)
-  const { data: studentsData, isLoading: studentsLoading, error: studentsError, refetch: refetchStudents } = useStudents({
+  const {
+    data: studentsData,
+    isLoading: studentsLoading,
+    error: studentsError,
+    refetch: refetchStudents,
+  } = useStudents({
     page,
     limit,
-    search: search.trim(),
-    gradeId: gradeFilter !== 'all' ? gradeFilter : undefined,
-    classId: classFilter !== 'all' ? classFilter : undefined,
-    classStatus: 'assigned', // Only show assigned students
-    paymentStatus: statusFilter !== 'all' ? (statusFilter as 'pending' | 'confirmed') : undefined,
-    month: isRegisterFeeFilter ? 'register_fee' : monthFilter,
+    search: debouncedSearch.trim(),
+    gradeId: gradeFilter !== "all" ? gradeFilter : undefined,
+    classId: classFilter !== "all" ? classFilter : undefined,
+    classStatus: "assigned", // Only show assigned students
+    paymentStatus:
+      statusFilter !== "all"
+        ? (statusFilter as "pending" | "confirmed")
+        : undefined,
+    month: isRegisterFeeFilter ? "register_fee" : monthFilter,
     year: monthYearObj.year,
   });
 
   const { data: unpaidStudentsData } = useStudents({
     limit: 1, // We only care about the total count
-    search: search.trim(),
-    gradeId: gradeFilter !== 'all' ? gradeFilter : undefined,
-    classId: classFilter !== 'all' ? classFilter : undefined,
-    classStatus: 'assigned',
-    paymentStatus: 'pending',
-    month: isRegisterFeeFilter ? 'register_fee' : monthFilter,
+    search: debouncedSearch.trim(),
+    gradeId: gradeFilter !== "all" ? gradeFilter : undefined,
+    classId: classFilter !== "all" ? classFilter : undefined,
+    classStatus: "assigned",
+    paymentStatus: "pending",
+    month: isRegisterFeeFilter ? "register_fee" : monthFilter,
     year: monthYearObj.year,
   });
 
@@ -212,7 +276,11 @@ export default function PaymentsPage() {
 
   // Fetch payments for all students (we'll filter client-side by month)
   // Don't filter by month on backend to ensure we have all payments for status checking
-  const { data: paymentsData, isLoading: paymentsLoading, refetch: refetchPayments } = usePayments();
+  const {
+    data: paymentsData,
+    isLoading: paymentsLoading,
+    refetch: refetchPayments,
+  } = usePayments();
 
   const createPayment = useCreatePayment();
   const createBulkPayment = useCreateBulkPayment();
@@ -224,7 +292,7 @@ export default function PaymentsPage() {
 
   // Helper to remove academic year from class name
   const removeAcademicYearFromClassName = (className: string): string => {
-    return className.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    return className.replace(/\s*\([^)]*\)\s*$/, "").trim();
   };
 
   // Backend already handles search, grade, class, classStatus, and paymentStatus filtering.
@@ -232,7 +300,7 @@ export default function PaymentsPage() {
 
   // Check if filters are fully applied (class is selected, meaning we have a specific filtered list)
   const isFullyFiltered =
-    classFilter !== 'all' || (academicYearFilter && gradeFilter !== 'all');
+    classFilter !== "all" || (academicYearFilter && gradeFilter !== "all");
 
   // Handle number search: when filters are fully applied and search is a number, find student by row number
   const finalStudents = useMemo(() => {
@@ -240,7 +308,7 @@ export default function PaymentsPage() {
     const searchTrimmed = search.trim();
     const searchAsNumber = parseInt(searchTrimmed);
     const isNumberSearch =
-      !isNaN(searchAsNumber) && searchTrimmed !== '' && isFullyFiltered;
+      !isNaN(searchAsNumber) && searchTrimmed !== "" && isFullyFiltered;
 
     if (isNumberSearch && searchAsNumber > 0) {
       // Find student at that position (1-indexed)
@@ -257,29 +325,46 @@ export default function PaymentsPage() {
   }, [filteredStudents, search, isFullyFiltered]);
 
   // Get payment status for a student
-  const getStudentPaymentStatus = (student: Student): { paid: boolean; payment?: Payment } => {
-    const studentPayments = payments.filter((p: Payment) => p.studentId === student.id);
+  const getStudentPaymentStatus = (
+    student: Student,
+  ): { paid: boolean; payment?: Payment } => {
+    const studentPayments = payments.filter(
+      (p: Payment) => p.studentId === student.id,
+    );
 
-    if (paymentTypeFilter !== 'all') {
-      const typed = studentPayments.filter((p) => p.paymentTypeId === paymentTypeFilter);
+    if (paymentTypeFilter !== "all") {
+      const typed = studentPayments.filter(
+        (p) => p.paymentTypeId === paymentTypeFilter,
+      );
 
       if (isRegisterFeeFilter) {
-        const payment = typed.find((p) => p.status === 'confirmed' && isRegisterFeeSentinelMonth(p.month));
+        const payment = typed.find(
+          (p) =>
+            p.status === "confirmed" && isRegisterFeeSentinelMonth(p.month),
+        );
         return payment ? { paid: true, payment } : { paid: false };
       }
 
       if (!monthFilter) return { paid: false };
-      const year = parseInt(monthFilter.split('-')[0]);
-      const payment = typed.find((p) => p.month === monthFilter && p.year === year && p.status === 'confirmed');
+      const year = parseInt(monthFilter.split("-")[0]);
+      const payment = typed.find(
+        (p) =>
+          p.month === monthFilter &&
+          p.year === year &&
+          p.status === "confirmed",
+      );
       return payment ? { paid: true, payment } : { paid: false };
     }
 
     if (!monthFilter) return { paid: false };
-    const year = parseInt(monthFilter.split('-')[0]);
+    const year = parseInt(monthFilter.split("-")[0]);
     const paymentInfo = hasPaymentForMonth(studentPayments, monthFilter, year);
-    if (paymentInfo.exists && paymentInfo.status === 'confirmed') {
+    if (paymentInfo.exists && paymentInfo.status === "confirmed") {
       const payment = studentPayments.find(
-        (p: Payment) => p.month === monthFilter && p.year === year && p.status === 'confirmed'
+        (p: Payment) =>
+          p.month === monthFilter &&
+          p.year === year &&
+          p.status === "confirmed",
       );
       return { paid: true, payment };
     }
@@ -289,10 +374,12 @@ export default function PaymentsPage() {
   // No longer needed: calculate unpaid students count for selected month
   // We use the unpaidStudentsData hook instead
 
-  const handleCreatePayment = async (data: CreatePaymentRequest | CreateBulkPaymentRequest) => {
+  const handleCreatePayment = async (
+    data: CreatePaymentRequest | CreateBulkPaymentRequest,
+  ) => {
     try {
       // Check if it's a bulk payment request (has months array)
-      if ('months' in data && Array.isArray(data.months)) {
+      if ("months" in data && Array.isArray(data.months)) {
         // Handle bulk payment (works for both single and multiple months)
         const bulkData = data as CreateBulkPaymentRequest;
         const payments = await createBulkPayment.mutateAsync(bulkData);
@@ -302,15 +389,15 @@ export default function PaymentsPage() {
           open: true,
           payment: null,
           payments: undefined,
-          isLoading: true
+          isLoading: true,
         });
 
         // Auto-confirm all payments with one shared receipt
-        const paymentIds = payments.map(p => p.id);
+        const paymentIds = payments.map((p) => p.id);
         const confirmResult = await confirmBulkPayments.mutateAsync({
           paymentIds,
           paymentDate: new Date().toISOString(),
-          paymentMethod: bulkData.paymentMethod || 'cash',
+          paymentMethod: bulkData.paymentMethod || "cash",
         });
 
         // Close payment dialog
@@ -324,8 +411,11 @@ export default function PaymentsPage() {
           setReceiptDialog({
             open: true,
             payment: confirmResult.payments[0],
-            payments: confirmResult.payments.length > 1 ? confirmResult.payments : undefined,
-            isLoading: false
+            payments:
+              confirmResult.payments.length > 1
+                ? confirmResult.payments
+                : undefined,
+            isLoading: false,
           });
         } else {
           setReceiptDialog({ open: false, payment: null, isLoading: false });
@@ -340,7 +430,7 @@ export default function PaymentsPage() {
           open: true,
           payment: null,
           payments: undefined,
-          isLoading: true
+          isLoading: true,
         });
 
         // Auto-confirm the payment immediately since it's being created as paid
@@ -349,8 +439,8 @@ export default function PaymentsPage() {
             id: payment.id,
             data: {
               paymentDate: new Date().toISOString(),
-              paymentMethod: singleData.paymentMethod || 'cash',
-            }
+              paymentMethod: singleData.paymentMethod || "cash",
+            },
           });
 
           // Close payment dialog
@@ -365,7 +455,7 @@ export default function PaymentsPage() {
               open: true,
               payment: confirmedPayment,
               payments: undefined,
-              isLoading: false
+              isLoading: false,
             });
           } else {
             setReceiptDialog({ open: false, payment: null, isLoading: false });
@@ -374,7 +464,7 @@ export default function PaymentsPage() {
       }
     } catch (error) {
       // Error is already handled by the mutation hooks
-      console.error('Error creating/confirming payment:', error);
+      console.error("Error creating/confirming payment:", error);
       setReceiptDialog({ open: false, payment: null, isLoading: false });
     }
   };
@@ -387,7 +477,12 @@ export default function PaymentsPage() {
   }
 
   if (error) {
-    return <ErrorState message="Failed to load payments" onRetry={() => refetchStudents()} />;
+    return (
+      <ErrorState
+        message="Failed to load payments"
+        onRetry={() => refetchStudents()}
+      />
+    );
   }
 
   return (
@@ -398,7 +493,9 @@ export default function PaymentsPage() {
             <div className="flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0" />
               <div>
-                <p className="text-2xl font-bold text-orange-900">{unpaidCount}</p>
+                <p className="text-2xl font-bold text-orange-900">
+                  {unpaidCount}
+                </p>
                 <p className="text-xs text-orange-700">Unpaid Students</p>
               </div>
             </div>
@@ -422,7 +519,7 @@ export default function PaymentsPage() {
             {/* Academic Year Filter - Smaller */}
             {isTeacherOrRegistrar ? (
               <Input
-                value={selectedAcademicYear?.name || 'Loading...'}
+                value={selectedAcademicYear?.name || "Loading..."}
                 disabled
                 className="bg-muted text-sm h-9"
               />
@@ -431,8 +528,8 @@ export default function PaymentsPage() {
                 value={academicYearFilter}
                 onValueChange={(value) => {
                   setAcademicYearFilter(value);
-                  setGradeFilter('all');
-                  setClassFilter('all');
+                  setGradeFilter("all");
+                  setClassFilter("all");
                   setShowGradeClasses(false);
                 }}
               >
@@ -441,9 +538,13 @@ export default function PaymentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {academicYears.map((year) => (
-                    <SelectItem key={year.id} value={year.id} className="text-sm">
+                    <SelectItem
+                      key={year.id}
+                      value={year.id}
+                      className="text-sm"
+                    >
                       {year.name}
-                      {activeYearData?.data?.id === year.id && ' (Active)'}
+                      {activeYearData?.data?.id === year.id && " (Active)"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -455,8 +556,8 @@ export default function PaymentsPage() {
               value={gradeFilter}
               onValueChange={(value) => {
                 setGradeFilter(value);
-                setClassFilter('all');
-                setShowGradeClasses(value !== 'all');
+                setClassFilter("all");
+                setShowGradeClasses(value !== "all");
               }}
               disabled={!academicYearFilter}
             >
@@ -486,7 +587,10 @@ export default function PaymentsPage() {
             </Select>
 
             {/* Payment Type Filter */}
-            <Select value={paymentTypeFilter} onValueChange={setPaymentTypeFilter}>
+            <Select
+              value={paymentTypeFilter}
+              onValueChange={setPaymentTypeFilter}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Payment Type" />
               </SelectTrigger>
@@ -520,7 +624,7 @@ export default function PaymentsPage() {
           </div>
 
           {/* Section/Class Filter - appears after grade selection */}
-          {showGradeClasses && gradeFilter !== 'all' && (
+          {showGradeClasses && gradeFilter !== "all" && (
             <div className="mt-4 pt-4 border-t">
               <Label className="text-xs text-gray-400 font-medium mb-2 block">
                 Sections/Classes for Selected Grade
@@ -569,10 +673,12 @@ export default function PaymentsPage() {
             <TableBody>
               {finalStudents.map((student: Student, index: number) => {
                 const paymentStatus = getStudentPaymentStatus(student);
-                const activeClass = 'classHistory' in student && Array.isArray(student.classHistory)
-                  ? student.classHistory.find((ch: any) => !ch.endDate)
-                  : null;
-                const className = activeClass?.class?.name || 'Not Assigned';
+                const activeClass =
+                  "classHistory" in student &&
+                  Array.isArray(student.classHistory)
+                    ? student.classHistory.find((ch: any) => !ch.endDate)
+                    : null;
+                const className = activeClass?.class?.name || "Not Assigned";
 
                 return (
                   <TableRow key={student.id}>
@@ -582,10 +688,15 @@ export default function PaymentsPage() {
                     <TableCell>
                       {student.firstName} {student.lastName}
                     </TableCell>
-                    <TableCell>{removeAcademicYearFromClassName(className)}</TableCell>
+                    <TableCell>
+                      {removeAcademicYearFromClassName(className)}
+                    </TableCell>
                     <TableCell>
                       {paymentStatus.paid ? (
-                        <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                        <Badge
+                          variant="default"
+                          className="bg-green-500 hover:bg-green-600"
+                        >
                           <CheckCircle2 className="mr-1 h-3 w-3" />
                           Paid
                         </Badge>
@@ -595,30 +706,36 @@ export default function PaymentsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {paymentStatus.paid && paymentStatus.payment?.receipt && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setReceiptDialog({
-                              open: true,
-                              payment: paymentStatus.payment!,
-                              payments: undefined,
-                              isLoading: false
-                            })}
-                            title="View Receipt"
-                          >
-                            <FileText className="h-4 w-4 text-green-600" />
-                          </Button>
-                        )}
+                        {paymentStatus.paid &&
+                          paymentStatus.payment?.receipt && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setReceiptDialog({
+                                  open: true,
+                                  payment: paymentStatus.payment!,
+                                  payments: undefined,
+                                  isLoading: false,
+                                })
+                              }
+                              title="View Receipt"
+                            >
+                              <FileText className="h-4 w-4 text-green-600" />
+                            </Button>
+                          )}
                         {paymentStatus.payment?.proofImageUrl && (
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setProofImageViewer({
-                              open: true,
-                              imageUrl: paymentStatus.payment!.proofImageUrl!,
-                              transactionNumber: paymentStatus.payment!.transactionNumber,
-                            })}
+                            onClick={() =>
+                              setProofImageViewer({
+                                open: true,
+                                imageUrl: paymentStatus.payment!.proofImageUrl!,
+                                transactionNumber:
+                                  paymentStatus.payment!.transactionNumber,
+                              })
+                            }
                             title="View Payment Proof"
                           >
                             <ImageIcon className="h-4 w-4 text-blue-600" />
@@ -628,7 +745,9 @@ export default function PaymentsPage() {
                           <Button
                             size="sm"
                             variant={paymentStatus.paid ? "outline" : "default"}
-                            onClick={() => setPaymentDialog({ open: true, student })}
+                            onClick={() =>
+                              setPaymentDialog({ open: true, student })
+                            }
                           >
                             <DollarSign className="mr-1 h-4 w-4" />
                             Pay
@@ -658,7 +777,7 @@ export default function PaymentsPage() {
               size="sm"
               onClick={() => {
                 setPage((p) => Math.max(1, p - 1));
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                window.scrollTo({ top: 0, behavior: "smooth" });
               }}
               disabled={page === 1}
             >
@@ -668,8 +787,10 @@ export default function PaymentsPage() {
               variant="outline"
               size="sm"
               onClick={() => {
-                setPage((p) => Math.min(studentsData.pagination!.totalPages, p + 1));
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setPage((p) =>
+                  Math.min(studentsData.pagination!.totalPages, p + 1),
+                );
+                window.scrollTo({ top: 0, behavior: "smooth" });
               }}
               disabled={page === studentsData.pagination!.totalPages}
             >
@@ -681,23 +802,32 @@ export default function PaymentsPage() {
 
       <PaymentDialog
         open={paymentDialog.open}
-        onOpenChange={(open) => setPaymentDialog({ open, student: paymentDialog.student })}
+        onOpenChange={(open) =>
+          setPaymentDialog({ open, student: paymentDialog.student })
+        }
         student={paymentDialog.student}
         academicYearStartDate={selectedAcademicYear?.startDate || null}
         academicYearEndDate={selectedAcademicYear?.endDate || null}
         defaultMonth={monthFilter}
         onSubmit={handleCreatePayment}
-        isLoading={createPayment.isPending || createBulkPayment.isPending || confirmPayment.isPending || confirmBulkPayments.isPending}
+        isLoading={
+          createPayment.isPending ||
+          createBulkPayment.isPending ||
+          confirmPayment.isPending ||
+          confirmBulkPayments.isPending
+        }
       />
 
       <ReceiptDialog
         open={receiptDialog.open}
-        onOpenChange={(open) => setReceiptDialog({
-          open,
-          payment: receiptDialog.payment,
-          payments: receiptDialog.payments,
-          isLoading: false
-        })}
+        onOpenChange={(open) =>
+          setReceiptDialog({
+            open,
+            payment: receiptDialog.payment,
+            payments: receiptDialog.payments,
+            isLoading: false,
+          })
+        }
         payment={receiptDialog.payment}
         payments={receiptDialog.payments}
         isLoading={receiptDialog.isLoading}
@@ -705,7 +835,10 @@ export default function PaymentsPage() {
 
       {/* Proof Image Viewer */}
       {proofImageViewer.imageUrl && (
-        <Dialog open={proofImageViewer.open} onOpenChange={(open) => setProofImageViewer({ open, imageUrl: null })}>
+        <Dialog
+          open={proofImageViewer.open}
+          onOpenChange={(open) => setProofImageViewer({ open, imageUrl: null })}
+        >
           <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Payment Proof</DialogTitle>
@@ -720,8 +853,12 @@ export default function PaymentsPage() {
               </div>
               {proofImageViewer.transactionNumber && (
                 <div className="text-center pt-4 border-t">
-                  <p className="text-sm text-muted-foreground mb-1">Transaction Number</p>
-                  <p className="font-mono font-semibold text-lg">{proofImageViewer.transactionNumber}</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Transaction Number
+                  </p>
+                  <p className="font-mono font-semibold text-lg">
+                    {proofImageViewer.transactionNumber}
+                  </p>
                 </div>
               )}
             </div>

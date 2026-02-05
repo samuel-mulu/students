@@ -12,23 +12,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import {
-  useAcademicYears,
-  useActiveAcademicYear,
+    useAcademicYears,
+    useActiveAcademicYear,
 } from "@/lib/hooks/use-academicYears";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { useGrades } from "@/lib/hooks/use-grades";
 import {
-  useAssignClass,
-  useDeleteStudent,
-  useStudents,
-  useTransferClass,
+    useAssignClass,
+    useDeleteStudent,
+    useStudents,
+    useToggleParentsPortal,
+    useTransferClass,
 } from "@/lib/hooks/use-students";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Student } from "@/lib/types";
@@ -47,6 +48,16 @@ export default function StudentsPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(40);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Simple debounce implementation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]);
   const [classStatusFilter, setClassStatusFilter] = useState<string>("all");
   const [academicYearFilter, setAcademicYearFilter] = useState<string>("");
   const [gradeFilter, setGradeFilter] = useState<string>("all");
@@ -100,7 +111,7 @@ export default function StudentsPage() {
         // If no active year, use the latest (most recent startDate)
         const latest = academicYears.sort(
           (a, b) =>
-            new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+            new Date(b.startDate).getTime() - new Date(a.startDate).getTime(),
         )[0];
         if (latest) {
           setAcademicYearFilter(latest.id);
@@ -117,7 +128,7 @@ export default function StudentsPage() {
         cls.academicYearId === academicYearFilter ||
         (typeof cls.academicYear === "object" &&
           cls.academicYear?.id === academicYearFilter) ||
-        cls.academicYear === academicYearFilter
+        cls.academicYear === academicYearFilter,
     );
   }, [allClasses, academicYearFilter]);
 
@@ -130,7 +141,13 @@ export default function StudentsPage() {
   // Reset page to 1 when filters change
   useEffect(() => {
     setPage(1);
-  }, [search, academicYearFilter, gradeFilter, classFilter, classStatusFilter]);
+  }, [
+    debouncedSearch,
+    academicYearFilter,
+    gradeFilter,
+    classFilter,
+    classStatusFilter,
+  ]);
 
   // Determine if we need to fetch all students (for grade filtering) or filter by classId
   const shouldFetchAllStudents = gradeFilter !== "all" && classFilter === "all";
@@ -138,7 +155,7 @@ export default function StudentsPage() {
   const { data, isLoading, error, refetch } = useStudents({
     page,
     limit,
-    search: search.trim(),
+    search: debouncedSearch.trim(),
     classStatus:
       classStatusFilter !== "all"
         ? (classStatusFilter as "new" | "assigned")
@@ -152,6 +169,7 @@ export default function StudentsPage() {
   const deleteStudent = useDeleteStudent();
   const assignClass = useAssignClass();
   const transferClass = useTransferClass();
+  const toggleParentsPortal = useToggleParentsPortal();
 
   const handleDelete = async () => {
     if (deleteDialog.student) {
@@ -178,6 +196,16 @@ export default function StudentsPage() {
       });
       setTransferDialog({ open: false, student: null });
     }
+  };
+
+  const handleToggleParentsPortal = async (
+    student: Student,
+    enabled: boolean,
+  ) => {
+    await toggleParentsPortal.mutateAsync({
+      id: student.id,
+      parentsPortal: enabled,
+    });
   };
 
   // Backend already handles search, grade, class, and classStatus filtering.
@@ -251,7 +279,9 @@ export default function StudentsPage() {
           <CardTitle>Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className={`grid gap-4 ${classStatusFilter === "new" ? "md:grid-cols-2" : "md:grid-cols-2 lg:grid-cols-4"}`}>
+          <div
+            className={`grid gap-4 ${classStatusFilter === "new" ? "md:grid-cols-2" : "md:grid-cols-2 lg:grid-cols-4"}`}
+          >
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -328,32 +358,34 @@ export default function StudentsPage() {
           </div>
 
           {/* Show classes dropdown when grade is selected (hidden for "new" students) */}
-          {classStatusFilter !== "new" && showGradeClasses && gradeFilter !== "all" && (
-            <div className="mt-4 pt-4 border-t">
-              <Label className="text-xs text-gray-400 font-medium mb-2 block">
-                Sections/Classes for Selected Grade
-              </Label>
-              <Select value={classFilter} onValueChange={setClassFilter}>
-                <SelectTrigger className="w-full md:w-auto">
-                  <SelectValue placeholder="Select Section/Class" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Classes in Grade</SelectItem>
-                  {gradeClasses.length > 0 ? (
-                    gradeClasses.map((cls) => (
-                      <SelectItem key={cls.id} value={cls.id}>
-                        {removeAcademicYearFromClassName(cls.name)}
+          {classStatusFilter !== "new" &&
+            showGradeClasses &&
+            gradeFilter !== "all" && (
+              <div className="mt-4 pt-4 border-t">
+                <Label className="text-xs text-gray-400 font-medium mb-2 block">
+                  Sections/Classes for Selected Grade
+                </Label>
+                <Select value={classFilter} onValueChange={setClassFilter}>
+                  <SelectTrigger className="w-full md:w-auto">
+                    <SelectValue placeholder="Select Section/Class" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Classes in Grade</SelectItem>
+                    {gradeClasses.length > 0 ? (
+                      gradeClasses.map((cls) => (
+                        <SelectItem key={cls.id} value={cls.id}>
+                          {removeAcademicYearFromClassName(cls.name)}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        No classes found for this grade
                       </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="none" disabled>
-                      No classes found for this grade
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
         </CardContent>
       </Card>
 
@@ -364,10 +396,10 @@ export default function StudentsPage() {
           action={
             hasRole(["OWNER", "REGISTRAR"])
               ? {
-                label: "Add Student",
-                onClick: () =>
-                  (window.location.href = "/dashboard/students/new"),
-              }
+                  label: "Add Student",
+                  onClick: () =>
+                    (window.location.href = "/dashboard/students/new"),
+                }
               : undefined
           }
         />
@@ -391,6 +423,7 @@ export default function StudentsPage() {
                 ? (student) => setTransferDialog({ open: true, student })
                 : undefined
             }
+            onToggleParentsPortal={handleToggleParentsPortal}
             showActions={hasRole(["OWNER", "REGISTRAR"])}
           />
 
@@ -430,10 +463,11 @@ export default function StudentsPage() {
           setDeleteDialog({ open, student: deleteDialog.student })
         }
         title="Delete Student"
-        description={`Are you sure you want to delete ${deleteDialog.student
+        description={`Are you sure you want to delete ${
+          deleteDialog.student
             ? `${deleteDialog.student.firstName} ${deleteDialog.student.lastName}`
             : "this student"
-          }? This action cannot be undone.`}
+        }? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={handleDelete}
