@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "https://students-nine-tau.vercel.app/api/:path*",
+        destination: "http://192.168.1.3:4000/api/:path*",
       },
     ];
   },
