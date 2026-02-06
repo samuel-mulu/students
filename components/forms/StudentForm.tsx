@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,14 +17,14 @@ import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { usePaymentTypes } from "@/lib/hooks/use-payment-types";
 import {
-    CreateStudentRequest,
-    Student,
-    UpdateStudentRequest,
+  CreateStudentRequest,
+  Student,
+  UpdateStudentRequest,
 } from "@/lib/types";
 import { formatCurrency, generateAllMonths } from "@/lib/utils/format";
 import {
-    getRegisterFeeSentinelMonth,
-    isRegisterFeePaymentTypeName,
+  getRegisterFeeSentinelMonth,
+  isRegisterFeePaymentTypeName,
 } from "@/lib/utils/paymentType";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, CheckCircle2 } from "lucide-react";
@@ -76,9 +76,9 @@ const studentSchema = z.object({
   paymentMethod: z.string().optional(),
   paymentNotes: z.string().optional(),
   // Profile image
-  profileImageUrl: z.string().url().optional().or(z.literal("")),
+  profileImageUrl: z.string().optional(),
   // Parents portal access
-  parentsPortal: z.boolean().default(true),
+  parentsPortal: z.boolean(),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -171,38 +171,40 @@ export function StudentForm({
     resolver: zodResolver(studentSchema),
     defaultValues: student
       ? {
-          firstName: student.firstName,
-          lastName: student.lastName,
-          dateOfBirth: student.dateOfBirth.split("T")[0],
-          gender: student.gender,
-          nationality: student.nationality || "",
-          religion: student.religion || "",
-          email: student.email || "",
-          phone: student.phone || "",
-          parentName: student.parentName,
-          parentPhone: student.parentPhone,
-          parentEmail: student.parentEmail || "",
-          parentRelation: student.parentRelation,
-          address: student.address,
-          city: student.city,
-          state: student.state || "",
-          zipCode: student.zipCode || "",
-          country: student.country || "",
-          emergencyName: student.emergencyName,
-          emergencyPhone: student.emergencyPhone,
-          emergencyRelation: student.emergencyRelation,
-          medicalConditions: student.medicalConditions || "",
-          allergies: student.allergies || "",
-          bloodGroup: student.bloodGroup || "",
-          previousSchool: student.previousSchool || "",
-          previousClass: student.previousClass || "",
-          transferReason: student.transferReason || "",
-          profileImageUrl: student.profileImageUrl || "",
-        }
+        firstName: student.firstName,
+        lastName: student.lastName,
+        dateOfBirth: student.dateOfBirth.split("T")[0],
+        gender: student.gender,
+        nationality: student.nationality || "",
+        religion: student.religion || "",
+        email: student.email || "",
+        phone: student.phone || "",
+        parentName: student.parentName,
+        parentPhone: student.parentPhone,
+        parentEmail: student.parentEmail || "",
+        parentRelation: student.parentRelation,
+        address: student.address,
+        city: student.city,
+        state: student.state || "",
+        zipCode: student.zipCode || "",
+        country: student.country || "",
+        emergencyName: student.emergencyName,
+        emergencyPhone: student.emergencyPhone,
+        emergencyRelation: student.emergencyRelation,
+        medicalConditions: student.medicalConditions || "",
+        allergies: student.allergies || "",
+        bloodGroup: student.bloodGroup || "",
+        previousSchool: student.previousSchool || "",
+        previousClass: student.previousClass || "",
+        transferReason: student.transferReason || "",
+        profileImageUrl: student.profileImageUrl || "",
+        parentsPortal: student.parentsPortal ?? true,
+      }
       : {
-          months: [currentMonth], // Default to current month
-          profileImageUrl: "",
-        },
+        months: [currentMonth], // Default to current month
+        profileImageUrl: "",
+        parentsPortal: true,
+      },
   });
 
   // Watch payment-related fields
@@ -319,9 +321,8 @@ export function StudentForm({
         className="space-y-4"
       >
         <TabsList
-          className={`grid w-full ${
-            isCreating ? "grid-cols-6" : "grid-cols-4"
-          }`}
+          className={`grid w-full ${isCreating ? "grid-cols-6" : "grid-cols-4"
+            }`}
         >
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="parent">Parent</TabsTrigger>
@@ -784,11 +785,10 @@ export function StudentForm({
                         return (
                           <div
                             key={month.value}
-                            className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all ${
-                              isSelected
+                            className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all ${isSelected
                                 ? "bg-blue-50 border-blue-300 hover:bg-blue-100 cursor-pointer"
                                 : "bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer"
-                            }`}
+                              }`}
                             onClick={() => handleMonthToggle(month.value)}
                           >
                             <div className="relative h-5 w-5 flex items-center justify-center">
@@ -796,11 +796,10 @@ export function StudentForm({
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => handleMonthToggle(month.value)}
-                                className={`h-5 w-5 rounded-sm border-2 cursor-pointer appearance-none transition-all ${
-                                  isSelected
+                                className={`h-5 w-5 rounded-sm border-2 cursor-pointer appearance-none transition-all ${isSelected
                                     ? "bg-blue-600 border-blue-600"
                                     : "bg-white border-gray-300 hover:border-blue-500"
-                                }`}
+                                  }`}
                               />
                               {isSelected && (
                                 <Check
