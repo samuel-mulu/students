@@ -114,18 +114,6 @@ export function BadgeFront({ data }: BadgeFrontProps) {
             >
               {data.student.firstName} {data.student.lastName}
             </div>
-            <div
-              style={{
-                fontFamily: "Arial, Helvetica, sans-serif",
-                fontSize: "5pt",
-                fontWeight: "bold",
-                color: "white",
-                marginTop: "0.5mm",
-                textTransform: "uppercase",
-              }}
-            >
-              CLASS
-            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center" }}>
             <img
@@ -160,13 +148,21 @@ export function BadgeFront({ data }: BadgeFrontProps) {
           >
             <div style={{ display: "flex", flexDirection: "column" }}>
               <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
+                Class:
+              </div>
+              <div style={{ color: "#666" }}>
+                {data.class?.grade?.name || "N/A"}{data.class?.name ? ` - ${data.class.name}` : ""}
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
                 Birthdate:
               </div>
               <div style={{ color: "#666" }}>{formattedDob}</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column" }}>
               <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
-                acadamicyear:
+                Academic Year:
               </div>
               <div style={{ color: "#666" }}>
                 {data.academicYear?.name || "N/A"}
@@ -174,7 +170,7 @@ export function BadgeFront({ data }: BadgeFrontProps) {
             </div>
             <div style={{ display: "flex", flexDirection: "column" }}>
               <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
-                emergencyphone
+                Emergency Phone:
               </div>
               <div style={{ color: "#666" }}>
                 {data.student.emergencyPhone || "N/A"}
@@ -210,15 +206,6 @@ export function BadgeFront({ data }: BadgeFrontProps) {
                   includeMargin={false}
                 />
               </div>
-              <div
-                style={{
-                  fontSize: "4pt",
-                  color: "#666",
-                  fontFamily: "'Courier New', monospace",
-                  textAlign: "left",
-                  lineHeight: 1.2,
-                }}
-              ></div>
             </div>
           </div>
 
@@ -255,36 +242,15 @@ export function BadgeFront({ data }: BadgeFrontProps) {
             height: "12mm",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "center",
             padding: "0 3mm",
             borderTop: "0.5mm solid #e0e0e0",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "2mm" }}>
-            {data.school.logoUrl && (
-              <img
-                src={data.school.logoUrl}
-                alt="School Logo"
-                style={{ width: "8mm", height: "8mm", objectFit: "contain" }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-            )}
-            <div
-              style={{ fontSize: "6pt", fontWeight: "bold", color: "#800020" }}
-            >
-              DIGITAL KG
-            </div>
-          </div>
           <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-            }}
+            style={{ fontSize: "6pt", fontWeight: "bold", color: "#800020", textAlign: "center" }}
           >
-            {/* QR code moved to right column with photo */}
+            DIGITAL KG
           </div>
         </div>
       </div>

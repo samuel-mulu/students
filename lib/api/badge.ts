@@ -12,6 +12,9 @@ export interface BadgeData {
   };
   class: {
     name: string;
+    grade?: {
+      name: string;
+    };
   } | null;
   academicYear: {
     name: string;
