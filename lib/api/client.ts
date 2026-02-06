@@ -7,13 +7,18 @@ import axios, {
 import { toast } from "sonner";
 
 const getApiUrl = (): string => {
- 
+  // Use relative path for production to support Next.js rewrites by default
+  // unless NEXT_PUBLIC_API_URL is explicitly set to an absolute URL
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  
   if (process.env.NODE_ENV === "production") {
+    if (apiUrl && apiUrl.startsWith('http')) {
+      return apiUrl.replace(/\/$/, "");
+    }
     return "";
   }
   
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-  return apiUrl.replace(/\/$/, "");
+  return (apiUrl || "http://localhost:4000").replace(/\/$/, "");
 };
 
 const API_URL = getApiUrl();
