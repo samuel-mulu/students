@@ -66,6 +66,7 @@ export interface Student {
   classStatus: ClassStatus;
   paymentStatus: PaymentStatus;
   parentsPortal: boolean;
+  payments?: Payment[];
   createdAt: string;
   updatedAt: string;
 }

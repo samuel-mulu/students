@@ -9,62 +9,62 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { useCalendarSystem } from "@/lib/context/calendar-context";
 import {
-    useAcademicYears,
-    useActiveAcademicYear,
+  useAcademicYears,
+  useActiveAcademicYear,
 } from "@/lib/hooks/use-academicYears";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { useGrades } from "@/lib/hooks/use-grades";
 import { usePaymentTypes } from "@/lib/hooks/use-payment-types";
 import {
-    useConfirmBulkPayments,
-    useConfirmPayment,
-    useCreateBulkPayment,
-    useCreatePayment,
-    usePayments,
+  useConfirmBulkPayments,
+  useConfirmPayment,
+  useCreateBulkPayment,
+  useCreatePayment,
+  usePayments,
 } from "@/lib/hooks/use-payments";
 import { useStudents } from "@/lib/hooks/use-students";
 import { useAuthStore } from "@/lib/store/auth-store";
 import {
-    CreateBulkPaymentRequest,
-    CreatePaymentRequest,
-    Payment,
-    Student,
+  CreateBulkPaymentRequest,
+  CreatePaymentRequest,
+  Payment,
+  Student,
 } from "@/lib/types";
 import { generateAllMonths, hasPaymentForMonth } from "@/lib/utils/format";
 import {
-    isRegisterFeePaymentTypeName,
-    isRegisterFeeSentinelMonth,
+  isRegisterFeePaymentTypeName,
+  isRegisterFeeSentinelMonth,
 } from "@/lib/utils/paymentType";
 import {
-    AlertCircle,
-    CheckCircle2,
-    DollarSign,
-    FileText,
-    Image as ImageIcon,
+  AlertCircle,
+  CheckCircle2,
+  DollarSign,
+  FileText,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -328,6 +328,16 @@ export default function PaymentsPage() {
   const getStudentPaymentStatus = (
     student: Student,
   ): { paid: boolean; payment?: Payment } => {
+    // Priority 1: Use payments attached to the student object (filtered by month/year on backend)
+    if (Array.isArray(student.payments) && student.payments.length > 0) {
+      const confirmed = student.payments.find((p) => p.status === "confirmed");
+      if (confirmed) return { paid: true, payment: confirmed };
+
+      // If no confirmed but has records, it might be pending
+      return { paid: false, payment: student.payments[0] };
+    }
+
+    // Priority 2: Fallback to global payments fetch (limited list)
     const studentPayments = payments.filter(
       (p: Payment) => p.studentId === student.id,
     );
@@ -346,7 +356,8 @@ export default function PaymentsPage() {
       }
 
       if (!monthFilter) return { paid: false };
-      const year = parseInt(monthFilter.split("-")[0]);
+      const [yearPart] = monthFilter.split("-");
+      const year = parseInt(yearPart);
       const payment = typed.find(
         (p) =>
           p.month === monthFilter &&
@@ -357,7 +368,8 @@ export default function PaymentsPage() {
     }
 
     if (!monthFilter) return { paid: false };
-    const year = parseInt(monthFilter.split("-")[0]);
+    const [yearPart] = monthFilter.split("-");
+    const year = parseInt(yearPart);
     const paymentInfo = hasPaymentForMonth(studentPayments, monthFilter, year);
     if (paymentInfo.exists && paymentInfo.status === "confirmed") {
       const payment = studentPayments.find(
@@ -370,6 +382,8 @@ export default function PaymentsPage() {
     }
     return { paid: false };
   };
+
+  // No longer needed: calculate unpaid students count for selected month
 
   // No longer needed: calculate unpaid students count for selected month
   // We use the unpaidStudentsData hook instead
@@ -675,7 +689,7 @@ export default function PaymentsPage() {
                 const paymentStatus = getStudentPaymentStatus(student);
                 const activeClass =
                   "classHistory" in student &&
-                  Array.isArray(student.classHistory)
+                    Array.isArray(student.classHistory)
                     ? student.classHistory.find((ch: any) => !ch.endDate)
                     : null;
                 const className = activeClass?.class?.name || "Not Assigned";
