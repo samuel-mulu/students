@@ -31,8 +31,8 @@ import { useUsers } from '@/lib/hooks/use-users';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { formatDateForUI } from '@/lib/utils/date';
 import { formatCurrency, formatDate, formatDateTime, formatMonthYear, generateAllMonths } from '@/lib/utils/format';
-import { format } from 'date-fns';
-import { Calendar, DollarSign, Download, FileText, Printer, RefreshCw, TrendingUp, UserCheck, Users, UserX } from 'lucide-react';
+import { addDays, format, parseISO, subDays } from 'date-fns';
+import { Calendar, ChevronLeft, ChevronRight, DollarSign, Download, FileText, Printer, RefreshCw, TrendingUp, UserCheck, Users, UserX } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 export default function ReportsPage() {
@@ -51,6 +51,8 @@ export default function ReportsPage() {
   const [registrarFilter, setRegistrarFilter] = useState<string>('all');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all');
   const [showPaidProgress, setShowPaidProgress] = useState<boolean>(true); // Toggle between paid and unpaid
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const todayISO = new Date().toISOString().split('T')[0];
 
   // Data hooks
   const { data: academicYearsData } = useAcademicYears();
@@ -228,6 +230,37 @@ export default function ReportsPage() {
 
   // Legacy support - keep for backward compatibility
   const registrarTableData = dailyTableData;
+
+  // Selected date calculations
+  const selectedDateData = useMemo(() => {
+    if (!dailyReports?.byDate) return { amount: 0, count: 0 };
+    const report = dailyReports.byDate.find(d => d.date === selectedDate);
+    return {
+      amount: report?.totalAmount || 0,
+      count: report?.paymentCount || 0
+    };
+  }, [dailyReports, selectedDate]);
+
+  const selectedDateRevenue = selectedDateData.amount;
+  const selectedDatePaymentCount = selectedDateData.count;
+
+  const handlePrevDay = () => {
+    setSelectedDate(prev => {
+      const date = parseISO(prev);
+      return format(subDays(date, 1), 'yyyy-MM-dd');
+    });
+  };
+
+  const handleNextDay = () => {
+    setSelectedDate(prev => {
+      const date = parseISO(prev);
+      return format(addDays(date, 1), 'yyyy-MM-dd');
+    });
+  };
+
+  const handleToday = () => {
+    setSelectedDate(todayISO);
+  };
 
   // Export to CSV for Daily View
   const handleDailyExport = () => {
@@ -907,16 +940,51 @@ export default function ReportsPage() {
                 <Card className="border-blue-200 bg-blue-50">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-blue-700">Today's Revenue</p>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-sm font-medium text-blue-700">
+                            {selectedDate === new Date().toISOString().split('T')[0]
+                              ? "Today's Revenue"
+                              : "Daily Revenue"}
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-blue-600 hover:bg-blue-100"
+                              onClick={handlePrevDay}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-blue-600 hover:bg-blue-100"
+                              onClick={handleToday}
+                              title="Reset to Today"
+                              disabled={selectedDate === todayISO}
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-blue-600 hover:bg-blue-100"
+                              onClick={handleNextDay}
+                              disabled={selectedDate >= todayISO}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
                         <p className="text-2xl font-bold text-blue-900 mt-1">
-                          {formatCurrency(dailyReports.summary.todayRevenue)}
+                          {formatCurrency(selectedDateRevenue)}
                         </p>
                         <p className="text-xs text-blue-600 mt-1">
-                          {formatDate(new Date(), calendarSystem)}
+                          {formatDate(selectedDate, calendarSystem)}
                         </p>
                       </div>
-                      <Calendar className="h-8 w-8 text-blue-600" />
+                      <Calendar className="h-8 w-8 text-blue-600 opacity-20" />
                     </div>
                   </CardContent>
                 </Card>
@@ -927,10 +995,10 @@ export default function ReportsPage() {
                       <div>
                         <p className="text-sm font-medium text-purple-700">Payment Count</p>
                         <p className="text-2xl font-bold text-purple-900 mt-1">
-                          {dailyReports.summary.paymentCount}
+                          {selectedDatePaymentCount}
                         </p>
                         <p className="text-xs text-purple-600 mt-1">
-                          Confirmed payments
+                          {selectedDate === todayISO ? "Today's payments" : "Daily payments"}
                         </p>
                       </div>
                       <FileText className="h-8 w-8 text-purple-600" />
@@ -1501,16 +1569,51 @@ export default function ReportsPage() {
               <Card className="border-blue-200 bg-blue-50">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Today's Revenue</p>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm font-medium text-blue-700">
+                          {selectedDate === new Date().toISOString().split('T')[0]
+                            ? "Today's Revenue"
+                            : "Daily Revenue"}
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-blue-600 hover:bg-blue-100"
+                            onClick={handlePrevDay}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-blue-600 hover:bg-blue-100"
+                            onClick={handleToday}
+                            title="Reset to Today"
+                            disabled={selectedDate === todayISO}
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-blue-600 hover:bg-blue-100"
+                            onClick={handleNextDay}
+                            disabled={selectedDate >= todayISO}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
                       <p className="text-2xl font-bold text-blue-900 mt-1">
-                        {formatCurrency(dailyReports.summary.todayRevenue)}
+                        {formatCurrency(selectedDateRevenue)}
                       </p>
                       <p className="text-xs text-blue-600 mt-1">
-                        {formatDate(new Date(), calendarSystem)}
+                        {formatDate(selectedDate, calendarSystem)}
                       </p>
                     </div>
-                    <Calendar className="h-8 w-8 text-blue-600" />
+                    <Calendar className="h-8 w-8 text-blue-600 opacity-20" />
                   </div>
                 </CardContent>
               </Card>
@@ -1521,10 +1624,10 @@ export default function ReportsPage() {
                     <div>
                       <p className="text-sm font-medium text-purple-700">Payment Count</p>
                       <p className="text-2xl font-bold text-purple-900 mt-1">
-                        {dailyReports.summary.paymentCount}
+                        {selectedDatePaymentCount}
                       </p>
                       <p className="text-xs text-purple-600 mt-1">
-                        Confirmed payments
+                        {selectedDate === todayISO ? "Today's payments" : "Daily payments"}
                       </p>
                     </div>
                     <FileText className="h-8 w-8 text-purple-600" />

@@ -5,30 +5,30 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Student } from "@/lib/types";
 import { formatFullName } from "@/lib/utils/format";
 import {
-    ArrowRightLeft,
-    Edit,
-    Eye,
-    IdCard,
-    MoreHorizontal,
-    Trash2,
-    UserPlus,
+  ArrowRightLeft,
+  Edit,
+  Eye,
+  IdCard,
+  MoreHorizontal,
+  Trash2,
+  UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -138,7 +138,7 @@ export function StudentsTable({
                   </TableCell>
                   <TableCell>
                     {currentClassName === "New" ||
-                    currentClassName === "Not Assigned" ? (
+                      currentClassName === "Not Assigned" ? (
                       <Badge
                         variant="secondary"
                         className="bg-yellow-100 text-yellow-800 border border-yellow-300"
@@ -182,6 +182,15 @@ export function StudentsTable({
                             <IdCard className="h-4 w-4" />
                           </button>
                         </Link>
+                        {onEdit && (
+                          <button
+                            onClick={() => onEdit(student)}
+                            className="w-7 h-7 flex items-center justify-center rounded-full bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#7E22CE] transition-colors"
+                            title="Edit Student Info"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        )}
                         {onDelete && (
                           <button
                             onClick={() => onDelete(student)}

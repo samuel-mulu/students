@@ -1,12 +1,12 @@
+import type { CalendarSystem } from "@/lib/context/calendar-context";
 import {
-  format,
-  parseISO,
-  eachMonthOfInterval,
-  startOfMonth,
-  endOfMonth,
+    eachMonthOfInterval,
+    endOfMonth,
+    format,
+    parseISO,
+    startOfMonth,
 } from "date-fns";
 import { formatDateForUI, getEthiopianMonthNameAmharic, gregorianMonthToEthiopianMonth } from "./date";
-import type { CalendarSystem } from "@/lib/context/calendar-context";
 
 /**
  * Format date for display
@@ -43,9 +43,10 @@ export const formatDateTime = (date: string | Date): string => {
 };
 
 export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-ET", {
     style: "currency",
-    currency: "USD",
+    currency: "ETB",
+    minimumFractionDigits: 2,
   }).format(amount);
 };
 

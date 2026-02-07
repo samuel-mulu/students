@@ -1,5 +1,6 @@
 "use client";
 
+import { ExportPaymentsDialog } from "@/components/forms/ExportPaymentsDialog";
 import { PaymentDialog } from "@/components/forms/PaymentDialog";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
@@ -63,8 +64,9 @@ import {
   AlertCircle,
   CheckCircle2,
   DollarSign,
+  Download,
   FileText,
-  Image as ImageIcon,
+  Image as ImageIcon
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -103,6 +105,7 @@ export default function PaymentsPage() {
     open: false,
     student: null,
   });
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [receiptDialog, setReceiptDialog] = useState<{
     open: boolean;
     payment: Payment | null;
@@ -617,7 +620,6 @@ export default function PaymentsPage() {
                 ))}
               </SelectContent>
             </Select>
-
             {/* Month Filter */}
             <Select
               value={monthFilter}
@@ -635,6 +637,16 @@ export default function PaymentsPage() {
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Export Button */}
+            <Button
+              variant="outline"
+              onClick={() => setExportDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
           </div>
 
           {/* Section/Class Filter - appears after grade selection */}
@@ -667,152 +679,156 @@ export default function PaymentsPage() {
         </CardContent>
       </Card>
 
-      {finalStudents.length === 0 ? (
-        <EmptyState
-          title="No students found"
-          description="Adjust your filters to see students"
-        />
-      ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">NO</TableHead>
-                <TableHead>Student Name</TableHead>
-                <TableHead>Class</TableHead>
-                <TableHead>Payment Status</TableHead>
-                <TableHead className="w-[100px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {finalStudents.map((student: Student, index: number) => {
-                const paymentStatus = getStudentPaymentStatus(student);
-                const activeClass =
-                  "classHistory" in student &&
-                    Array.isArray(student.classHistory)
-                    ? student.classHistory.find((ch: any) => !ch.endDate)
-                    : null;
-                const className = activeClass?.class?.name || "Not Assigned";
+      {
+        finalStudents.length === 0 ? (
+          <EmptyState
+            title="No students found"
+            description="Adjust your filters to see students"
+          />
+        ) : (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">NO</TableHead>
+                  <TableHead>Student Name</TableHead>
+                  <TableHead>Class</TableHead>
+                  <TableHead>Payment Status</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {finalStudents.map((student: Student, index: number) => {
+                  const paymentStatus = getStudentPaymentStatus(student);
+                  const activeClass =
+                    "classHistory" in student &&
+                      Array.isArray(student.classHistory)
+                      ? student.classHistory.find((ch: any) => !ch.endDate)
+                      : null;
+                  const className = activeClass?.class?.name || "Not Assigned";
 
-                return (
-                  <TableRow key={student.id}>
-                    <TableCell className="text-center font-medium">
-                      {(page - 1) * limit + index + 1}
-                    </TableCell>
-                    <TableCell>
-                      {student.firstName} {student.lastName}
-                    </TableCell>
-                    <TableCell>
-                      {removeAcademicYearFromClassName(className)}
-                    </TableCell>
-                    <TableCell>
-                      {paymentStatus.paid ? (
-                        <Badge
-                          variant="default"
-                          className="bg-green-500 hover:bg-green-600"
-                        >
-                          <CheckCircle2 className="mr-1 h-3 w-3" />
-                          Paid
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">Unpaid</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {paymentStatus.paid &&
-                          paymentStatus.payment?.receipt && (
+                  return (
+                    <TableRow key={student.id}>
+                      <TableCell className="text-center font-medium">
+                        {(page - 1) * limit + index + 1}
+                      </TableCell>
+                      <TableCell>
+                        {student.firstName} {student.lastName}
+                      </TableCell>
+                      <TableCell>
+                        {removeAcademicYearFromClassName(className)}
+                      </TableCell>
+                      <TableCell>
+                        {paymentStatus.paid ? (
+                          <Badge
+                            variant="default"
+                            className="bg-green-500 hover:bg-green-600"
+                          >
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                            Paid
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">Unpaid</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {paymentStatus.paid &&
+                            paymentStatus.payment?.receipt && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setReceiptDialog({
+                                    open: true,
+                                    payment: paymentStatus.payment!,
+                                    payments: undefined,
+                                    isLoading: false,
+                                  })
+                                }
+                                title="View Receipt"
+                              >
+                                <FileText className="h-4 w-4 text-green-600" />
+                              </Button>
+                            )}
+                          {paymentStatus.payment?.proofImageUrl && (
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() =>
-                                setReceiptDialog({
+                                setProofImageViewer({
                                   open: true,
-                                  payment: paymentStatus.payment!,
-                                  payments: undefined,
-                                  isLoading: false,
+                                  imageUrl: paymentStatus.payment!.proofImageUrl!,
+                                  transactionNumber:
+                                    paymentStatus.payment!.transactionNumber,
                                 })
                               }
-                              title="View Receipt"
+                              title="View Payment Proof"
                             >
-                              <FileText className="h-4 w-4 text-green-600" />
+                              <ImageIcon className="h-4 w-4 text-blue-600" />
                             </Button>
                           )}
-                        {paymentStatus.payment?.proofImageUrl && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              setProofImageViewer({
-                                open: true,
-                                imageUrl: paymentStatus.payment!.proofImageUrl!,
-                                transactionNumber:
-                                  paymentStatus.payment!.transactionNumber,
-                              })
-                            }
-                            title="View Payment Proof"
-                          >
-                            <ImageIcon className="h-4 w-4 text-blue-600" />
-                          </Button>
-                        )}
-                        {monthFilter && (
-                          <Button
-                            size="sm"
-                            variant={paymentStatus.paid ? "outline" : "default"}
-                            onClick={() =>
-                              setPaymentDialog({ open: true, student })
-                            }
-                          >
-                            <DollarSign className="mr-1 h-4 w-4" />
-                            Pay
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+                          {monthFilter && (
+                            <Button
+                              size="sm"
+                              variant={paymentStatus.paid ? "outline" : "default"}
+                              onClick={() =>
+                                setPaymentDialog({ open: true, student })
+                              }
+                            >
+                              <DollarSign className="mr-1 h-4 w-4" />
+                              Pay
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )
+      }
 
       {/* Pagination Controls */}
-      {studentsData?.pagination && studentsData.pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-muted-foreground">
-            Showing {(page - 1) * limit + 1} to{" "}
-            {Math.min(page * limit, studentsData.pagination.total)} of{" "}
-            {studentsData.pagination.total} students
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setPage((p) => Math.max(1, p - 1));
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              disabled={page === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setPage((p) =>
-                  Math.min(studentsData.pagination!.totalPages, p + 1),
-                );
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              disabled={page === studentsData.pagination!.totalPages}
-            >
-              Next
-            </Button>
+      {
+        studentsData?.pagination && studentsData.pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-sm text-muted-foreground">
+              Showing {(page - 1) * limit + 1} to{" "}
+              {Math.min(page * limit, studentsData.pagination.total)} of{" "}
+              {studentsData.pagination.total} students
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPage((p) => Math.max(1, p - 1));
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                disabled={page === 1}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPage((p) =>
+                    Math.min(studentsData.pagination!.totalPages, p + 1),
+                  );
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                disabled={page === studentsData.pagination!.totalPages}
+              >
+                Next
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       <PaymentDialog
         open={paymentDialog.open}
@@ -848,37 +864,44 @@ export default function PaymentsPage() {
       />
 
       {/* Proof Image Viewer */}
-      {proofImageViewer.imageUrl && (
-        <Dialog
-          open={proofImageViewer.open}
-          onOpenChange={(open) => setProofImageViewer({ open, imageUrl: null })}
-        >
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Payment Proof</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="flex items-center justify-center py-4">
-                <img
-                  src={proofImageViewer.imageUrl}
-                  alt="Payment proof"
-                  className="max-w-full max-h-[70vh] rounded-lg object-contain"
-                />
-              </div>
-              {proofImageViewer.transactionNumber && (
-                <div className="text-center pt-4 border-t">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Transaction Number
-                  </p>
-                  <p className="font-mono font-semibold text-lg">
-                    {proofImageViewer.transactionNumber}
-                  </p>
+      {
+        proofImageViewer.imageUrl && (
+          <Dialog
+            open={proofImageViewer.open}
+            onOpenChange={(open) => setProofImageViewer({ open, imageUrl: null })}
+          >
+            <DialogContent className="sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Payment Proof</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="flex items-center justify-center py-4">
+                  <img
+                    src={proofImageViewer.imageUrl}
+                    alt="Payment proof"
+                    className="max-w-full max-h-[70vh] rounded-lg object-contain"
+                  />
                 </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+                {proofImageViewer.transactionNumber && (
+                  <div className="text-center pt-4 border-t">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Transaction Number
+                    </p>
+                    <p className="font-mono font-semibold text-lg">
+                      {proofImageViewer.transactionNumber}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        )
+      }
+
+      <ExportPaymentsDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+      />
     </div>
   );
 }

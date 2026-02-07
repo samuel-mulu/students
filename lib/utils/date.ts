@@ -1,5 +1,5 @@
-import Kenat from "kenat";
 import { format, parseISO } from "date-fns";
+import Kenat from "kenat";
 
 type CalendarSystem = "gregorian" | "ethiopian";
 
@@ -70,8 +70,16 @@ export function formatDateForUI(dateISO: string, system: CalendarSystem): string
     } else {
       // Ethiopian calendar
       const kenat = new Kenat(parseISO(dateISO));
-      // Format with weekday and full date in English
-      return kenat.format({ lang: "english", showWeekday: true });
+      const ethiopian = kenat.getEthiopian();
+      const monthName = getEthiopianMonthNameAmharic(ethiopian.month);
+      
+      // Get weekday name in Amharic
+      const date = parseISO(dateISO);
+      const dayOfWeek = date.getDay(); // 0 = Sunday
+      const amharicWeekdays = ["እሁድ", "ሰኞ", "ማክሰኞ", "ረቡዕ", "ሐሙስ", "አርብ", "ቅዳሜ"];
+      const weekday = amharicWeekdays[dayOfWeek];
+      
+      return `${weekday}፣ ${monthName} ${ethiopian.day} ቀን ${ethiopian.year}`;
     }
   } catch (error) {
     console.error("Error formatting date for UI:", error);
@@ -85,7 +93,15 @@ export function formatDateForUI(dateISO: string, system: CalendarSystem): string
 export function formatEthiopianDateWithWeekday(dateISO: string): string {
   try {
     const kenat = new Kenat(parseISO(dateISO));
-    return kenat.format({ lang: "english", showWeekday: true });
+    const ethiopian = kenat.getEthiopian();
+    const monthName = getEthiopianMonthNameAmharic(ethiopian.month);
+    
+    // Get weekday name in Amharic
+    const date = parseISO(dateISO);
+    const amharicWeekdays = ["እሁድ", "ሰኞ", "ማክሰኞ", "ረቡዕ", "ሐሙስ", "አርብ", "ቅዳሜ"];
+    const weekday = amharicWeekdays[date.getDay()];
+    
+    return `${weekday}፣ ${monthName} ${ethiopian.day} ቀን ${ethiopian.year}`;
   } catch (error) {
     console.error("Error formatting Ethiopian date:", error);
     return dateISO;

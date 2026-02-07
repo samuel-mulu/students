@@ -1,6 +1,7 @@
 "use client";
 
 import { AssignClassDialog } from "@/components/forms/AssignClassDialog";
+import { EditStudentDialog } from "@/components/forms/EditStudentDialog";
 import { TransferClassDialog } from "@/components/forms/TransferClassDialog";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -12,24 +13,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-    useAcademicYears,
-    useActiveAcademicYear,
+  useAcademicYears,
+  useActiveAcademicYear,
 } from "@/lib/hooks/use-academicYears";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { useGrades } from "@/lib/hooks/use-grades";
 import {
-    useAssignClass,
-    useDeleteStudent,
-    useStudents,
-    useToggleParentsPortal,
-    useTransferClass,
+  useAssignClass,
+  useDeleteStudent,
+  useStudents,
+  useToggleParentsPortal,
+  useTransferClass,
 } from "@/lib/hooks/use-students";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Student } from "@/lib/types";
@@ -78,6 +79,13 @@ export default function StudentsPage() {
     student: null,
   });
   const [transferDialog, setTransferDialog] = useState<{
+    open: boolean;
+    student: Student | null;
+  }>({
+    open: false,
+    student: null,
+  });
+  const [editDialog, setEditDialog] = useState<{
     open: boolean;
     student: Student | null;
   }>({
@@ -396,10 +404,10 @@ export default function StudentsPage() {
           action={
             hasRole(["OWNER", "REGISTRAR"])
               ? {
-                  label: "Add Student",
-                  onClick: () =>
-                    (window.location.href = "/dashboard/students/new"),
-                }
+                label: "Add Student",
+                onClick: () =>
+                  (window.location.href = "/dashboard/students/new"),
+              }
               : undefined
           }
         />
@@ -408,6 +416,7 @@ export default function StudentsPage() {
           <StudentsTable
             students={finalStudents}
             offset={(page - 1) * limit}
+            onEdit={(student) => setEditDialog({ open: true, student })}
             onDelete={
               hasRole(["OWNER"])
                 ? (student) => setDeleteDialog({ open: true, student })
@@ -463,11 +472,10 @@ export default function StudentsPage() {
           setDeleteDialog({ open, student: deleteDialog.student })
         }
         title="Delete Student"
-        description={`Are you sure you want to delete ${
-          deleteDialog.student
-            ? `${deleteDialog.student.firstName} ${deleteDialog.student.lastName}`
-            : "this student"
-        }? This action cannot be undone.`}
+        description={`Are you sure you want to delete ${deleteDialog.student
+          ? `${deleteDialog.student.firstName} ${deleteDialog.student.lastName}`
+          : "this student"
+          }? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={handleDelete}
@@ -492,6 +500,14 @@ export default function StudentsPage() {
         student={transferDialog.student}
         onConfirm={handleTransferClass}
         isLoading={transferClass.isPending}
+      />
+
+      <EditStudentDialog
+        open={editDialog.open}
+        onOpenChange={(open) =>
+          setEditDialog({ open, student: editDialog.student })
+        }
+        student={editDialog.student}
       />
     </div>
   );
