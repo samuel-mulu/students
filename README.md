@@ -13,7 +13,7 @@ This is the frontend application for the School Management System, built with [N
 
 1. Copy the example environment file:
    ```bash
-   cp .env.example .env.local
+   cp .env.example .env.local yesii
    ```
 
 2. Update `.env.local` with your configuration:
