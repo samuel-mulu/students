@@ -1,15 +1,16 @@
 'use client';
 
-import { use } from 'react';
-import { useBadgePreview, useDownloadBadge } from '@/lib/hooks/use-badge';
-import { BadgeFront } from '@/components/badge/BadgeFront';
 import { BadgeBack } from '@/components/badge/BadgeBack';
+import { BadgeFront } from '@/components/badge/BadgeFront';
+import { BackButton } from '@/components/shared/BackButton';
+import { ErrorState } from '@/components/shared/ErrorState';
+import { LoadingState } from '@/components/shared/LoadingState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoadingState } from '@/components/shared/LoadingState';
-import { ErrorState } from '@/components/shared/ErrorState';
-import { Download, FileText, Image as ImageIcon } from 'lucide-react';
-import { BackButton } from '@/components/shared/BackButton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useBadgePreview, useDownloadBadge } from '@/lib/hooks/use-badge';
+import { Download, FileText, Image as ImageIcon, Layout, Square } from 'lucide-react';
+import { use, useState } from 'react';
 
 export default function BadgePage({
   params,
@@ -17,6 +18,7 @@ export default function BadgePage({
   params: Promise<{ studentId: string }>;
 }) {
   const { studentId } = use(params);
+  const [badgeType, setBadgeType] = useState<'full' | 'minimal'>('full');
   const { data: badgeData, isLoading, error } = useBadgePreview(studentId);
   const { download } = useDownloadBadge();
 
@@ -33,7 +35,7 @@ export default function BadgePage({
   }
 
   const handleDownload = (format: 'pdf' | 'png', side: 'front' | 'back' | 'combined') => {
-    download(studentId, format, side);
+    download(studentId, format, side, badgeType === 'minimal');
   };
 
   return (
@@ -48,6 +50,19 @@ export default function BadgePage({
             </p>
           </div>
         </div>
+
+        <Tabs value={badgeType} onValueChange={(v) => setBadgeType(v as any)} className="w-auto">
+          <TabsList>
+            <TabsTrigger value="full" className="flex items-center gap-2">
+              <Layout className="h-4 w-4" />
+              Full Badge
+            </TabsTrigger>
+            <TabsTrigger value="minimal" className="flex items-center gap-2">
+              <Square className="h-4 w-4" />
+              Minimal (Name + QR)
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -60,7 +75,7 @@ export default function BadgePage({
           <CardContent className="space-y-4">
             <div className="flex justify-center bg-slate-50 p-4 rounded-lg border-2 border-dashed border-slate-300">
               <div style={{ transform: 'scale(1.5)', transformOrigin: 'top center' }}>
-                <BadgeFront data={badgeData.data} />
+                <BadgeFront data={badgeData.data} minimal={badgeType === 'minimal'} />
               </div>
             </div>
             <div className="flex flex-wrap gap-2 justify-center">

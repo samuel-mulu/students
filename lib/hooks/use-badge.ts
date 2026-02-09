@@ -1,5 +1,5 @@
+import { badgeApi } from '@/lib/api/badge';
 import { useQuery } from '@tanstack/react-query';
-import { badgeApi, BadgeData } from '@/lib/api/badge';
 
 export function useBadgePreview(studentId: string) {
   return useQuery({
@@ -17,9 +17,10 @@ export function useDownloadBadge() {
     download: async (
       studentId: string,
       format: 'pdf' | 'png' = 'pdf',
-      side: 'front' | 'back' | 'combined' = 'combined'
+      side: 'front' | 'back' | 'combined' = 'combined',
+      minimal: boolean = false
     ) => {
-      const blob = await badgeApi.downloadBadge(studentId, format, side);
+      const blob = await badgeApi.downloadBadge(studentId, format, side, minimal);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

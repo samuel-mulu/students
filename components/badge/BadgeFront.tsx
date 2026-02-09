@@ -6,9 +6,10 @@ import { QRCodeSVG } from "qrcode.react";
 
 interface BadgeFrontProps {
   data: BadgeData;
+  minimal?: boolean;
 }
 
-export function BadgeFront({ data }: BadgeFrontProps) {
+export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
   const dob = new Date(data.student.dateOfBirth);
   const formattedDob = format(dob, "MM/dd/yyyy");
 
@@ -77,11 +78,12 @@ export function BadgeFront({ data }: BadgeFrontProps) {
         <div
           style={{
             backgroundColor: "#800020",
-            height: "18mm",
+            height: minimal ? "12mm" : "18mm",
             position: "relative",
             display: "flex",
             alignItems: "center",
             padding: "0 3mm",
+            transition: "height 0.3s ease",
           }}
         >
           <div
@@ -105,90 +107,104 @@ export function BadgeFront({ data }: BadgeFrontProps) {
             <div
               style={{
                 fontFamily: "Georgia, 'Times New Roman', serif",
-                fontSize: "7pt",
+                fontSize: minimal ? "10pt" : "7pt",
                 fontWeight: "bold",
                 color: "white",
                 lineHeight: 1.2,
                 textTransform: "uppercase",
+                textAlign: minimal ? "center" : "left",
               }}
             >
               {data.student.firstName} {data.student.lastName}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <img
-              src={data.school.logoUrl || "/logo.jpg"}
-              alt="School Logo"
-              style={{
-                width: "8mm",
-                height: "8mm",
-                objectFit: "contain",
-                marginRight: "2mm",
-              }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = "/logo.jpg";
-              }}
-            />
-          </div>
+          {!minimal && (
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <img
+                src={data.school.logoUrl || "/logo.jpg"}
+                alt="School Logo"
+                style={{
+                  width: "8mm",
+                  height: "8mm",
+                  objectFit: "contain",
+                  marginRight: "2mm",
+                }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/logo.jpg";
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Main Content */}
         <div
-          style={{ flex: 1, display: "flex", padding: "2mm 3mm", gap: "2mm" }}
+          style={{
+            flex: 1,
+            display: "flex",
+            padding: minimal ? "4mm 3mm" : "2mm 3mm",
+            gap: "2mm",
+            justifyContent: minimal ? "center" : "initial"
+          }}
         >
           <div
             style={{
-              flex: 1,
+              flex: minimal ? "none" : 1,
               display: "flex",
               flexDirection: "column",
-              gap: "1.5mm",
+              gap: minimal ? "4mm" : "1.5mm",
               fontSize: "5pt",
               color: "#333",
+              alignItems: minimal ? "center" : "initial",
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
-                Class:
-              </div>
-              <div style={{ color: "#666" }}>
-                {data.class?.grade?.name || "N/A"}{data.class?.name ? ` - ${data.class.name}` : ""}
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
-                Birthdate:
-              </div>
-              <div style={{ color: "#666" }}>{formattedDob}</div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
-                Academic Year:
-              </div>
-              <div style={{ color: "#666" }}>
-                {data.academicYear?.name || "N/A"}
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
-                Emergency Phone:
-              </div>
-              <div style={{ color: "#666" }}>
-                {data.student.emergencyPhone || "N/A"}
-              </div>
-            </div>
+            {!minimal && (
+              <>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
+                    Class:
+                  </div>
+                  <div style={{ color: "#666" }}>
+                    {data.class?.grade?.name || "N/A"}{data.class?.name ? ` - ${data.class.name}` : ""}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
+                    Birthdate:
+                  </div>
+                  <div style={{ color: "#666" }}>{formattedDob}</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
+                    Academic Year:
+                  </div>
+                  <div style={{ color: "#666" }}>
+                    {data.academicYear?.name || "N/A"}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={{ fontWeight: "bold", marginBottom: "0.3mm" }}>
+                    Emergency Phone:
+                  </div>
+                  <div style={{ color: "#666" }}>
+                    {data.student.emergencyPhone || "N/A"}
+                  </div>
+                </div>
+              </>
+            )}
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "flex-start",
                 gap: "0.8mm",
-                marginTop: "1mm",
+                marginTop: minimal ? "0" : "1mm",
               }}
             >
               <div
                 style={{
-                  width: "12mm",
-                  height: "12mm",
+                  width: minimal ? "25mm" : "12mm",
+                  height: minimal ? "25mm" : "12mm",
                   border: "0.4mm solid #e0e0e0",
                   borderRadius: "0.8mm",
                   background: "white",
@@ -201,7 +217,7 @@ export function BadgeFront({ data }: BadgeFrontProps) {
               >
                 <QRCodeSVG
                   value={qrCodeValue}
-                  size={40}
+                  size={minimal ? 80 : 40}
                   level="M"
                   includeMargin={false}
                 />
@@ -209,31 +225,33 @@ export function BadgeFront({ data }: BadgeFrontProps) {
             </div>
           </div>
 
-          <div
-            style={{
-              width: "22mm",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <img
-              src={data.student.profileImageUrl || "/placeholder-student.png"}
-              alt="Student Photo"
+          {!minimal && (
+            <div
               style={{
-                width: "20mm",
-                height: "25mm",
-                objectFit: "cover",
-                border: "1mm solid white",
-                boxShadow: "0 1mm 2mm rgba(0, 0, 0, 0.1)",
-                background: "#f0f0f0",
+                width: "22mm",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ddd%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-family=%22Arial%22 font-size=%2214%22%3ENo Photo%3C/text%3E%3C/svg%3E";
-              }}
-            />
-          </div>
+            >
+              <img
+                src={data.student.profileImageUrl || "/placeholder-student.png"}
+                alt="Student Photo"
+                style={{
+                  width: "20mm",
+                  height: "25mm",
+                  objectFit: "cover",
+                  border: "1mm solid white",
+                  boxShadow: "0 1mm 2mm rgba(0, 0, 0, 0.1)",
+                  background: "#f0f0f0",
+                }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ddd%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-family=%22Arial%22 font-size=%2214%22%3ENo Photo%3C/text%3E%3C/svg%3E";
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Footer */}
