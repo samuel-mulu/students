@@ -741,7 +741,7 @@ export default function PaymentsPage() {
                                 onClick={() =>
                                   setReceiptDialog({
                                     open: true,
-                                    payment: paymentStatus.payment!,
+                                    payment: { ...paymentStatus.payment!, student },
                                     payments: undefined,
                                     isLoading: false,
                                   })
