@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "School Management System",
+  title: "DIGITAL KG",
   description: "Internal dashboard for school administration",
 };
 

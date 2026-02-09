@@ -2,6 +2,7 @@
 
 import { AssignClassDialog } from "@/components/forms/AssignClassDialog";
 import { EditStudentDialog } from "@/components/forms/EditStudentDialog";
+import { ExportStudentsDialog } from "@/components/forms/ExportStudentsDialog";
 import { TransferClassDialog } from "@/components/forms/TransferClassDialog";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -34,7 +35,7 @@ import {
 } from "@/lib/hooks/use-students";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Student } from "@/lib/types";
-import { Plus, Search } from "lucide-react";
+import { Download, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -92,6 +93,7 @@ export default function StudentsPage() {
     open: false,
     student: null,
   });
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const { data: classesData } = useClasses();
   const { data: academicYearsData } = useAcademicYears();
@@ -272,14 +274,20 @@ export default function StudentsPage() {
             Manage student records and information
           </p>
         </div>
-        {hasRole(["OWNER", "REGISTRAR"]) && (
-          <Link href="/dashboard/students/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Student
-            </Button>
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
+          {hasRole(["OWNER", "REGISTRAR"]) && (
+            <Link href="/dashboard/students/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Student
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -508,6 +516,11 @@ export default function StudentsPage() {
           setEditDialog({ open, student: editDialog.student })
         }
         student={editDialog.student}
+      />
+
+      <ExportStudentsDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
       />
     </div>
   );

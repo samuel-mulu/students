@@ -1,13 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useClasses } from "@/lib/hooks/use-classes";
-import { useStudents } from "@/lib/hooks/use-students";
-import {
-  useAttendanceByClass,
-  useBulkAttendance,
-} from "@/lib/hooks/use-attendance";
+import { ExportAttendanceDialog } from "@/components/forms/ExportAttendanceDialog";
+
+import { DateField } from "@/components/shared/DateField";
+import { ErrorState } from "@/components/shared/ErrorState";
+import { LoadingState } from "@/components/shared/LoadingState";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,58 +31,51 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { useCalendarSystem } from "@/lib/context/calendar-context";
+import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useRouter } from "next/navigation";
+  useAttendanceByClass,
+  useBulkAttendance,
+} from "@/lib/hooks/use-attendance";
+import { useClasses } from "@/lib/hooks/use-classes";
+import { useStudents } from "@/lib/hooks/use-students";
+import { useAuthStore } from "@/lib/store/auth-store";
+import { AttendanceStatus } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { formatDateForUI } from "@/lib/utils/date";
+import { formatFullName } from "@/lib/utils/format";
+import { isNoClassDay } from "@/lib/utils/schoolCalendar";
 import {
-  Calendar,
-  GraduationCap,
-  Users,
   Check,
-  X,
-  Clock,
-  Save,
-  History,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  Download,
+  History,
+  Save,
+  Users,
+  X
 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { AttendanceStatus } from "@/lib/types";
-import { formatFullName, formatDate } from "@/lib/utils/format";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useMemo } from "react";
-import { LoadingState } from "@/components/shared/LoadingState";
-import { ErrorState } from "@/components/shared/ErrorState";
-import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/lib/store/auth-store";
-import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
-import { DateField } from "@/components/shared/DateField";
-import { useCalendarSystem } from "@/lib/context/calendar-context";
-import { formatDateForUI } from "@/lib/utils/date";
-import { isNoClassDay } from "@/lib/utils/schoolCalendar";
 
 export default function AttendancePage() {
   const router = useRouter();
   const { hasRole, user } = useAuthStore();
   const { data: activeYearData } = useActiveAcademicYear();
   const { calendarSystem } = useCalendarSystem();
-  
+
   // Role-based access control
   const canMarkAttendance = hasRole(["TEACHER"]);
   const canViewAttendance = hasRole(["TEACHER", "OWNER"]);
   const isTeacher = hasRole(["TEACHER"]);
   const activeYear = activeYearData?.data;
-  
+
   // If user doesn't have permission to view, show error
   if (!canViewAttendance) {
-  return (
-    <div className="space-y-4">
+    return (
+      <div className="space-y-4">
         <Card>
           <CardContent className="p-6">
             <div className="text-center py-12">
@@ -91,7 +90,7 @@ export default function AttendancePage() {
   }
   const { data: classesData } = useClasses();
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
-  
+
   // Filter classes for teachers: 
   // Step 1: Filter by active academic year first
   // Step 2: Then filter by assigned classes
@@ -100,12 +99,12 @@ export default function AttendancePage() {
     if (!isTeacher) {
       return allClasses;
     }
-    
+
     // For teachers: must have active academic year
     if (!activeYear || !activeYear.id) {
       return [];
     }
-    
+
     // Step 1: Get classes from active academic year
     const activeYearClasses = allClasses.filter((cls) => {
       // Check both academicYearId and legacy academicYear field
@@ -122,17 +121,17 @@ export default function AttendancePage() {
       }
       return false;
     });
-    
+
     // Step 2: Filter by assigned classes (if teacher has assigned classes)
     if (user?.teacherClasses && user.teacherClasses.length > 0) {
       const assignedClassIds = user.teacherClasses.map((tc) => tc.id);
       return activeYearClasses.filter((cls) => assignedClassIds.includes(cls.id));
     }
-    
+
     // If no assigned classes, return empty array
     return [];
   }, [isTeacher, user?.teacherClasses, activeYear, allClasses]);
-  
+
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
@@ -150,11 +149,12 @@ export default function AttendancePage() {
     Record<string, AttendanceStatus>
   >({});
   const [attendanceNotes, setAttendanceNotes] = useState<Record<string, string>>({});
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // Check if attendance is recorded for the selected date
   const isAttendanceRecorded = useMemo(() => {
     if (!attendanceData?.data || !selectedClassId) return false;
-    
+
     let attendanceArray: any[] = [];
     if (Array.isArray(attendanceData.data)) {
       attendanceArray = attendanceData.data;
@@ -164,7 +164,7 @@ export default function AttendancePage() {
         studentId: item.student?.id || item.attendance?.studentId,
       })).filter((item: any) => item && item.id);
     }
-    
+
     return attendanceArray.length > 0;
   }, [attendanceData, selectedClassId]);
 
@@ -214,7 +214,7 @@ export default function AttendancePage() {
     if (attendanceData?.data && studentsData?.data) {
       const states: Record<string, AttendanceStatus> = {};
       const notes: Record<string, string> = {};
-      
+
       // Handle different response structures
       let attendanceArray: any[] = [];
       if (Array.isArray(attendanceData.data)) {
@@ -225,11 +225,11 @@ export default function AttendancePage() {
           studentId: item.student?.id || item.attendance?.studentId,
         })).filter((item: any) => item && item.id);
       }
-      
+
       studentsData.data.forEach((student) => {
         const existing = attendanceArray.find(
-          (a: any) => a.studentId === student.id || 
-          (a.student && a.student.id === student.id)
+          (a: any) => a.studentId === student.id ||
+            (a.student && a.student.id === student.id)
         );
         states[student.id] = existing?.status || "present";
         notes[student.id] = existing?.notes || "";
@@ -301,7 +301,7 @@ export default function AttendancePage() {
     const attendanceDataToSave = studentsData.data.map((student) => {
       const status = attendanceStates[student.id] || "present";
       return {
-      studentId: student.id,
+        studentId: student.id,
         status,
         notes: (status === 'late' || status === 'absent') ? (attendanceNotes[student.id] || '') : '',
       };
@@ -347,16 +347,29 @@ export default function AttendancePage() {
     }
   };
 
+  const handleExportClick = () => {
+    if (!selectedClassId) {
+      toast.error("Please select a class first");
+      return;
+    }
+    if (!isAttendanceRecorded) {
+      toast.warning("Attendance Not Recorded", {
+        description: `Please record attendance for ${formatDateForUI(selectedDate, calendarSystem)} before exporting.`,
+      });
+      return;
+    }
+    setExportDialogOpen(true);
+  };
 
   const students = Array.isArray(studentsData?.data) ? studentsData.data : [];
-  
+
   // Sort students alphabetically by first name (A, B, C...)
   const sortedStudents = useMemo(() => {
     return [...students].sort((a, b) => {
       return (a.firstName || '').localeCompare(b.firstName || '');
     });
   }, [students]);
-  
+
   const showAttendanceTable = !!selectedClassId;
   const hasStudents = sortedStudents.length > 0;
 
@@ -366,19 +379,32 @@ export default function AttendancePage() {
       <Card className="border border-slate-200 shadow-sm">
         <CardHeader className="bg-slate-50 border-b border-slate-200 py-3">
           <div className="flex items-center justify-between">
-              <CardTitle className="text-slate-900">Mark Attendance</CardTitle>
-            {showAttendanceTable && selectedClassId && (
-              <Button
-                onClick={() => {
-                  router.push(`/dashboard/attendance/${selectedClassId}?date=${selectedDate}&history=true`);
-                }}
-                variant="outline"
-                size="sm"
-              >
-                <History className="mr-2 h-4 w-4" />
-                View History
-              </Button>
-            )}
+            <CardTitle className="text-slate-900">Mark Attendance</CardTitle>
+            <div className="flex items-center gap-2">
+              {showAttendanceTable && selectedClassId && (
+                <>
+                  <Button
+                    onClick={handleExportClick}
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-200 hover:bg-blue-50 text-blue-700"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      router.push(`/dashboard/attendance/${selectedClassId}?date=${selectedDate}&history=true`);
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <History className="mr-2 h-4 w-4" />
+                    View History
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-4">
@@ -402,8 +428,8 @@ export default function AttendancePage() {
                         {isTeacher && activeYear
                           ? `No assigned classes found in active academic year (${activeYear.name})`
                           : isTeacher && !activeYear
-                          ? "No active academic year found. Please contact administrator."
-                          : "No classes available"}
+                            ? "No active academic year found. Please contact administrator."
+                            : "No classes available"}
                       </div>
                     ) : (
                       classes.map((cls) => (
@@ -552,7 +578,7 @@ export default function AttendancePage() {
                   <LoadingState rows={5} columns={5} />
                 ) : studentsError || attendanceError ? (
                   <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-                    <ErrorState 
+                    <ErrorState
                       message={studentsError ? "Failed to load students" : "Failed to load attendance data"}
                       onRetry={() => window.location.reload()}
                     />
@@ -616,7 +642,7 @@ export default function AttendancePage() {
                               attendanceStates[student.id] || "present";
                             const notes = attendanceNotes[student.id] || '';
                             const showReason = status === 'late' || status === 'absent';
-                            
+
                             // Get class name from student data
                             const getClassName = (student: any): string => {
                               if ('classHistory' in student && Array.isArray(student.classHistory)) {
@@ -640,8 +666,8 @@ export default function AttendancePage() {
                                 <TableCell>
                                   <div className="flex flex-col">
                                     <h3 className="font-semibold">{formatFullName(
-                                    student.firstName,
-                                    student.lastName
+                                      student.firstName,
+                                      student.lastName
                                     )}</h3>
                                     <p className="text-xs text-gray-500">{className}</p>
                                   </div>
@@ -667,7 +693,7 @@ export default function AttendancePage() {
                                       className={cn(
                                         "h-5 w-5 border-green-600",
                                         status === "present" &&
-                                          "bg-green-600 border-green-600",
+                                        "bg-green-600 border-green-600",
                                         (!canMarkAttendance || isReadOnly) && "opacity-50 cursor-not-allowed"
                                       )}
                                     />
@@ -689,7 +715,7 @@ export default function AttendancePage() {
                                       className={cn(
                                         "h-5 w-5 border-red-600",
                                         status === "absent" &&
-                                          "bg-red-600 border-red-600",
+                                        "bg-red-600 border-red-600",
                                         (!canMarkAttendance || isReadOnly) && "opacity-50 cursor-not-allowed"
                                       )}
                                     />
@@ -711,7 +737,7 @@ export default function AttendancePage() {
                                       className={cn(
                                         "h-5 w-5 border-yellow-600",
                                         status === "late" &&
-                                          "bg-yellow-600 border-yellow-600",
+                                        "bg-yellow-600 border-yellow-600",
                                         (!canMarkAttendance || isReadOnly) && "opacity-50 cursor-not-allowed"
                                       )}
                                     />
@@ -763,6 +789,13 @@ export default function AttendancePage() {
           </Button>
         </div>
       )}
+      <ExportAttendanceDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        classId={selectedClassId}
+        className={classes.find(c => c.id === selectedClassId)?.name || ''}
+        date={selectedDate}
+      />
     </div>
   );
 }

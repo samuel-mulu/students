@@ -22,53 +22,40 @@ import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
 import { useClassesByGradeAndYear } from '@/lib/hooks/use-classes';
 import { useGrades } from '@/lib/hooks/use-grades';
-import { formatDate, generateAllMonths } from '@/lib/utils/format';
+import { formatDate } from '@/lib/utils/format';
 import { Download, Loader2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
-interface ExportPaymentsDialogProps {
+interface ExportStudentsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialogProps) {
+export function ExportStudentsDialog({ open, onOpenChange }: ExportStudentsDialogProps) {
   const { calendarSystem } = useCalendarSystem();
   const { data: activeYearData } = useActiveAcademicYear();
   const { data: gradesData } = useGrades();
   const grades = gradesData?.data || [];
   const academicYearId = activeYearData?.data?.id || '';
 
-  const [gradeId, setGradeId] = useState<string>('');
+  const [classStatus, setClassStatus] = useState<string>('assigned');
+  const [gradeId, setGradeId] = useState<string>('all');
   const [classId, setClassId] = useState<string>('all');
-  const [paymentStatus, setPaymentStatus] = useState<string>('all');
-  const [month, setMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [exportType, setExportType] = useState<'csv' | 'pdf'>('csv');
   const [isExporting, setIsExporting] = useState(false);
 
-  const { data: classesData } = useClassesByGradeAndYear(gradeId, academicYearId);
+  const { data: classesData } = useClassesByGradeAndYear(gradeId === 'all' ? '' : gradeId, academicYearId);
   const classes = classesData?.data || [];
 
-  const months = useMemo(() => generateAllMonths(new Date().getFullYear(), calendarSystem), [calendarSystem]);
-
   const handleExport = async () => {
-    if (!gradeId) {
-      toast.error('Grade is required');
-      return;
-    }
-
     try {
       setIsExporting(true);
 
-      const apiPaymentStatus = paymentStatus === 'paid' ? 'confirmed' :
-        paymentStatus === 'unpaid' ? 'pending' : undefined;
-
       const response = await studentsApi.getAll({
-        gradeId,
+        classStatus: classStatus === 'all' ? undefined : classStatus as 'new' | 'assigned',
+        gradeId: gradeId === 'all' ? undefined : gradeId,
         classId: classId === 'all' ? undefined : classId,
-        month,
-        year: parseInt(month.split('-')[0]),
-        paymentStatus: apiPaymentStatus,
         limit: 1000,
       });
 
@@ -99,41 +86,33 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
   };
 
   const handleCSVExport = (students: any[]) => {
-    const headers = ['First Name', 'Last Name', 'Grade', 'Class', 'Month', 'Status', 'Amount', 'Receipt No', 'Payment Date'];
+    const headers = ['First Name', 'Last Name', 'Gender', 'Class', 'Parent Name', 'Parent Phone', 'Status', 'Parents Portal'];
     const rows = students.map(student => {
-      const payment = student.payments?.find((p: any) => p.month === month);
-      const status = payment ? payment.status : 'Pending';
-      const amount = payment ? payment.amount : '-';
-      const receiptNo = payment?.receipt?.receiptNumber || '-';
-      const paymentDate = payment?.paymentDate ? formatDate(payment.paymentDate, calendarSystem) : '-';
-
       const currentClass = student.classHistory?.find((ch: any) => !ch.endDate);
       const className = currentClass?.class?.name || 'Not Assigned';
-      const gradeName = currentClass?.class?.grade?.name || '-';
 
       return [
         student.firstName,
         student.lastName,
-        gradeName,
+        student.gender,
         className,
-        month,
-        status,
-        amount,
-        receiptNo,
-        paymentDate
+        student.parentName,
+        student.parentPhone,
+        student.classStatus,
+        student.parentsPortal ? 'Enabled' : 'Disabled'
       ];
     });
 
     const csvContent = [
       headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ...rows.map(row => row.map(cell => `"${cell || ''}"`).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `payments_${gradeId}_${month}.csv`);
+    link.setAttribute('download', `students_${classStatus}_${new Date().toISOString().slice(0, 10)}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -144,18 +123,11 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const gradeName = grades.find(g => g.id === gradeId)?.name || '';
+    const gradeName = gradeId === 'all' ? 'All Grades' : grades.find(g => g.id === gradeId)?.name || '';
     const selectedClass = classes.find(c => c.id === classId);
-    const className = selectedClass ? selectedClass.name : 'All Sections';
-    const monthLabel = months.find(m => m.value === month)?.label || month;
+    const className = classId === 'all' ? 'All Sections' : selectedClass ? selectedClass.name : '';
 
     const rows = students.map((student, index) => {
-      const payment = student.payments?.find((p: any) => p.month === month);
-      const status = payment ? payment.status : 'Pending';
-      const amount = payment ? payment.amount : '-';
-      const receiptNo = payment?.receipt?.receiptNumber || '-';
-      const paymentDate = payment?.paymentDate ? formatDate(payment.paymentDate, calendarSystem) : '-';
-
       const currentClass = student.classHistory?.find((ch: any) => !ch.endDate);
       const actualClassName = currentClass?.class?.name || 'Not Assigned';
 
@@ -163,11 +135,9 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
         <tr>
           <td>${index + 1}</td>
           <td>${student.firstName} ${student.lastName}</td>
+          <td>${student.gender}</td>
           <td>${actualClassName}</td>
-          <td class="${status.toLowerCase() === 'confirmed' ? 'text-green' : 'text-red'}">${status}</td>
-          <td>${amount !== '-' ? `ETB ${amount}` : '-'}</td>
-          <td>${receiptNo}</td>
-          <td>${paymentDate}</td>
+          <td>${student.parentPhone}</td>
         </tr>
       `;
     }).join('');
@@ -176,7 +146,7 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Payment Report - ${gradeName} - ${monthLabel}</title>
+          <title>Student List - ${gradeName} - ${className}</title>
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; position: relative; }
@@ -188,8 +158,6 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th { background-color: #f3f4f6; padding: 10px; text-align: left; border: 1px solid #ddd; font-size: 13px; }
             td { padding: 8px; border: 1px solid #ddd; font-size: 12px; }
-            .text-green { color: #16a34a; font-weight: bold; }
-            .text-red { color: #dc2626; font-weight: bold; }
             @media print {
               body { margin: 0; }
               .header { border-bottom-color: #000; }
@@ -201,16 +169,17 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
             <div class="developer-notice">© 2ms deelopers 0962520885</div>
             <img src="/logo.jpg" alt="Logo" />
             <div class="school-name">DIGITAL KG</div>
-            <h1>Payment Status Report</h1>
+            <h1>Student List Report</h1>
           </div>
           <div class="meta">
             <div>
+              <p><strong>Status:</strong> ${classStatus.toUpperCase()}</p>
               <p><strong>Grade:</strong> ${gradeName}</p>
               <p><strong>Section:</strong> ${className}</p>
             </div>
             <div style="text-align: right;">
-              <p><strong>Month:</strong> ${monthLabel}</p>
               <p><strong>Report Date:</strong> ${formatDate(new Date(), calendarSystem)}</p>
+              <p><strong>Total Students:</strong> ${students.length}</p>
             </div>
           </div>
           <table>
@@ -218,20 +187,15 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
               <tr>
                 <th style="width: 40px;">No</th>
                 <th>Student Name</th>
+                <th>Gender</th>
                 <th>Class</th>
-                <th>Status</th>
-                <th>Amount</th>
-                <th>Receipt No</th>
-                <th>Payment Date</th>
+                <th>Parent Phone</th>
               </tr>
             </thead>
             <tbody>
               ${rows}
             </tbody>
           </table>
-          <div style="margin-top: 20px; text-align: right; font-size: 12px; color: #666;">
-            <p>Total Students: ${students.length}</p>
-          </div>
         </body>
       </html>
     `;
@@ -248,79 +212,72 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Export Payment Report</DialogTitle>
+          <DialogTitle>Export Students List</DialogTitle>
           <DialogDescription>
-            Choose filters to generate the payment report.
+            Choose filters to generate the student list report.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="grade">Grade *</Label>
-            <Select value={gradeId} onValueChange={(val) => {
-              setGradeId(val);
-              setClassId('all');
+            <Label htmlFor="status">Class Status</Label>
+            <Select value={classStatus} onValueChange={(val) => {
+              setClassStatus(val);
+              if (val === 'new') {
+                setGradeId('all');
+                setClassId('all');
+              }
             }}>
-              <SelectTrigger id="grade">
-                <SelectValue placeholder="Select Grade" />
+              <SelectTrigger id="status">
+                <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
-                {grades.map((grade) => (
-                  <SelectItem key={grade.id} value={grade.id}>
-                    {grade.name}
-                  </SelectItem>
-                ))}
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="assigned">Assigned</SelectItem>
+                <SelectItem value="new">New (Unassigned)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="class">Section / Class (Optional)</Label>
-            <Select value={classId} onValueChange={setClassId} disabled={!gradeId}>
-              <SelectTrigger id="class">
-                <SelectValue placeholder="All Sections" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sections</SelectItem>
-                {classes.map((cls) => (
-                  <SelectItem key={cls.id} value={cls.id}>
-                    {cls.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {classStatus !== 'new' && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="grade">Grade {classStatus === 'assigned' && '*'}</Label>
+                <Select value={gradeId} onValueChange={(val) => {
+                  setGradeId(val);
+                  setClassId('all');
+                }}>
+                  <SelectTrigger id="grade">
+                    <SelectValue placeholder="Select Grade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Grades</SelectItem>
+                    {grades.map((grade) => (
+                      <SelectItem key={grade.id} value={grade.id}>
+                        {grade.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="status">Payment Status</Label>
-              <Select value={paymentStatus} onValueChange={setPaymentStatus}>
-                <SelectTrigger id="status">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="paid">Paid Only</SelectItem>
-                  <SelectItem value="unpaid">Unpaid Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="month">Month</Label>
-              <Select value={month} onValueChange={setMonth}>
-                <SelectTrigger id="month">
-                  <SelectValue placeholder="Select Month" />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="class">Section / Class (Optional)</Label>
+                <Select value={classId} onValueChange={setClassId} disabled={gradeId === 'all'}>
+                  <SelectTrigger id="class">
+                    <SelectValue placeholder="All Sections" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sections</SelectItem>
+                    {classes.map((cls) => (
+                      <SelectItem key={cls.id} value={cls.id}>
+                        {cls.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="exportType">Download Format</Label>
@@ -339,7 +296,10 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isExporting}>
             Cancel
           </Button>
-          <Button onClick={handleExport} disabled={!gradeId || isExporting}>
+          <Button
+            onClick={handleExport}
+            disabled={isExporting || (classStatus === 'assigned' && gradeId === 'all')}
+          >
             {isExporting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
