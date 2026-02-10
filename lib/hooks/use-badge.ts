@@ -1,5 +1,6 @@
 import { badgeApi } from '@/lib/api/badge';
 import { useQuery } from '@tanstack/react-query';
+import { generateBadgePDFClient } from '../utils/badge-generator';
 
 export function useBadgePreview(studentId: string) {
   return useQuery({
@@ -20,12 +21,19 @@ export function useDownloadBadge() {
       side: 'front' | 'back' | 'combined' = 'combined',
       minimal: boolean = false
     ) => {
+      if (format === 'pdf') {
+        const previewResponse = await badgeApi.getPreview(studentId);
+        await generateBadgePDFClient(previewResponse, side, minimal);
+        return;
+      }
+
+      // For PNG, keep the backend implementation for now or implement client-side as well
       const blob = await badgeApi.downloadBadge(studentId, format, side, minimal);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       
-      const extension = format === 'pdf' ? 'pdf' : 'png';
+      const extension = format;
       const sideName = side === 'combined' ? 'combined' : side;
       link.download = `badge-${studentId}-${sideName}.${extension}`;
       
