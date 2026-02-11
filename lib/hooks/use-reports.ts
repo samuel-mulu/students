@@ -1,5 +1,5 @@
+import { PaymentReportsParams, RegistrarPaymentReportsParams, reportsApi } from '@/lib/api/reports';
 import { useQuery } from '@tanstack/react-query';
-import { reportsApi, PaymentReportsParams, RegistrarPaymentReportsParams } from '@/lib/api/reports';
 
 export function usePaymentReports(params?: PaymentReportsParams) {
   return useQuery({
@@ -33,11 +33,11 @@ export function useStudentReport(studentId: string) {
   });
 }
 
-export function useClassReport(classId: string, term?: string) {
+export function useClassReport(classId: string, term?: string, page?: number, limit?: number) {
   return useQuery({
-    queryKey: ['classReport', classId, term],
+    queryKey: ['classReport', classId, term, page, limit],
     queryFn: async () => {
-      const data = await reportsApi.getClassReport(classId, term);
+      const data = await reportsApi.getClassReport(classId, term, page, limit);
       return { data };
     },
     enabled: !!classId, // Only fetch if classId is provided

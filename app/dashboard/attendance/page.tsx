@@ -66,11 +66,39 @@ export default function AttendancePage() {
   const { data: activeYearData } = useActiveAcademicYear();
   const { calendarSystem } = useCalendarSystem();
 
+  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
+  const [page, setPage] = useState(1);
+  const [limit] = useState(50);
+  const [attendanceStates, setAttendanceStates] = useState<
+    Record<string, AttendanceStatus>
+  >({});
+  const [attendanceNotes, setAttendanceNotes] = useState<Record<string, string>>({});
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+
+  const { data: classesData } = useClasses();
+  const { data: studentsData, isLoading: studentsLoading, error: studentsError } = useStudents({
+    classId: selectedClassId || undefined,
+    classStatus: "assigned",
+    page,
+    limit,
+  });
+  const { data: attendanceData, isLoading: attendanceLoading, error: attendanceError } =
+    useAttendanceByClass(selectedClassId || "", selectedDate);
+  const bulkAttendance = useBulkAttendance();
+
   // Role-based access control
   const canMarkAttendance = hasRole(["TEACHER"]);
   const canViewAttendance = hasRole(["TEACHER", "OWNER"]);
   const isTeacher = hasRole(["TEACHER"]);
   const activeYear = activeYearData?.data;
+
+  // Reset page when class changes
+  useEffect(() => {
+    setPage(1);
+  }, [selectedClassId]);
 
   // If user doesn't have permission to view, show error
   if (!canViewAttendance) {
@@ -88,7 +116,7 @@ export default function AttendancePage() {
       </div>
     );
   }
-  const { data: classesData } = useClasses();
+
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
 
   // Filter classes for teachers: 
@@ -132,37 +160,21 @@ export default function AttendancePage() {
     return [];
   }, [isTeacher, user?.teacherClasses, activeYear, allClasses]);
 
-  const [selectedClassId, setSelectedClassId] = useState<string>("");
-  const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
-  );
-
-  const { data: studentsData, isLoading: studentsLoading, error: studentsError } = useStudents({
-    classId: selectedClassId || undefined,
-    classStatus: "assigned",
-  });
-  const { data: attendanceData, isLoading: attendanceLoading, error: attendanceError } =
-    useAttendanceByClass(selectedClassId || "", selectedDate);
-  const bulkAttendance = useBulkAttendance();
-
-  const [attendanceStates, setAttendanceStates] = useState<
-    Record<string, AttendanceStatus>
-  >({});
-  const [attendanceNotes, setAttendanceNotes] = useState<Record<string, string>>({});
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
-
   // Check if attendance is recorded for the selected date
   const isAttendanceRecorded = useMemo(() => {
     if (!attendanceData?.data || !selectedClassId) return false;
 
-    let attendanceArray: any[] = [];
+    let attendanceArray: unknown[] = [];
     if (Array.isArray(attendanceData.data)) {
       attendanceArray = attendanceData.data;
     } else if (attendanceData.data.students) {
-      attendanceArray = attendanceData.data.students.map((item: any) => ({
-        ...item.attendance,
-        studentId: item.student?.id || item.attendance?.studentId,
-      })).filter((item: any) => item && item.id);
+      attendanceArray = attendanceData.data.students.map((item: { attendance: unknown; student?: { id: string } }) => {
+        const attendance = item.attendance as { id?: string; studentId?: string };
+        return {
+          ...attendance,
+          studentId: item.student?.id || attendance.studentId,
+        };
+      }).filter((item: { id?: string }) => item && item.id);
     }
 
     return attendanceArray.length > 0;
@@ -216,21 +228,27 @@ export default function AttendancePage() {
       const notes: Record<string, string> = {};
 
       // Handle different response structures
-      let attendanceArray: any[] = [];
+      let attendanceArray: unknown[] = [];
       if (Array.isArray(attendanceData.data)) {
         attendanceArray = attendanceData.data;
       } else if (attendanceData.data.students) {
-        attendanceArray = attendanceData.data.students.map((item: any) => ({
-          ...item.attendance,
-          studentId: item.student?.id || item.attendance?.studentId,
-        })).filter((item: any) => item && item.id);
+        attendanceArray = attendanceData.data.students.map((item: { attendance: unknown; student?: { id: string } }) => {
+          const attendance = item.attendance as { id?: string; studentId?: string };
+          return {
+            ...attendance,
+            studentId: item.student?.id || attendance.studentId,
+          };
+        }).filter((item: { id?: string }) => item && item.id);
       }
 
       studentsData.data.forEach((student) => {
         const existing = attendanceArray.find(
-          (a: any) => a.studentId === student.id ||
-            (a.student && a.student.id === student.id)
-        );
+          (a: unknown) => {
+            const acc = a as { studentId: string; student?: { id: string } };
+            return acc.studentId === student.id ||
+              (acc.student && acc.student.id === student.id);
+          }
+        ) as { status?: AttendanceStatus; notes?: string } | undefined;
         states[student.id] = existing?.status || "present";
         notes[student.id] = existing?.notes || "";
       });
@@ -651,7 +669,7 @@ export default function AttendancePage() {
                                   return activeClass.class.name;
                                 }
                               }
-                              const selectedClass = classes.find(c => c.id === selectedClassId);
+                              const selectedClass = classes.find((c: any) => c.id === selectedClassId);
                               return selectedClass?.name || 'Not Assigned';
                             };
                             const className = getClassName(student);
@@ -661,7 +679,7 @@ export default function AttendancePage() {
                                 key={student.id}
                               >
                                 <TableCell className="text-center font-medium">
-                                  {index + 1}
+                                  {(page - 1) * limit + index + 1}
                                 </TableCell>
                                 <TableCell>
                                   <div className="flex flex-col">
@@ -769,6 +787,37 @@ export default function AttendancePage() {
                     </Table>
                   </div>
                 )}
+
+                {/* Pagination */}
+                {studentsData?.pagination && studentsData.pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 px-4 pb-4">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(page - 1) * limit + 1} to{" "}
+                      {Math.min(page * limit, studentsData.pagination.total)} of{" "}
+                      {studentsData.pagination.total} students
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setPage((p) => Math.min(studentsData.pagination!.totalPages, p + 1))
+                        }
+                        disabled={page === studentsData.pagination!.totalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -793,7 +842,7 @@ export default function AttendancePage() {
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
         classId={selectedClassId}
-        className={classes.find(c => c.id === selectedClassId)?.name || ''}
+        className={classes.find((c: any) => c.id === selectedClassId)?.name || ''}
         date={selectedDate}
       />
     </div>

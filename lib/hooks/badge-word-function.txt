@@ -1,0 +1,85 @@
+const downloadBadgeForWord = (data: any, side: 'front' | 'back' | 'combined', minimal: boolean) => {
+  const parentsPortalUrl = process.env.NEXT_PUBLIC_PARENTS_PORTAL_URL || "https://parents-portal-x9sp.vercel.app";
+  const qrCodeUrl = `${parentsPortalUrl}/parents/${data.student.id}/attendance`;
+  const qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCodeUrl)}`;
+
+  const badgeHtml = `
+    <div style="width: 85.6mm; height: 65mm; border: 2px solid #ccc; display: inline-block; margin: 5mm; page-break-inside: avoid; font-family: Arial, sans-serif; position: relative; overflow: hidden; background: white;">
+      <div style="width: 100%; height: 100%; display: flex; flex-direction: column;">
+        <div style="background-color: #800020; height: ${minimal ? '14mm' : '20mm'}; display: flex; align-items: center; padding: 0 4mm; gap: 2mm; color: white;">
+          <div style="font-weight: 900; font-size: 14pt; color: #0044ff; text-transform: uppercase; flex: 1; text-shadow: 1px 1px 0px rgba(255,255,255,0.5);">
+            ${data.student.firstName} ${data.student.lastName}
+          </div>
+          ${!minimal && data.school.logoUrl ? `
+            <img src="${data.school.logoUrl}" style="width: 14mm; height: 14mm; object-fit: contain; background: white; border-radius: 1mm; padding: 0.5mm;" />
+          ` : ''}
+        </div>
+        <div style="flex: 1; display: flex; padding: 2mm 4mm; gap: 3mm; align-items: center;">
+          <div style="flex: 1; font-size: 9pt; color: #000; display: flex; flex-direction: column; gap: 1.5mm;">
+            ${!minimal ? `
+              <div><strong>Class:</strong> ${data.class?.grade?.name || 'N/A'}${data.class?.name ? ` - ${data.class.name}` : ''}</div>
+              <div><strong>Birthdate:</strong> ${new Date(data.student.dateOfBirth).toLocaleDateString()}</div>
+              <div><strong>Year:</strong> ${data.academicYear?.name || 'N/A'}</div>
+              <div><strong>Emergency:</strong> ${data.student.emergencyPhone || 'N/A'}</div>
+            ` : ''}
+            <div style="margin-top: 1mm;">
+              <img src="${qrDataUrl}" alt="QR Code" style="width: ${minimal ? '35mm' : '22mm'}; height: auto;" />
+            </div>
+          </div>
+          ${!minimal && data.student.profileImageUrl ? `
+            <div style="width: 22mm; display: flex; align-items: center; justify-content: center;">
+              <img src="${data.student.profileImageUrl}" style="width: 22mm; height: 26mm; object-fit: cover; border: 0.5mm solid #800020;" />
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>ID Badge - ${data.student.firstName} ${data.student.lastName}</title>
+        <style>
+          @page { size: A4; margin: 10mm; }
+          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+          .instructions {
+            background-color: #f0f9ff;
+            border: 2px solid #0284c7;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 11pt;
+          }
+          .instructions h2 { margin-top: 0; color: #0284c7; font-size: 13pt; }
+          .instructions ul { margin: 10px 0; padding-left: 20px; }
+          .instructions li { margin: 5px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="instructions">
+          <h2>📝 Instructions for Microsoft Word</h2>
+          <ul>
+            <li><strong>To add more students:</strong> Select the badge below, copy it (Ctrl+C), and paste it (Ctrl+V) multiple times</li>
+            <li><strong>To arrange badges:</strong> Drag and position badges on the page as needed</li>
+            <li><strong>Recommended:</strong> Fit 6-8 badges per A4 page (2 columns × 3-4 rows)</li>
+            <li><strong>Before printing:</strong> Go to File → Print → Print Preview to check the layout</li>
+          </ul>
+        </div>
+        ${badgeHtml}
+      </body>
+    </html>
+  `;
+
+  const blob = new Blob([htmlContent], { type: 'text/html' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `badge-${data.student.firstName}-${data.student.lastName}-editable.html`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};

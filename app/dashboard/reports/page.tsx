@@ -5,6 +5,12 @@ import { ErrorState } from '@/components/shared/ErrorState';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -26,14 +32,231 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { useAcademicYears, useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
+import { usePayments } from '@/lib/hooks/use-payments';
 import { usePaymentReports, useRegistrarPaymentReports } from '@/lib/hooks/use-reports';
 import { useUsers } from '@/lib/hooks/use-users';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { formatDateForUI } from '@/lib/utils/date';
-import { formatCurrency, formatDate, formatDateTime, formatMonthYear, generateAllMonths } from '@/lib/utils/format';
+import { formatCurrency, formatDate, formatDateTime, formatFullName, formatMonthYear, generateAllMonths } from '@/lib/utils/format';
 import { addDays, format, parseISO, subDays } from 'date-fns';
 import { Calendar, ChevronLeft, ChevronRight, DollarSign, Download, FileText, Printer, RefreshCw, TrendingUp, UserCheck, Users, UserX } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+
+function PaymentStudentsModal({
+  isOpen,
+  onClose,
+  date,
+  calendarSystem
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  date: string;
+  calendarSystem: any;
+}) {
+  const [year] = date.split('-').map(Number);
+  const monthStr = `${date.split('-')[0]}-${date.split('-')[1]}`;
+
+  const { data: paymentsData, isLoading } = usePayments({
+    month: monthStr,
+    year: year
+  });
+
+  const students = useMemo(() => {
+    if (!paymentsData?.data) return [];
+    // The paymentDate from backend might be an ISO string, so we extract the date part
+    return paymentsData.data.filter((p: any) => p.paymentDate?.split('T')[0] === date);
+  }, [paymentsData, date]);
+
+  const totalAmount = useMemo(() =>
+    students.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+    , [students]);
+
+  const handleModalExport = () => {
+    if (students.length === 0) return;
+
+    const headers = ['No.', 'Student Name', 'Payment Type', 'Amount', 'Method'];
+    const rows = students.map((p: any, index: number) => [
+      (index + 1).toString(),
+      formatFullName(p.student?.firstName || '', p.student?.lastName || '').replace(/,/g, ' '),
+      (p.paymentType?.name || 'Unknown').replace(/,/g, ' '),
+      p.amount.toFixed(2),
+      (p.paymentMethod?.replace('_', ' ') || '-').replace(/,/g, ' ')
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row: string[]) => row.join(',')),
+      '', // Empty row
+      `Total,,,${totalAmount.toFixed(2)},`
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `payments-students-${date}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleModalPrint = () => {
+    if (students.length === 0) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const studentRows = students.map((p: any, index: number) => `
+      <tr>
+        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${index + 1}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${formatFullName(p.student?.firstName || '', p.student?.lastName || '')}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${p.paymentType?.name || 'Unknown'}</td>
+        <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${formatCurrency(p.amount)}</td>
+        <td style="padding: 8px; border: 1px solid #ddd; text-transform: capitalize;">${p.paymentMethod?.replace('_', ' ') || '-'}</td>
+      </tr>
+    `).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Payments Report - ${date}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 30px; color: #333; }
+            h1 { color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 10px; }
+            .meta { margin-bottom: 20px; font-size: 14px; color: #666; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { border: 1px solid #ddd; padding: 12px 8px; background-color: #f8fafc; text-align: left; font-weight: bold; }
+            td { border: 1px solid #ddd; padding: 8px; }
+            .total-row { background-color: #f1f5f9; font-weight: bold; }
+            .footer { margin-top: 30px; text-align: right; font-size: 12px; color: #999; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <h1>Daily Payments List</h1>
+          <div class="meta">
+            <p><strong>Date:</strong> ${formatDateForUI(date, calendarSystem)}</p>
+            <p><strong>Generated on:</strong> ${formatDateTime(new Date())}</p>
+            <p><strong>Total Transactions:</strong> ${students.length}</p>
+            <p><strong>Total Amount:</strong> ${formatCurrency(totalAmount)}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">No.</th>
+                <th>Student Name</th>
+                <th>Payment Type</th>
+                <th style="text-align: right;">Amount</th>
+                <th>Method</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${studentRows}
+              <tr class="total-row">
+                <td colspan="3" style="text-align: right; padding: 8px;">Total</td>
+                <td style="text-align: right; padding: 8px;">${formatCurrency(totalAmount)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="footer">
+            Generated by School Management System
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogHeader className="flex flex-row items-center gap-4 pr-8 border-b pb-4">
+          <DialogTitle className="flex-1">
+            Payments on {formatDateForUI(date, calendarSystem)}
+          </DialogTitle>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleModalExport}
+              disabled={students.length === 0}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleModalPrint}
+              disabled={students.length === 0}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              PDF
+            </Button>
+          </div>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="py-12 flex justify-center">
+            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : students.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground">
+            No payments recorded on this date.
+          </div>
+        ) : (
+          <div className="overflow-y-auto pr-2">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">No.</TableHead>
+                  <TableHead>Student Name</TableHead>
+                  <TableHead>Payment Type</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Method</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {students.map((p: any, index: number) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="text-muted-foreground font-medium">
+                      {index + 1}
+                    </TableCell>
+                    <TableCell className="font-semibold">
+                      {formatFullName(p.student?.firstName || '', p.student?.lastName || '')}
+                    </TableCell>
+                    <TableCell>{p.paymentType?.name || 'Unknown'}</TableCell>
+                    <TableCell className="text-right font-bold text-green-700">
+                      {formatCurrency(p.amount)}
+                    </TableCell>
+                    <TableCell className="capitalize text-muted-foreground">{p.paymentMethod?.replace('_', ' ') || '-'}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="bg-muted/50 font-bold border-t-2">
+                  <TableCell colSpan={3} className="text-right">
+                    Total
+                  </TableCell>
+                  <TableCell className="text-right text-green-800">
+                    {formatCurrency(totalAmount)}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function ReportsPage() {
   const { user } = useAuthStore();
@@ -53,6 +276,10 @@ export default function ReportsPage() {
   const [showPaidProgress, setShowPaidProgress] = useState<boolean>(true); // Toggle between paid and unpaid
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const todayISO = new Date().toISOString().split('T')[0];
+
+  // Modal state
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
+  const [modalDate, setModalDate] = useState<string>(todayISO);
 
   // Data hooks
   const { data: academicYearsData } = useAcademicYears();
@@ -1001,7 +1228,18 @@ export default function ReportsPage() {
                           {selectedDate === todayISO ? "Today's payments" : "Daily payments"}
                         </p>
                       </div>
-                      <FileText className="h-8 w-8 text-purple-600" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 text-purple-600 hover:bg-purple-100 rounded-full"
+                        onClick={() => {
+                          setModalDate(selectedDate);
+                          setIsStudentModalOpen(true);
+                        }}
+                        title="View students list"
+                      >
+                        <FileText className="h-8 w-8" />
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -1630,7 +1868,18 @@ export default function ReportsPage() {
                         {selectedDate === todayISO ? "Today's payments" : "Daily payments"}
                       </p>
                     </div>
-                    <FileText className="h-8 w-8 text-purple-600" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 text-purple-600 hover:bg-purple-100 rounded-full"
+                      onClick={() => {
+                        setModalDate(selectedDate);
+                        setIsStudentModalOpen(true);
+                      }}
+                      title="View students list"
+                    >
+                      <FileText className="h-8 w-8" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -1838,6 +2087,13 @@ export default function ReportsPage() {
           ) : null}
         </TabsContent>
       </Tabs>
+
+      <PaymentStudentsModal
+        isOpen={isStudentModalOpen}
+        onClose={() => setIsStudentModalOpen(false)}
+        date={modalDate}
+        calendarSystem={calendarSystem}
+      />
 
       {/* Print Styles */}
       <style jsx global>{`

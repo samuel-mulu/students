@@ -1,18 +1,20 @@
 "use client";
 
-import { use, useMemo, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useClass } from "@/lib/hooks/use-classes";
-import { useStudents } from "@/lib/hooks/use-students";
-import {
-  useAttendanceByClass,
-  useBulkAttendance,
-  useClassAttendanceDates,
-  useClassAttendanceSummary,
-  useUpdateAttendance,
-} from "@/lib/hooks/use-attendance";
+import { BackButton } from "@/components/shared/BackButton";
+import { ErrorState } from "@/components/shared/ErrorState";
+import { LoadingState } from "@/components/shared/LoadingState";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -21,46 +23,37 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { useCalendarSystem } from "@/lib/context/calendar-context";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+  useAttendanceByClass,
+  useBulkAttendance,
+  useClassAttendanceDates,
+  useClassAttendanceSummary,
+  useUpdateAttendance,
+} from "@/lib/hooks/use-attendance";
+import { useClass } from "@/lib/hooks/use-classes";
+import { useStudents } from "@/lib/hooks/use-students";
+import { useAuthStore } from "@/lib/store/auth-store";
+import { AttendanceStatus } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { formatDateForUI } from "@/lib/utils/date";
+import { formatFullName } from "@/lib/utils/format";
+import { format } from "date-fns";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { LoadingState } from "@/components/shared/LoadingState";
-import { ErrorState } from "@/components/shared/ErrorState";
-import { AttendanceStatus, Attendance } from "@/lib/types";
-import { formatFullName, formatDate } from "@/lib/utils/format";
-import {
-  Check,
-  X,
-  Clock,
   Calendar,
+  Check,
   ChevronLeft,
   ChevronRight,
-  Users,
-  Save,
-  History as HistoryIcon,
+  Clock,
   Download,
+  History as HistoryIcon,
   Printer,
+  Save,
+  Users,
+  X,
 } from "lucide-react";
-import { format } from "date-fns";
-import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/lib/store/auth-store";
-import { BackButton } from "@/components/shared/BackButton";
-import { useCalendarSystem } from "@/lib/context/calendar-context";
-import { formatDateForUI } from "@/lib/utils/date";
+import { useRouter, useSearchParams } from "next/navigation";
+import { use, useEffect, useMemo, useState } from "react";
 
 export default function AttendanceBulkPage({
   params,
@@ -78,16 +71,22 @@ export default function AttendanceBulkPage({
   const todayStr = today.toISOString().split("T")[0];
   const isHistoryMode = searchParams.get("history") === "true";
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+
   const { data: classData, isLoading: classLoading } = useClass(classId);
   const { data: studentsData, isLoading: studentsLoading } = useStudents({
     classId,
     classStatus: "assigned",
+    page,
+    limit,
   });
 
   // Get available dates for history
   const { data: datesData, isLoading: datesLoading, refetch: refetchDates, error: datesError } = useClassAttendanceDates(classId);
   const { data: summaryData, isLoading: summaryLoading, refetch: refetchSummary } = useClassAttendanceSummary(classId);
-  
+
   const availableDates = useMemo(() => {
     if (!datesData?.data) return [];
     const dates = Array.isArray(datesData.data) ? datesData.data : [];
@@ -131,6 +130,11 @@ export default function AttendanceBulkPage({
   const [selectedDate, setSelectedDate] = useState<string>(
     searchParams.get("date") || (isHistoryMode ? latestDate : todayStr)
   );
+
+  // Reset page when class changes or mode changes
+  useEffect(() => {
+    setPage(1);
+  }, [classId, isHistoryMode]);
 
   // Refetch dates when component mounts or classId changes
   useEffect(() => {
@@ -554,7 +558,7 @@ export default function AttendanceBulkPage({
                     <div>
                       <Label className="text-slate-800 font-semibold text-base">
                         Daily Attendance Summary
-                  </Label>
+                      </Label>
                       <p className="text-xs text-slate-500 mt-1">
                         Click on any date to view detailed student records
                       </p>
@@ -817,60 +821,80 @@ export default function AttendanceBulkPage({
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {displayDates.map((date) => {
-                            const isSelected = date === selectedDate;
-                            // Normalize date for lookup (ensure YYYY-MM-DD format)
-                            const normalizedDate = date.split('T')[0];
-                            const summary = summaryMap.get(normalizedDate) || summaryMap.get(date);
-                            const stats = summary || { present: 0, absent: 0, late: 0, total: students.length };
-                            
-                            return (
-                              <TableRow
-                                key={date}
-                                className={cn(
-                                  "cursor-pointer hover:bg-slate-50 transition-colors",
-                                  isSelected && "bg-blue-50 border-l-4 border-l-blue-600"
-                                )}
-                                onClick={() => handleDateChange(date)}
-                              >
-                                <TableCell className="font-medium">
-                                  <div className="flex items-center gap-2">
-                                    <Calendar className="h-4 w-4 text-slate-500" />
-                                    <span>{formatDateForUI(date, calendarSystem)}</span>
-                                    {isSelected && (
-                                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs border-blue-200">
-                                        Viewing
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-green-50 text-green-700 font-semibold text-sm border border-green-200">
-                                    {stats.present}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-red-50 text-red-700 font-semibold text-sm border border-red-200">
-                                    {stats.absent}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-yellow-50 text-yellow-700 font-semibold text-sm border border-yellow-200">
-                                    {stats.late}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center font-semibold text-slate-700">
-                                  {stats.total}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
+                          {displayDates
+                            .slice((page - 1) * limit, page * limit)
+                            .map((date) => {
+                              const isSelected = date === selectedDate;
+                              // Normalize date for lookup (ensure YYYY-MM-DD format)
+                              const normalizedDate = date.split('T')[0];
+                              const summary = summaryMap.get(normalizedDate) || summaryMap.get(date);
+                              const stats = summary || { present: 0, absent: 0, late: 0, total: students.length };
+
+                              return (
+                                <TableRow
+                                  key={date}
+                                  className={cn(
+                                    "cursor-pointer hover:bg-slate-50 transition-colors",
+                                    isSelected && "bg-blue-50 border-l-4 border-l-blue-600"
+                                  )}
+                                  onClick={() => handleDateChange(date)}
+                                >
+                                  <TableCell className="font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="h-4 w-4 text-slate-500" />
+                                      <span>{formatDateForUI(date, calendarSystem)}</span>
+                                      {isSelected && (
+                                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs border-blue-200">
+                                          Viewing
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-green-50 text-green-700 font-semibold text-sm border border-green-200">
+                                      {stats.present}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-red-50 text-red-700 font-semibold text-sm border border-red-200">
+                                      {stats.absent}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-yellow-50 text-yellow-700 font-semibold text-sm border border-yellow-200">
+                                      {stats.late}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-center font-semibold text-slate-700">
+                                    {stats.total}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                         </TableBody>
                       </Table>
-                      <div className="p-3 border-t border-slate-200 bg-slate-50">
-                        <p className="text-xs text-slate-600 text-center">
-                          Showing <strong className="text-slate-800">{displayDates.length}</strong> date{displayDates.length !== 1 ? 's' : ''} with attendance records
+                      <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
+                        <p className="text-sm text-slate-600">
+                          Showing {(page - 1) * limit + 1} to {Math.min(page * limit, displayDates.length)} of {displayDates.length} dates
                         </p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            disabled={page === 1}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPage((p) => Math.min(Math.ceil(displayDates.length / limit), p + 1))}
+                            disabled={page === Math.ceil(displayDates.length / limit)}
+                          >
+                            Next
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1029,7 +1053,7 @@ export default function AttendanceBulkPage({
                       return (
                         <TableRow key={student.id}>
                           <TableCell className="text-center font-medium">
-                            {index + 1}
+                            {(page - 1) * limit + index + 1}
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col">
@@ -1069,9 +1093,9 @@ export default function AttendanceBulkPage({
                                 className={cn(
                                   "h-5 w-5 border-green-600",
                                   status === "present" &&
-                                    "bg-green-600 border-green-600",
+                                  "bg-green-600 border-green-600",
                                   (isHistory || !canMarkAttendance) &&
-                                    "opacity-50 cursor-not-allowed"
+                                  "opacity-50 cursor-not-allowed"
                                 )}
                               />
                             </div>
@@ -1093,9 +1117,9 @@ export default function AttendanceBulkPage({
                                 className={cn(
                                   "h-5 w-5 border-red-600",
                                   status === "absent" &&
-                                    "bg-red-600 border-red-600",
+                                  "bg-red-600 border-red-600",
                                   (isHistory || !canMarkAttendance) &&
-                                    "opacity-50 cursor-not-allowed"
+                                  "opacity-50 cursor-not-allowed"
                                 )}
                               />
                             </div>
@@ -1117,9 +1141,9 @@ export default function AttendanceBulkPage({
                                 className={cn(
                                   "h-5 w-5 border-yellow-600",
                                   status === "late" &&
-                                    "bg-yellow-600 border-yellow-600",
+                                  "bg-yellow-600 border-yellow-600",
                                   (isHistory || !canMarkAttendance) &&
-                                    "opacity-50 cursor-not-allowed"
+                                  "opacity-50 cursor-not-allowed"
                                 )}
                               />
                             </div>
@@ -1151,6 +1175,41 @@ export default function AttendanceBulkPage({
                   )}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          {studentsData?.pagination && studentsData.pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-slate-600">
+                Showing {(page - 1) * limit + 1} to {" "}
+                {Math.min(page * limit, studentsData.pagination.total)} of {" "}
+                {studentsData.pagination.total} students
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPage((p) => Math.max(1, p - 1));
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  disabled={page === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPage((p) =>
+                      Math.min(studentsData.pagination!.totalPages, p + 1),
+                    );
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  disabled={page === studentsData.pagination!.totalPages}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

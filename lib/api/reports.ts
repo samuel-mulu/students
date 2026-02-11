@@ -131,6 +131,13 @@ export interface ClassReportResponse {
     email?: string;
     classStatus: string;
   }>;
+  studentCount: number;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
   attendance: {
     averageAttendanceRate: number;
   };
@@ -152,14 +159,20 @@ export const reportsApi = {
     const response = await apiClient.get<StudentReportResponse>(`/api/reports/student/${studentId}`);
     return response.data;
   },
-  getClassReport: async (classId: string, term?: string): Promise<ClassReportResponse> => {
-    const params = term ? { term } : undefined;
+  getClassReport: async (classId: string, term?: string, page?: number, limit?: number): Promise<ClassReportResponse> => {
+    const params = {
+      ...(term ? { term } : {}),
+      ...(page ? { page } : {}),
+      ...(limit ? { limit } : {}),
+    };
     const response = await apiClient.get<any>(`/api/reports/class/${classId}`, { params });
     const backendData = response.data;
     // Transform backend response to match frontend expectations
     return {
       class: backendData.class,
       students: backendData.students || [],
+      studentCount: backendData.studentCount || 0,
+      pagination: backendData.pagination,
       attendance: {
         averageAttendanceRate: backendData.attendanceSummary?.averageAttendanceRate || 0,
       },

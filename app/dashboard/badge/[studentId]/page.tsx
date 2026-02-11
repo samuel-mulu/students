@@ -20,7 +20,7 @@ export default function BadgePage({
   const { studentId } = use(params);
   const [badgeType, setBadgeType] = useState<'full' | 'minimal'>('full');
   const { data: badgeData, isLoading, error } = useBadgePreview(studentId);
-  const { download } = useDownloadBadge();
+  const { download, downloadForWord } = useDownloadBadge();
 
   if (isLoading) {
     return <LoadingState rows={5} columns={2} />;
@@ -140,14 +140,25 @@ export default function BadgePage({
           <CardDescription>Download both front and back as a single PDF</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex justify-center">
+          <div className="flex flex-col gap-3 items-center">
             <Button
               onClick={() => handleDownload('pdf', 'combined')}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
             >
               <Download className="h-4 w-4 mr-2" />
               Download Combined PDF
             </Button>
+            <Button
+              onClick={() => downloadForWord(studentId, 'combined', badgeType === 'minimal')}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Download for Word (Editable)
+            </Button>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Word file can be edited to add multiple students on one page
+            </p>
           </div>
         </CardContent>
       </Card>

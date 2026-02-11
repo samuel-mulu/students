@@ -1,9 +1,10 @@
 'use client';
 
-import { Fragment, use, useMemo } from 'react';
-import { useClass } from '@/lib/hooks/use-classes';
-import { useRosterResultsSemesters } from '@/lib/hooks/use-results';
+import { BackButton } from '@/components/shared/BackButton';
+import { ErrorState } from '@/components/shared/ErrorState';
+import { LoadingState } from '@/components/shared/LoadingState';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -12,14 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { LoadingState } from '@/components/shared/LoadingState';
-import { ErrorState } from '@/components/shared/ErrorState';
+import { useClass } from '@/lib/hooks/use-classes';
+import { useRosterResultsSemesters } from '@/lib/hooks/use-results';
 import { formatFullName, getInitials } from '@/lib/utils/format';
-import { Award, Download, Printer } from 'lucide-react';
-import { BackButton } from '@/components/shared/BackButton';
 import { format } from 'date-fns';
+import { Award, Download, Printer } from 'lucide-react';
 import Link from 'next/link';
+import { Fragment, use, useEffect, useMemo, useState } from 'react';
 
 interface RosterSemestersResponse {
   class: { id: string; name: string };
@@ -59,6 +59,15 @@ export default function RosterResultsSemestersPage({
   const { classId } = use(params);
   const { data: classData } = useClass(classId);
   const { data: rosterData, isLoading, error } = useRosterResultsSemesters(classId);
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [limit] = useState(40);
+
+  // Reset page when class changes
+  useEffect(() => {
+    setPage(1);
+  }, [classId]);
 
   const roster = rosterData?.data as RosterSemestersResponse | undefined;
 
@@ -242,10 +251,10 @@ export default function RosterResultsSemestersPage({
                     const v = !subjectData
                       ? 0
                       : sem.key === 'term1'
-                      ? subjectData.term1Total
-                      : sem.key === 'term2'
-                      ? subjectData.term2Total
-                      : subjectData.averageTotal;
+                        ? subjectData.term1Total
+                        : sem.key === 'term2'
+                          ? subjectData.term2Total
+                          : subjectData.averageTotal;
                     return `<td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold;">${v.toFixed(2)}</td>`;
                   }).join('');
 

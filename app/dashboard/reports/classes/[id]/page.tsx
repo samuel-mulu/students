@@ -1,16 +1,20 @@
 'use client';
 
-import { use } from 'react';
-import { useClassReport } from '@/lib/hooks/use-reports';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
+import { LoadingState } from '@/components/shared/LoadingState';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useClassReport } from '@/lib/hooks/use-reports';
 import { formatFullName } from '@/lib/utils/format';
 import Link from 'next/link';
+import { use, useState } from 'react';
 
 export default function ClassReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, isLoading, error } = useClassReport(id);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+
+  const { data, isLoading, error } = useClassReport(id, undefined, page, limit);
 
   if (isLoading) {
     return <LoadingState rows={5} columns={4} />;
@@ -35,7 +39,7 @@ export default function ClassReportPage({ params }: { params: Promise<{ id: stri
             <CardTitle>Total Students</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{report.students.length}</p>
+            <p className="text-2xl font-bold">{report.studentCount}</p>
           </CardContent>
         </Card>
         <Card>
@@ -90,6 +94,42 @@ export default function ClassReportPage({ params }: { params: Promise<{ id: stri
               </tbody>
             </table>
           </div>
+
+          {report.pagination && report.pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {(page - 1) * limit + 1} to {" "}
+                {Math.min(page * limit, report.pagination.total)} of {" "}
+                {report.pagination.total} students
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPage((p) => Math.max(1, p - 1));
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  disabled={page === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPage((p) =>
+                      Math.min(report.pagination!.totalPages, p + 1),
+                    );
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  disabled={page === report.pagination!.totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
