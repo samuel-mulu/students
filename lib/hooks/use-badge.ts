@@ -72,40 +72,79 @@ const printBadge = (data: any, side: 'front' | 'back' | 'combined', minimal: boo
       <head>
         <title>ID Badge - ${data.student.firstName}</title>
         <style>
-          @page { size: 85.6mm 53.98mm; margin: 0; }
+          @page { size: 85.6mm 65mm; margin: 0; }
           body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
           .badge-container {
-            width: 85.6mm; height: 53.98mm;
+            width: 85.6mm; height: 65mm;
             position: relative; overflow: hidden;
-            border: 1px solid #eee; /* Light border for preview */
+            border: 1px solid #eee;
             page-break-after: always;
             display: flex; flex-direction: column;
             background-color: white;
           }
-          .header { display: flex; align-items: center; padding: 0 3mm; color: white; position: relative; }
-          .student-name { font-weight: bold; font-size: 8pt; text-transform: uppercase; flex: 1; }
-          .school-logo { width: 8mm; height: 8mm; object-fit: contain; }
-          .content { flex: 1; display: flex; padding: 2mm 3mm; gap: 2mm; }
-          .info { flex: 1; font-size: 6pt; color: #333; display: flex; flex-direction: column; gap: 1mm; }
-          .photo-container { width: 20mm; display: flex; align-items: center; justify-content: center; }
-          .student-photo { width: 18mm; height: 22mm; object-fit: cover; border: 0.5mm solid #eee; }
+          .header { display: flex; align-items: center; padding: 0 4mm; color: white; position: relative; gap: 2mm; }
+          .student-name { font-weight: 900; font-size: 14pt; color: #0044ff; text-transform: uppercase; flex: 1; text-shadow: 1px 1px 0px rgba(255,255,255,0.5); }
+          .school-logo { width: 14mm; height: 14mm; object-fit: contain; background: white; border-radius: 1mm; padding: 0.5mm; }
+          .content { flex: 1; display: flex; padding: 2mm 4mm; gap: 3mm; align-items: center; }
+          .info { flex: 1; font-size: 9pt; color: #000; display: flex; flex-direction: column; gap: 1.5mm; }
+          .photo-container { width: 22mm; display: flex; align-items: center; justify-content: center; }
+          .student-photo { width: 22mm; height: 26mm; object-fit: cover; border: 0.5mm solid #800020; }
           .qr-container { margin-top: 1mm; }
-          .footer { height: 8mm; border-top: 0.2mm solid #e0e0e0; display: flex; align-items: center; justify-content: center; font-size: 7pt; font-weight: bold; color: #800020; }
+          .footer { height: 7mm; border-top: 0.2mm solid #e0e0e0; display: flex; align-items: center; justify-content: center; font-size: 9pt; font-weight: bold; color: #800020; }
           
           .top-band { width: 100%; }
-          .center-content { flex: 1; display: flex; flexDirection: column; align-items: center; justify-content: center; text-align: center; gap: 1mm; }
-          .school-title { font-weight: bold; font-size: 10pt; letter-spacing: 0.4mm; }
-          .contacts { height: 10mm; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 6pt; border-top: 0.2mm solid #e0e0e0; }
-          .contact-label { color: #666; font-size: 5pt; }
+          .center-content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2mm; }
+          .school-title { font-weight: bold; font-size: 14pt; color: #800020; text-transform: uppercase; letter-spacing: 0.5mm; }
+          .contacts { height: 15mm; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10pt; border-top: 0.2mm solid #e0e0e0; gap: 1mm; }
+          .contact-label { color: #666; font-size: 8pt; font-weight: bold; }
+          .phone { font-weight: bold; color: #000; }
           
           @media print {
             .badge-container { border: none; }
+            .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           }
         </style>
       </head>
       <body>
-        ${side === 'combined' || side === 'front' ? frontHtml : ''}
-        ${side === 'combined' || side === 'back' ? backHtml : ''}
+        <div class="badge-container">
+          <div class="header" style="background-color: #800020; height: ${minimal ? '14mm' : '20mm'};">
+            <div class="student-name">${data.student.firstName} ${data.student.lastName}</div>
+            ${!minimal ? `<img src="${data.school.logoUrl || '/logo.jpg'}" class="school-logo" />` : ''}
+          </div>
+          <div class="content">
+            <div class="info">
+              ${!minimal ? `
+                <div class="field"><strong>Class:</strong> ${data.class?.grade?.name || 'N/A'}${data.class?.name ? ` - ${data.class.name}` : ''}</div>
+                <div class="field"><strong>Birthdate:</strong> ${new Date(data.student.dateOfBirth).toLocaleDateString()}</div>
+                <div class="field"><strong>Year:</strong> ${data.academicYear?.name || 'N/A'}</div>
+                <div class="field"><strong>Emergency:</strong> ${data.student.emergencyPhone || 'N/A'}</div>
+              ` : ''}
+              <div class="qr-container">
+                <img src="${qrDataUrl}" alt="QR" style="width: ${minimal ? '35mm' : '22mm'};" />
+              </div>
+            </div>
+            ${!minimal ? `
+              <div class="photo-container">
+                <img src="${data.student.profileImageUrl || '/placeholder-student.png'}" class="student-photo" />
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        ${side === 'combined' || side === 'back' ? `
+          <div class="badge-container">
+            <div class="top-band" style="background-color: #808080; height: 12mm;"></div>
+            <div class="center-content">
+              <img src="${data.school.logoUrl || '/logo.jpg'}" style="width: 22mm; height: 22mm; object-fit: contain;" />
+              <div class="school-title">DIGITAL KG</div>
+            </div>
+            <div class="contacts">
+              <div class="contact-label">Contact Numbers:</div>
+              <div class="phone">0992023823</div>
+              <div class="phone">0914151769</div>
+            </div>
+          </div>
+        ` : ''}
       </body>
     </html>
   `;
