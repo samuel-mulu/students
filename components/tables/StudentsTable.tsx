@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Student } from "@/lib/types";
+import { getOptimizedCloudinaryUrl } from "@/lib/utils/cloudinary";
 import { formatFullName } from "@/lib/utils/format";
 import {
   ArrowRightLeft,
@@ -115,7 +116,7 @@ export function StudentsTable({
                       <Avatar className="h-10 w-10">
                         {student.profileImageUrl ? (
                           <AvatarImage
-                            src={student.profileImageUrl}
+                            src={getOptimizedCloudinaryUrl(student.profileImageUrl, { width: 80 })}
                             alt={formatFullName(
                               student.firstName,
                               student.lastName,

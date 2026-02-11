@@ -1,6 +1,7 @@
 "use client";
 
 import { BadgeData } from "@/lib/api/badge";
+import { getOptimizedCloudinaryUrl } from '@/lib/utils/cloudinary';
 
 interface BadgeBackProps {
   data: BadgeData;
@@ -46,19 +47,25 @@ export function BadgeBack({ data }: BadgeBackProps) {
             textAlign: "center",
           }}
         >
-          <img
-            src={data.school.logoUrl || "/logo.jpg"}
-            alt="School Logo"
+          <div
             style={{
-              width: "16mm",
-              height: "16mm",
-              objectFit: "contain",
-              marginBottom: "1mm",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = "/logo.jpg";
-            }}
-          />
+          >
+            {data.school.logoUrl && (
+              <img
+                src={getOptimizedCloudinaryUrl(data.school.logoUrl, { width: 200 }) || '/logo.jpg'}
+                alt="School Logo"
+                style={{
+                  width: "16mm",
+                  height: "16mm",
+                  objectFit: "contain",
+                }}
+              />
+            )}
+          </div>
           <div
             style={{
               fontSize: "10pt",

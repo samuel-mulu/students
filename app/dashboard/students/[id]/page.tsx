@@ -1,25 +1,23 @@
 'use client';
 
-import { use, useState, useMemo } from 'react';
-import { useStudent, useAssignClass, useTransferClass } from '@/lib/hooks/use-students';
-import { usePayments } from '@/lib/hooks/use-payments';
-import { useAttendance } from '@/lib/hooks/use-attendance';
-import { useResults } from '@/lib/hooks/use-results';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { LoadingState } from '@/components/shared/LoadingState';
-import { ErrorState } from '@/components/shared/ErrorState';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { formatDate, formatFullName, formatCurrency, formatMonthYear } from '@/lib/utils/format';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssignClassDialog } from '@/components/forms/AssignClassDialog';
 import { TransferClassDialog } from '@/components/forms/TransferClassDialog';
-import { useAuthStore } from '@/lib/store/auth-store';
-import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { BackButton } from '@/components/shared/BackButton';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorState } from '@/components/shared/ErrorState';
 import { ImageViewerDialog } from '@/components/shared/ImageViewerDialog';
+import { LoadingState } from '@/components/shared/LoadingState';
+import { ReceiptDialog } from '@/components/shared/ReceiptDialog';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -28,16 +26,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ReceiptDialog } from '@/components/shared/ReceiptDialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { DollarSign, TrendingUp, FileText, Calendar, BookOpen, Award, CheckCircle2, XCircle, Clock, Image as ImageIcon, IdCard } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useCalendarSystem } from '@/lib/context/calendar-context';
+import { useAttendance } from '@/lib/hooks/use-attendance';
+import { usePayments } from '@/lib/hooks/use-payments';
+import { useResults } from '@/lib/hooks/use-results';
+import { useAssignClass, useStudent, useTransferClass } from '@/lib/hooks/use-students';
+import { useAuthStore } from '@/lib/store/auth-store';
+import { getOptimizedCloudinaryUrl } from '@/lib/utils/cloudinary';
+import { formatCurrency, formatDate, formatFullName, formatMonthYear } from '@/lib/utils/format';
 import { format } from 'date-fns';
+import { Award, BookOpen, Calendar, CheckCircle2, Clock, DollarSign, FileText, IdCard, Image as ImageIcon, TrendingUp, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { use, useMemo, useState } from 'react';
 
 export default function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -64,7 +65,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
   // Fetch student basic info
   const { data, isLoading, error } = useStudent(id);
-  
+
   // Fetch detailed data for tabs (only when tab is active)
   const { data: paymentsData, isLoading: paymentsLoading } = usePayments(
     activeTab === 'payments' ? { studentId: id } : undefined
@@ -94,8 +95,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     const pendingPayments = payments.filter(p => p.status === 'pending');
     const totalPaid = confirmedPayments.reduce((sum, p) => sum + p.amount, 0);
     const totalPending = pendingPayments.reduce((sum, p) => sum + p.amount, 0);
-    const paymentProgress = payments.length > 0 
-      ? (confirmedPayments.length / payments.length) * 100 
+    const paymentProgress = payments.length > 0
+      ? (confirmedPayments.length / payments.length) * 100
       : 0;
     return { confirmedPayments, pendingPayments, totalPaid, totalPending, paymentProgress };
   }, [payments]);
@@ -111,8 +112,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       } else {
         // Convert month name to yyyy-MM format
         try {
-          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                             'July', 'August', 'September', 'October', 'November', 'December'];
+          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'];
           const monthIndex = monthNames.findIndex(m => m.toLowerCase() === payment.month.toLowerCase());
           if (monthIndex >= 0) {
             monthKey = `${payment.year}-${String(monthIndex + 1).padStart(2, '0')}`;
@@ -126,7 +127,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           monthKey = `${payment.year}-${payment.month}`;
         }
       }
-      
+
       if (!monthMap.has(monthKey)) {
         monthMap.set(monthKey, { paid: 0, pending: 0 });
       }
@@ -154,11 +155,11 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     if (!attendanceData?.data) {
       return [];
     }
-    
+
     // Handle different response structures
     let result: any[] = [];
     const data = attendanceData.data as any;
-    
+
     if (Array.isArray(data)) {
       // Direct array response
       result = data;
@@ -171,7 +172,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
         result = data.data;
       }
     }
-    
+
     return result;
   }, [attendanceData?.data]);
 
@@ -215,11 +216,11 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     if (!marksData?.data) {
       return [];
     }
-    
+
     // Handle different response structures
     let result: any[] = [];
     const data = marksData.data as any;
-    
+
     if (Array.isArray(data)) {
       // Direct array response
       result = data;
@@ -234,7 +235,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
         result = data.data;
       }
     }
-    
+
     return result;
   }, [marksData?.data]);
 
@@ -245,11 +246,11 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       marks: typeof marks;
       average: number;
     }>();
-    
+
     marks.forEach(mark => {
       const subjectId = mark.subjectId;
       const subjectName = (mark as any).subject?.name || 'Unknown';
-      
+
       if (!subjectMap.has(subjectId)) {
         subjectMap.set(subjectId, {
           subjectId,
@@ -260,7 +261,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       }
       subjectMap.get(subjectId)!.marks.push(mark);
     });
-    
+
     return Array.from(subjectMap.values()).map(subjectData => {
       const validMarks = subjectData.marks.filter(m => m.score !== undefined && m.maxScore !== undefined);
       const average = validMarks.length > 0
@@ -328,7 +329,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
             >
               <Avatar className="h-16 w-16">
                 {student.profileImageUrl ? (
-                  <AvatarImage src={student.profileImageUrl} alt={formatFullName(student.firstName, student.lastName)} />
+                  <AvatarImage src={getOptimizedCloudinaryUrl(student.profileImageUrl, { width: 128 })} alt={formatFullName(student.firstName, student.lastName)} />
                 ) : null}
                 <AvatarFallback className="bg-indigo-100 text-indigo-700 font-semibold text-lg">
                   {initials}
@@ -629,7 +630,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                             // Fallback to current date if parsing fails
                             monthDate = new Date();
                           }
-                          
+
                           return (
                             <div key={monthData.month} className="flex-1 flex flex-col items-center gap-1">
                               <div className="w-full flex flex-col justify-end h-full gap-0.5">
@@ -874,7 +875,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                             // Fallback to current date if parsing fails
                             monthDate = new Date();
                           }
-                          
+
                           return (
                             <div key={monthData.month} className="flex-1 flex flex-col items-center gap-1">
                               <div className="w-full flex flex-col justify-end h-full gap-0.5">
@@ -961,8 +962,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                                     record.status === 'present'
                                       ? 'bg-green-100 text-green-800'
                                       : record.status === 'late'
-                                      ? 'bg-yellow-100 text-yellow-800'
-                                      : 'bg-red-100 text-red-800'
+                                        ? 'bg-yellow-100 text-yellow-800'
+                                        : 'bg-red-100 text-red-800'
                                   }
                                 >
                                   {record.status}
@@ -1070,7 +1071,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                       <div className="flex items-end gap-2 h-64">
                         {marksBySubject.map((subjectData) => {
                           const height = (subjectData.average / maxMarksAverage) * 100;
-                          
+
                           return (
                             <div key={subjectData.subjectId} className="flex-1 flex flex-col items-center gap-1">
                               <div className="w-full flex flex-col justify-end h-full">
@@ -1125,7 +1126,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                             const subjectName = (mark as any).subject?.name || 'Unknown';
                             const termName = (mark as any).term?.name || 'Unknown';
                             const subExamName = (mark as any).subExam?.name || 'Unknown';
-                            
+
                             return (
                               <TableRow key={mark.id}>
                                 <TableCell className="font-medium">

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { studentsApi } from '@/lib/api/students';
-import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Image as ImageIcon, Loader2, Upload, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 interface ImageUploadProps {
   value?: string; // Current image URL
@@ -25,6 +25,7 @@ export function ImageUpload({
 }: ImageUploadProps) {
   const [preview, setPreview] = useState<string | null>(value || null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -38,16 +39,14 @@ export function ImageUpload({
       return;
     }
 
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image size must be less than 5MB');
-      return;
-    }
-
     setError(null);
-    setIsUploading(true);
 
-    // Create preview
+    // Dynamically import to keep bundle smaller
+    const imageCompression = (await import('browser-image-compression')).default;
+
+    let fileToUpload = file;
+
+    // Show preview immediately for original file
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreview(reader.result as string);
@@ -55,18 +54,36 @@ export function ImageUpload({
     reader.readAsDataURL(file);
 
     try {
+      setIsCompressing(true);
+
+      const compressionOptions = {
+        maxSizeMB: 0.5, // Aim for < 500KB
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+      };
+
+      console.log('Original size:', file.size / 1024 / 1024, 'MB');
+
+      fileToUpload = await imageCompression(file, compressionOptions);
+
+      console.log('Compressed size:', fileToUpload.size / 1024 / 1024, 'MB');
+
+      setIsCompressing(false);
+      setIsUploading(true);
+
       // Upload to Cloudinary
-      const result = await studentsApi.uploadImage(file);
+      const result = await studentsApi.uploadImage(fileToUpload);
       onChange(result.imageUrl);
       setPreview(result.imageUrl);
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Failed to upload image');
-      setPreview(null);
-      // Reset file input
+      console.error('Upload Error:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to process image');
+      setPreview(value || null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     } finally {
+      setIsCompressing(false);
       setIsUploading(false);
     }
   };
@@ -136,10 +153,15 @@ export function ImageUpload({
               type="button"
               variant="outline"
               onClick={handleClick}
-              disabled={disabled || isUploading}
+              disabled={disabled || isUploading || isCompressing}
               className="flex items-center gap-2"
             >
-              {isUploading ? (
+              {isCompressing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Compressing...
+                </>
+              ) : isUploading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Uploading...

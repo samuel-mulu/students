@@ -1,6 +1,7 @@
 "use client";
 
 import { BadgeData } from "@/lib/api/badge";
+import { getOptimizedCloudinaryUrl } from '@/lib/utils/cloudinary';
 import { format } from "date-fns";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -118,19 +119,18 @@ export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
               {data.student.firstName} {data.student.lastName}
             </div>
           </div>
-          {!minimal && (
+          {!minimal && data.school.logoUrl && (
             <div style={{ display: "flex", alignItems: "center" }}>
               <img
-                src={data.school.logoUrl || "/logo.jpg"}
+                src={getOptimizedCloudinaryUrl(data.school.logoUrl, { width: 200 }) || "/logo.jpg"}
                 alt="School Logo"
                 style={{
                   width: "8mm",
                   height: "8mm",
                   objectFit: "contain",
-                  marginRight: "2mm",
-                }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/logo.jpg";
+                  backgroundColor: "white",
+                  borderRadius: "1mm",
+                  padding: "0.5mm",
                 }}
               />
             </div>
