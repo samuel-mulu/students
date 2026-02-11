@@ -116,7 +116,7 @@ export function StudentsTable({
                       <Avatar className="h-10 w-10">
                         {student.profileImageUrl ? (
                           <AvatarImage
-                            src={getOptimizedCloudinaryUrl(student.profileImageUrl, { width: 80 })}
+                            src={getOptimizedCloudinaryUrl(student.profileImageUrl, { width: 80 }) ?? undefined}
                             alt={formatFullName(
                               student.firstName,
                               student.lastName,

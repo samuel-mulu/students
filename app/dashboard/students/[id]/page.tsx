@@ -329,7 +329,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
             >
               <Avatar className="h-16 w-16">
                 {student.profileImageUrl ? (
-                  <AvatarImage src={getOptimizedCloudinaryUrl(student.profileImageUrl, { width: 128 })} alt={formatFullName(student.firstName, student.lastName)} />
+                  <AvatarImage src={getOptimizedCloudinaryUrl(student.profileImageUrl, { width: 128 }) ?? undefined} alt={formatFullName(student.firstName, student.lastName)} />
                 ) : null}
                 <AvatarFallback className="bg-indigo-100 text-indigo-700 font-semibold text-lg">
                   {initials}
