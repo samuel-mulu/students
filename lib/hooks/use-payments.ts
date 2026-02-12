@@ -1,6 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { paymentsApi } from '@/lib/api/payments';
-import { CreatePaymentRequest, CreateBulkPaymentRequest, ConfirmPaymentRequest, ConfirmBulkPaymentsRequest } from '@/lib/types';
+import { ConfirmBulkPaymentsRequest, ConfirmPaymentRequest, CreateBulkPaymentRequest, CreatePaymentRequest } from '@/lib/types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 export function usePayments(params?: {
@@ -8,6 +8,9 @@ export function usePayments(params?: {
   status?: 'pending' | 'confirmed';
   month?: string;
   year?: number;
+  paymentDate?: string;
+  limit?: number;
+  page?: number;
 }) {
   return useQuery({
     queryKey: ['payments', params],

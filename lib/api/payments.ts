@@ -1,11 +1,11 @@
-import apiClient from './client';
 import {
-  Payment,
-  CreatePaymentRequest,
-  CreateBulkPaymentRequest,
-  ConfirmPaymentRequest,
-  Receipt
+    ConfirmPaymentRequest,
+    CreateBulkPaymentRequest,
+    CreatePaymentRequest,
+    Payment,
+    Receipt
 } from '@/lib/types';
+import apiClient from './client';
 
 // Backend returns { payments: Payment[], pagination: {...} }
 interface PaymentsBackendResponse {
@@ -59,6 +59,9 @@ export const paymentsApi = {
     status?: 'pending' | 'confirmed';
     month?: string;
     year?: number;
+    paymentDate?: string;
+    limit?: number;
+    page?: number;
   }): Promise<Payment[]> => {
     const response = await apiClient.get<PaymentsBackendResponse>('/api/payments', { params });
     // Response interceptor extracts data, backend returns { payments, pagination }

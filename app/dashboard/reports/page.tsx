@@ -53,19 +53,15 @@ function PaymentStudentsModal({
   date: string;
   calendarSystem: any;
 }) {
-  const [year] = date.split('-').map(Number);
-  const monthStr = `${date.split('-')[0]}-${date.split('-')[1]}`;
-
   const { data: paymentsData, isLoading } = usePayments({
-    month: monthStr,
-    year: year
+    paymentDate: date,
+    status: 'confirmed',
+    limit: 1000
   });
 
   const students = useMemo(() => {
-    if (!paymentsData?.data) return [];
-    // The paymentDate from backend might be an ISO string, so we extract the date part
-    return paymentsData.data.filter((p: any) => p.paymentDate?.split('T')[0] === date);
-  }, [paymentsData, date]);
+    return paymentsData?.data || [];
+  }, [paymentsData]);
 
   const totalAmount = useMemo(() =>
     students.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
@@ -1374,8 +1370,15 @@ export default function ReportsPage() {
                         {dailyTableData.rows.map((row) => {
                           const date = new Date(row.date);
                           return (
-                            <TableRow key={row.date}>
-                              <TableCell className="sticky left-0 bg-background z-10 font-medium">
+                            <TableRow
+                              key={row.date}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => {
+                                setModalDate(row.date);
+                                setIsStudentModalOpen(true);
+                              }}
+                            >
+                              <TableCell className="sticky left-0 bg-background z-10 font-medium whitespace-nowrap">
                                 {formatDate(date, calendarSystem)}
                               </TableCell>
                               {dailyTableData.paymentTypes.map((pt) => {
@@ -1419,18 +1422,25 @@ export default function ReportsPage() {
           </TabsContent>
         </Tabs>
 
+        <PaymentStudentsModal
+          isOpen={isStudentModalOpen}
+          onClose={() => setIsStudentModalOpen(false)}
+          date={modalDate}
+          calendarSystem={calendarSystem}
+        />
+
         {/* Print Styles */}
         <style jsx global>{`
-          @media print {
-            .no-print {
-              display: none !important;
-            }
-            body {
-              print-color-adjust: exact;
-              -webkit-print-color-adjust: exact;
-            }
+        @media print {
+          .no-print {
+            display: none !important;
           }
-        `}</style>
+          body {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+        }
+      `}</style>
       </div>
     );
   }
@@ -2043,8 +2053,15 @@ export default function ReportsPage() {
                       {dailyTableData.rows.map((row) => {
                         const date = new Date(row.date);
                         return (
-                          <TableRow key={row.date}>
-                            <TableCell className="sticky left-0 bg-background z-10 font-medium">
+                          <TableRow
+                            key={row.date}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => {
+                              setModalDate(row.date);
+                              setIsStudentModalOpen(true);
+                            }}
+                          >
+                            <TableCell className="sticky left-0 bg-background z-10 font-medium whitespace-nowrap">
                               {formatDate(date, calendarSystem)}
                             </TableCell>
                             {dailyTableData.paymentTypes.map((pt) => {
