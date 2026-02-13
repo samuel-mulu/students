@@ -107,73 +107,64 @@ export default function BadgePage({
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        {/* Front Badge */}
+        {/* Front Badge Preview */}
         <Card>
           <CardHeader>
             <CardTitle>ID Badge Preview</CardTitle>
             <CardDescription>Front side with school contact information</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <div className="flex justify-center bg-slate-50 p-4 rounded-lg border-2 border-dashed border-slate-300 overflow-hidden">
               <div style={{ transform: 'scale(1.5)', transformOrigin: 'top center', paddingBottom: '30mm' }}>
                 <BadgeFront data={badgeData.data} minimal={badgeType === 'minimal'} photoStyle={photoStyle} />
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 justify-center">
+          </CardContent>
+        </Card>
+
+        {/* Download Options */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Download Options</CardTitle>
+            <CardDescription>Export your student ID badge</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Button
-                variant="outline"
-                size="sm"
                 onClick={() => handleDownload('pdf', 'front')}
                 disabled={!!isDownloading}
+                className="bg-blue-600 hover:bg-blue-700 w-full"
               >
-                <FileText className="h-4 w-4 mr-2" />
+                <Download className="h-4 w-4 mr-2" />
                 {isDownloading === 'pdf-front' ? 'Downloading...' : 'Download PDF'}
               </Button>
+
               <Button
-                variant="outline"
-                size="sm"
                 onClick={() => handleDownload('png', 'front')}
                 disabled={!!isDownloading}
+                variant="outline"
+                className="w-full"
               >
                 <ImageIcon className="h-4 w-4 mr-2" />
                 {isDownloading === 'png-front' ? 'Downloading...' : 'Download PNG'}
               </Button>
+
+              <Button
+                onClick={handleDownloadForWord}
+                disabled={!!isDownloading}
+                variant="outline"
+                className="w-full text-blue-600 border-blue-200 hover:bg-blue-50"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {isDownloading === 'word' ? 'Downloading...' : 'Download for Word'}
+              </Button>
             </div>
+            <p className="text-xs text-muted-foreground text-center mt-4">
+              Total 1 side (Front). Word file is editable for bulk printing.
+            </p>
           </CardContent>
         </Card>
       </div>
-
-      {/* Download Options */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Download Options</CardTitle>
-          <CardDescription>Export your student ID badge</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-3 items-center">
-            <Button
-              onClick={() => handleDownload('pdf', 'front')}
-              disabled={!!isDownloading}
-              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {isDownloading === 'pdf-front' ? 'Downloading...' : 'Download PDF Badge'}
-            </Button>
-            <Button
-              onClick={handleDownloadForWord}
-              disabled={!!isDownloading}
-              variant="outline"
-              className="w-full sm:w-auto"
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              {isDownloading === 'word' ? 'Downloading...' : 'Download for Word (Editable)'}
-            </Button>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              Word file can be edited to add multiple students on one page
-            </p>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

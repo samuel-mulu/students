@@ -1,5 +1,6 @@
 import { badgeApi } from '@/lib/api/badge';
 import { useQuery } from '@tanstack/react-query';
+import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
 
 export function useBadgePreview(studentId: string) {
@@ -180,18 +181,29 @@ export function useDownloadBadge() {
           return;
         }
 
-        // Keep PNG as is (backend)
-        const blob = await badgeApi.downloadBadge(studentId, format, side, minimal, photoStyle);
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const extension = format;
-        const sideName = side === 'combined' ? 'combined' : side;
-        link.download = `badge-${studentId}-${sideName}.${extension}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        if (format === 'png') {
+          const badgeElement = document.querySelector('.badge-front') as HTMLElement;
+          if (!badgeElement) {
+            throw new Error('Badge preview element not found');
+          }
+
+          const canvas = await html2canvas(badgeElement, {
+            scale: 4, // Higher scale for better quality
+            useCORS: true,
+            backgroundColor: null,
+          });
+
+          const url = canvas.toDataURL('image/png');
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `badge-${studentId}-front.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          return;
+        }
+
+        return;
       } catch (error: any) {
         toast.error('Download failed', {
           description: error.message || 'An unexpected error occurred'
