@@ -36,10 +36,11 @@ export const badgeApi = {
     studentId: string,
     format: 'pdf' | 'png' = 'pdf',
     side: 'front' | 'back' | 'combined' = 'combined',
-    minimal: boolean = false
+    minimal: boolean = false,
+    photoStyle: 'square' | 'rounded' | 'circle' = 'square'
   ): Promise<Blob> => {
     const response = await apiClient.get(
-      `/api/badge/${studentId}?format=${format}&side=${side}${minimal ? '&minimal=true' : ''}`,
+      `/api/badge/${studentId}?format=${format}&side=${side}${minimal ? '&minimal=true' : ''}&photoStyle=${photoStyle}`,
       {
         responseType: 'blob',
       }

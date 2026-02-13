@@ -1,16 +1,16 @@
 "use client";
 
 import { BadgeData } from "@/lib/api/badge";
-import { getOptimizedCloudinaryUrl } from '@/lib/utils/cloudinary';
 import { format } from "date-fns";
 import { QRCodeSVG } from "qrcode.react";
 
 interface BadgeFrontProps {
   data: BadgeData;
   minimal?: boolean;
+  photoStyle?: 'square' | 'rounded' | 'circle';
 }
 
-export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
+export function BadgeFront({ data, minimal = false, photoStyle = 'square' }: BadgeFrontProps) {
   const dob = new Date(data.student.dateOfBirth);
   const formattedDob = format(dob, "MM/dd/yyyy");
 
@@ -79,7 +79,7 @@ export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
         <div
           style={{
             backgroundColor: "#800020",
-            height: minimal ? "12mm" : "18mm",
+            height: minimal ? "10mm" : "14mm",
             position: "relative",
             display: "flex",
             alignItems: "center",
@@ -119,22 +119,6 @@ export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
               {data.student.firstName} {data.student.lastName}
             </div>
           </div>
-          {!minimal && data.school.logoUrl && (
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <img
-                src={getOptimizedCloudinaryUrl(data.school.logoUrl, { width: 200 }) || "/logo.jpg"}
-                alt="School Logo"
-                style={{
-                  width: "8mm",
-                  height: "8mm",
-                  objectFit: "contain",
-                  backgroundColor: "white",
-                  borderRadius: "1mm",
-                  padding: "0.5mm",
-                }}
-              />
-            </div>
-          )}
         </div>
 
         {/* Main Content */}
@@ -230,6 +214,7 @@ export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
               style={{
                 width: "22mm",
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -238,10 +223,11 @@ export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
                 src={data.student.profileImageUrl || "/placeholder-student.png"}
                 alt="Student Photo"
                 style={{
-                  width: "20mm",
-                  height: "25mm",
+                  width: photoStyle === 'circle' ? "22mm" : "20mm",
+                  height: photoStyle === 'circle' ? "22mm" : "25mm",
                   objectFit: "cover",
                   border: "1mm solid white",
+                  borderRadius: photoStyle === 'circle' ? "50%" : photoStyle === 'rounded' ? "2mm" : "0",
                   boxShadow: "0 1mm 2mm rgba(0, 0, 0, 0.1)",
                   background: "#f0f0f0",
                 }}
@@ -250,6 +236,19 @@ export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
                     "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ddd%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-family=%22Arial%22 font-size=%2214%22%3ENo Photo%3C/text%3E%3C/svg%3E";
                 }}
               />
+              <div
+                style={{
+                  marginTop: "1.5mm",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "0.2mm",
+                }}
+              >
+                <div style={{ fontSize: "5pt", fontWeight: "bold", color: "#666" }}>Contact:</div>
+                <div style={{ fontSize: "5.5pt", fontWeight: "bold", color: "#333" }}>0992023823</div>
+                <div style={{ fontSize: "5.5pt", fontWeight: "bold", color: "#333" }}>0914151769</div>
+              </div>
             </div>
           )}
         </div>
@@ -257,7 +256,7 @@ export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
         {/* Footer */}
         <div
           style={{
-            height: "12mm",
+            height: "6mm",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -265,11 +264,6 @@ export function BadgeFront({ data, minimal = false }: BadgeFrontProps) {
             borderTop: "0.5mm solid #e0e0e0",
           }}
         >
-          <div
-            style={{ fontSize: "6pt", fontWeight: "bold", color: "#800020", textAlign: "center" }}
-          >
-            DIGITAL KG
-          </div>
         </div>
       </div>
     </div>
