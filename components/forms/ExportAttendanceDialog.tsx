@@ -85,8 +85,17 @@ export function ExportAttendanceDialog({
   };
 
   const handleCSVExport = (data: any[]) => {
+    // Sort students alphabetically by first name
+    const sortedData = [...data].sort((a, b) => {
+      const studentA = a.student || a;
+      const studentB = b.student || b;
+      const firstNameA = studentA.firstName || '';
+      const firstNameB = studentB.firstName || '';
+      return firstNameA.localeCompare(firstNameB);
+    });
+
     const headers = ['No', 'Student Name', 'Status', 'Reason', 'Date', 'Class'];
-    const rows = data.map((item, index) => {
+    const rows = sortedData.map((item, index) => {
       const student = item.student || item;
       const attendance = item.attendance || item;
 
@@ -126,7 +135,16 @@ export function ExportAttendanceDialog({
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const rows = data.map((item, index) => {
+    // Sort students alphabetically by first name
+    const sortedData = [...data].sort((a, b) => {
+      const studentA = a.student || a;
+      const studentB = b.student || b;
+      const firstNameA = studentA.firstName || '';
+      const firstNameB = studentB.firstName || '';
+      return firstNameA.localeCompare(firstNameB);
+    });
+
+    const rows = sortedData.map((item, index) => {
       const student = item.student || item;
       const attendance = item.attendance || item;
 

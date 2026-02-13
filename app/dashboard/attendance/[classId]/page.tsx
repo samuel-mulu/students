@@ -971,17 +971,150 @@ export default function AttendanceBulkPage({
       {/* Students Attendance Table */}
       <Card className="border shadow-sm border-slate-200">
         <CardHeader className="border-b bg-slate-50 border-slate-200">
-          <div className="flex items-center gap-3">
-            <Users className="h-5 w-5 text-slate-600" />
-            <div>
-              <CardTitle className="text-slate-900">
-                Students Attendance
-              </CardTitle>
-              <CardDescription className="text-slate-600">
-                {students.length}{" "}
-                {students.length === 1 ? "student" : "students"} in class
-                {isHistory && " • Historical Record"}
-              </CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Users className="h-5 w-5 text-slate-600" />
+              <div>
+                <CardTitle className="text-slate-900">
+                  Students Attendance
+                </CardTitle>
+                <CardDescription className="text-slate-600">
+                  {students.length}{" "}
+                  {students.length === 1 ? "student" : "students"} in class
+                  {isHistory && " • Historical Record"}
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Export student list to CSV (alphabetically sorted)
+                  const headers = ['No', 'Student Name', 'Class', 'Present', 'Absent', 'Late', 'Reason'];
+                  const rows = sortedStudents.map((student, index) => {
+                    const status = attendanceStates[student.id] || 'present';
+                    const notes = attendanceNotes[student.id] || '';
+                    const getClassName = (student: any): string => {
+                      if ('classHistory' in student && Array.isArray(student.classHistory)) {
+                        const activeClass = student.classHistory.find((ch: any) => !ch.endDate);
+                        if (activeClass?.class?.name) return activeClass.class.name;
+                      }
+                      return classData?.data?.name || 'Not Assigned';
+                    };
+                    return [
+                      (index + 1).toString(),
+                      formatFullName(student.firstName, student.lastName).replace(/,/g, ' '),
+                      getClassName(student).replace(/,/g, ' '),
+                      status === 'present' ? 'Yes' : 'No',
+                      status === 'absent' ? 'Yes' : 'No',
+                      status === 'late' ? 'Yes' : 'No',
+                      notes.replace(/,/g, ' ') || '-'
+                    ];
+                  });
+                  const csvContent = [
+                    headers.join(','),
+                    ...rows.map(row => row.join(','))
+                  ].join('\n');
+                  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                  const link = document.createElement('a');
+                  const url = URL.createObjectURL(blob);
+                  link.setAttribute('href', url);
+                  link.setAttribute('download', `attendance-students-${classData?.data?.name || 'class'}-${selectedDate}.csv`);
+                  link.style.visibility = 'hidden';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="text-xs"
+                disabled={sortedStudents.length === 0}
+              >
+                <Download className="h-3 w-3 mr-1" />
+                Export
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Print student list (alphabetically sorted)
+                  const printWindow = window.open('', '_blank');
+                  if (!printWindow) return;
+                  const studentRows = sortedStudents.map((student, index) => {
+                    const status = attendanceStates[student.id] || 'present';
+                    const notes = attendanceNotes[student.id] || '';
+                    const getClassName = (student: any): string => {
+                      if ('classHistory' in student && Array.isArray(student.classHistory)) {
+                        const activeClass = student.classHistory.find((ch: any) => !ch.endDate);
+                        if (activeClass?.class?.name) return activeClass.class.name;
+                      }
+                      return classData?.data?.name || 'Not Assigned';
+                    };
+                    const statusColor = status === 'present' ? '#16a34a' : status === 'absent' ? '#dc2626' : '#ca8a04';
+                    const statusText = status === 'present' ? 'Present' : status === 'absent' ? 'Absent' : 'Late';
+                    return `
+                      <tr>
+                        <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: center;">${index + 1}</td>
+                        <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: 600;">${formatFullName(student.firstName, student.lastName)}</td>
+                        <td style="padding: 10px; border: 1px solid #e5e7eb;">${getClassName(student)}</td>
+                        <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: center; color: ${statusColor}; font-weight: 600;">${statusText}</td>
+                        <td style="padding: 10px; border: 1px solid #e5e7eb;">${notes || '-'}</td>
+                      </tr>
+                    `;
+                  }).join('');
+                  const htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                      <head>
+                        <title>Attendance - ${classData?.data?.name || 'Class'} - ${formatDateForUI(selectedDate, calendarSystem)}</title>
+                        <style>
+                          body { font-family: Arial, sans-serif; margin: 20px; color: #000; }
+                          h1 { color: #1f2937; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; margin-bottom: 20px; }
+                          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                          th { background-color: #f3f4f6; padding: 12px; text-align: left; border: 1px solid #ddd; font-weight: bold; }
+                          td { padding: 10px; border: 1px solid #ddd; }
+                          .summary { margin-top: 20px; padding: 15px; background-color: #f9fafb; border: 1px solid #ddd; }
+                          @media print { body { margin: 0; } }
+                        </style>
+                      </head>
+                      <body>
+                        <h1>Student Attendance - ${classData?.data?.name || 'Class'}</h1>
+                        <p><strong>Date:</strong> ${formatDateForUI(selectedDate, calendarSystem)}</p>
+                        <p><strong>Total Students:</strong> ${sortedStudents.length}</p>
+                        <div class="summary">
+                          <strong>Present:</strong> ${currentDateStats.present} | 
+                          <strong>Absent:</strong> ${currentDateStats.absent} | 
+                          <strong>Late:</strong> ${currentDateStats.late}
+                        </div>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th style="width: 50px; text-align: center;">No</th>
+                              <th>Student Name</th>
+                              <th>Class</th>
+                              <th style="text-align: center;">Status</th>
+                              <th>Reason</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${studentRows}
+                          </tbody>
+                        </table>
+                      </body>
+                    </html>
+                  `;
+                  printWindow.document.write(htmlContent);
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => {
+                    printWindow.print();
+                  }, 250);
+                }}
+                className="text-xs"
+                disabled={sortedStudents.length === 0}
+              >
+                <Printer className="h-3 w-3 mr-1" />
+                Print
+              </Button>
             </div>
           </div>
         </CardHeader>

@@ -52,6 +52,13 @@ export default function ContinuousResultsPage({
     page,
     limit
   });
+
+  // Fetch ALL students for export (no pagination)
+  const { data: allStudentsData } = useStudents({
+    classId,
+    classStatus: 'assigned',
+    limit: 9999 // Large limit to get all students
+  });
   const { data: marksData, isLoading: marksLoading, refetch: refetchMarks } = useResultsByClassAndTerm(classId, subjectId, termId);
 
 
@@ -80,6 +87,7 @@ export default function ContinuousResultsPage({
   const marksInitializedRef = useRef(false);
 
   const students = Array.isArray(studentsData?.data) ? studentsData.data : [];
+  const allStudents = Array.isArray(allStudentsData?.data) ? allStudentsData.data : [];
 
   // Sort students alphabetically by first name (A, B, C...)
   const sortedStudents = useMemo(() => {
@@ -87,6 +95,13 @@ export default function ContinuousResultsPage({
       return (a.firstName || '').localeCompare(b.firstName || '');
     });
   }, [students]);
+
+  // Sort ALL students alphabetically for export
+  const allSortedStudents = useMemo(() => {
+    return [...allStudents].sort((a, b) => {
+      return (a.firstName || '').localeCompare(b.firstName || '');
+    });
+  }, [allStudents]);
 
   const subExams = Array.isArray(subExamsData?.data) ? subExamsData.data : [];
   const existingMarks = Array.isArray(marksData?.data) ? marksData.data : [];
@@ -736,7 +751,7 @@ export default function ContinuousResultsPage({
                 ...orderedSubExams.generalTests.map(se => se.name),
                 'Grand Total'
               ];
-              const rows = sortedStudents.map((student, index) => {
+              const rows = allSortedStudents.map((student, index) => {
                 const subtotals = calculateStudentSubtotals(student.id);
                 const getScore = (subExamId: string) =>
                   marks[student.id]?.[subExamId] ?? savedMarks[student.id]?.[subExamId] ?? 0;
@@ -784,7 +799,7 @@ export default function ContinuousResultsPage({
               const getScore = (studentId: string, subExamId: string) =>
                 marks[studentId]?.[subExamId] ?? savedMarks[studentId]?.[subExamId] ?? 0;
 
-              const tableRows = sortedStudents.map((student, index) => {
+              const tableRows = allSortedStudents.map((student, index) => {
                 const subtotals = calculateStudentSubtotals(student.id);
                 const studentName = formatFullName(student.firstName, student.lastName);
                 const quizCells = orderedSubExams.quizzes.map(se =>
