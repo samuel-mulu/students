@@ -71,16 +71,17 @@ export default function AttendanceBulkPage({
   const todayStr = today.toISOString().split("T")[0];
   const isHistoryMode = searchParams.get("history") === "true";
 
-  // Pagination state
+  // Pagination state for display only
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
 
   const { data: classData, isLoading: classLoading } = useClass(classId);
+  // Fetch ALL students for attendance recording (no pagination)
   const { data: studentsData, isLoading: studentsLoading } = useStudents({
     classId,
     classStatus: "assigned",
-    page,
-    limit,
+    page: 1,
+    limit: 1000, // Large limit to get all students
   });
 
   // Get available dates for history
@@ -1161,161 +1162,165 @@ export default function AttendanceBulkPage({
                       </TableCell>
                     </TableRow>
                   ) : (
-                    sortedStudents.map((student, index) => {
-                      const status = attendanceStates[student.id] || "present";
-                      const notes = attendanceNotes[student.id] || "";
-                      const showReason =
-                        status === "late" || status === "absent";
-                      // Get class name from student data
-                      const getClassName = (student: any): string => {
-                        if (
-                          "classHistory" in student &&
-                          Array.isArray(student.classHistory)
-                        ) {
-                          const activeClass = student.classHistory.find(
-                            (ch: any) => !ch.endDate
-                          );
-                          if (activeClass?.class?.name) {
-                            return activeClass.class.name;
+                    sortedStudents
+                      .slice((page - 1) * limit, page * limit)
+                      .map((student, displayIndex) => {
+                        // Calculate the actual index in the full list
+                        const actualIndex = (page - 1) * limit + displayIndex;
+                        const status = attendanceStates[student.id] || "present";
+                        const notes = attendanceNotes[student.id] || "";
+                        const showReason =
+                          status === "late" || status === "absent";
+                        // Get class name from student data
+                        const getClassName = (student: any): string => {
+                          if (
+                            "classHistory" in student &&
+                            Array.isArray(student.classHistory)
+                          ) {
+                            const activeClass = student.classHistory.find(
+                              (ch: any) => !ch.endDate
+                            );
+                            if (activeClass?.class?.name) {
+                              return activeClass.class.name;
+                            }
                           }
-                        }
-                        return classData?.data?.name || "Not Assigned";
-                      };
-                      const className = getClassName(student);
+                          return classData?.data?.name || "Not Assigned";
+                        };
+                        const className = getClassName(student);
 
-                      return (
-                        <TableRow key={student.id}>
-                          <TableCell className="text-center font-medium">
-                            {(page - 1) * limit + index + 1}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <h3 className="font-semibold">
-                                {formatFullName(
-                                  student.firstName,
-                                  student.lastName
-                                )}
-                              </h3>
-                              <p className="text-xs text-gray-500">
+                        return (
+                          <TableRow key={student.id}>
+                            <TableCell className="text-center font-medium">
+                              {actualIndex + 1}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <h3 className="font-semibold">
+                                  {formatFullName(
+                                    student.firstName,
+                                    student.lastName
+                                  )}
+                                </h3>
+                                <p className="text-xs text-gray-500">
+                                  {className}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="default"
+                                className="bg-blue-100 text-blue-800 border border-blue-300 font-medium"
+                              >
                                 {className}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="default"
-                              className="bg-blue-100 text-blue-800 border border-blue-300 font-medium"
-                            >
-                              {className}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-center">
-                              <Checkbox
-                                checked={status === "present"}
-                                disabled={isHistory || !canMarkAttendance}
-                                onCheckedChange={(checked) => {
-                                  if (
-                                    checked &&
-                                    !isHistory &&
-                                    canMarkAttendance
-                                  ) {
-                                    handleStatusChange(student.id, "present");
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-center">
+                                <Checkbox
+                                  checked={status === "present"}
+                                  disabled={isHistory || !canMarkAttendance}
+                                  onCheckedChange={(checked) => {
+                                    if (
+                                      checked &&
+                                      !isHistory &&
+                                      canMarkAttendance
+                                    ) {
+                                      handleStatusChange(student.id, "present");
+                                    }
+                                  }}
+                                  className={cn(
+                                    "h-5 w-5 border-green-600",
+                                    status === "present" &&
+                                    "bg-green-600 border-green-600",
+                                    (isHistory || !canMarkAttendance) &&
+                                    "opacity-50 cursor-not-allowed"
+                                  )}
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-center">
+                                <Checkbox
+                                  checked={status === "absent"}
+                                  disabled={isHistory || !canMarkAttendance}
+                                  onCheckedChange={(checked) => {
+                                    if (
+                                      checked &&
+                                      !isHistory &&
+                                      canMarkAttendance
+                                    ) {
+                                      handleStatusChange(student.id, "absent");
+                                    }
+                                  }}
+                                  className={cn(
+                                    "h-5 w-5 border-red-600",
+                                    status === "absent" &&
+                                    "bg-red-600 border-red-600",
+                                    (isHistory || !canMarkAttendance) &&
+                                    "opacity-50 cursor-not-allowed"
+                                  )}
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-center">
+                                <Checkbox
+                                  checked={status === "late"}
+                                  disabled={isHistory || !canMarkAttendance}
+                                  onCheckedChange={(checked) => {
+                                    if (
+                                      checked &&
+                                      !isHistory &&
+                                      canMarkAttendance
+                                    ) {
+                                      handleStatusChange(student.id, "late");
+                                    }
+                                  }}
+                                  className={cn(
+                                    "h-5 w-5 border-yellow-600",
+                                    status === "late" &&
+                                    "bg-yellow-600 border-yellow-600",
+                                    (isHistory || !canMarkAttendance) &&
+                                    "opacity-50 cursor-not-allowed"
+                                  )}
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {showReason ? (
+                                <Input
+                                  type="text"
+                                  placeholder={
+                                    status === "late"
+                                      ? "Reason for being late..."
+                                      : "Reason for absence..."
                                   }
-                                }}
-                                className={cn(
-                                  "h-5 w-5 border-green-600",
-                                  status === "present" &&
-                                  "bg-green-600 border-green-600",
-                                  (isHistory || !canMarkAttendance) &&
-                                  "opacity-50 cursor-not-allowed"
-                                )}
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-center">
-                              <Checkbox
-                                checked={status === "absent"}
-                                disabled={isHistory || !canMarkAttendance}
-                                onCheckedChange={(checked) => {
-                                  if (
-                                    checked &&
-                                    !isHistory &&
-                                    canMarkAttendance
-                                  ) {
-                                    handleStatusChange(student.id, "absent");
+                                  value={notes}
+                                  onChange={(e) =>
+                                    handleNotesChange(student.id, e.target.value)
                                   }
-                                }}
-                                className={cn(
-                                  "h-5 w-5 border-red-600",
-                                  status === "absent" &&
-                                  "bg-red-600 border-red-600",
-                                  (isHistory || !canMarkAttendance) &&
-                                  "opacity-50 cursor-not-allowed"
-                                )}
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-center">
-                              <Checkbox
-                                checked={status === "late"}
-                                disabled={isHistory || !canMarkAttendance}
-                                onCheckedChange={(checked) => {
-                                  if (
-                                    checked &&
-                                    !isHistory &&
-                                    canMarkAttendance
-                                  ) {
-                                    handleStatusChange(student.id, "late");
-                                  }
-                                }}
-                                className={cn(
-                                  "h-5 w-5 border-yellow-600",
-                                  status === "late" &&
-                                  "bg-yellow-600 border-yellow-600",
-                                  (isHistory || !canMarkAttendance) &&
-                                  "opacity-50 cursor-not-allowed"
-                                )}
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {showReason ? (
-                              <Input
-                                type="text"
-                                placeholder={
-                                  status === "late"
-                                    ? "Reason for being late..."
-                                    : "Reason for absence..."
-                                }
-                                value={notes}
-                                onChange={(e) =>
-                                  handleNotesChange(student.id, e.target.value)
-                                }
-                                disabled={isHistory && !canMarkAttendance}
-                                className="w-full min-w-[200px] text-sm"
-                                maxLength={200}
-                              />
-                            ) : (
-                              <span className="text-xs text-gray-400">-</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
+                                  disabled={isHistory && !canMarkAttendance}
+                                  className="w-full min-w-[200px] text-sm"
+                                  maxLength={200}
+                                />
+                              ) : (
+                                <span className="text-xs text-gray-400">-</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                   )}
                 </TableBody>
               </Table>
             </div>
           )}
-          {studentsData?.pagination && studentsData.pagination.totalPages > 1 && (
+          {sortedStudents.length > limit && (
             <div className="flex items-center justify-between mt-4">
               <p className="text-sm text-slate-600">
-                Showing {(page - 1) * limit + 1} to {" "}
-                {Math.min(page * limit, studentsData.pagination.total)} of {" "}
-                {studentsData.pagination.total} students
+                Showing {(page - 1) * limit + 1} to{" "}
+                {Math.min(page * limit, sortedStudents.length)} of{" "}
+                {sortedStudents.length} students
               </p>
               <div className="flex gap-2">
                 <Button
@@ -1334,11 +1339,11 @@ export default function AttendanceBulkPage({
                   size="sm"
                   onClick={() => {
                     setPage((p) =>
-                      Math.min(studentsData.pagination!.totalPages, p + 1),
+                      Math.min(Math.ceil(sortedStudents.length / limit), p + 1)
                     );
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
-                  disabled={page === studentsData.pagination!.totalPages}
+                  disabled={page === Math.ceil(sortedStudents.length / limit)}
                 >
                   Next
                 </Button>
