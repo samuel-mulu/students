@@ -12,7 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -47,6 +46,7 @@ import {
   Clock,
   Download,
   History as HistoryIcon,
+  MessageSquare,
   Printer,
   Save,
   Users,
@@ -73,7 +73,7 @@ export default function AttendanceBulkPage({
 
   // Pagination state for display only
   const [page, setPage] = useState(1);
-  const [limit] = useState(20);
+  const [limit] = useState(40);
 
   const { data: classData, isLoading: classLoading } = useClass(classId);
   // Fetch ALL students for attendance recording (no pagination)
@@ -85,18 +85,29 @@ export default function AttendanceBulkPage({
   });
 
   // Get available dates for history
-  const { data: datesData, isLoading: datesLoading, refetch: refetchDates, error: datesError } = useClassAttendanceDates(classId);
-  const { data: summaryData, isLoading: summaryLoading, refetch: refetchSummary } = useClassAttendanceSummary(classId);
+  const {
+    data: datesData,
+    isLoading: datesLoading,
+    refetch: refetchDates,
+    error: datesError,
+  } = useClassAttendanceDates(classId);
+  const {
+    data: summaryData,
+    isLoading: summaryLoading,
+    refetch: refetchSummary,
+  } = useClassAttendanceSummary(classId);
 
   const availableDates = useMemo(() => {
     if (!datesData?.data) return [];
     const dates = Array.isArray(datesData.data) ? datesData.data : [];
     // Filter out any invalid dates and sort: latest first
-    const validDates = dates.filter(date => {
+    const validDates = dates.filter((date) => {
       const d = new Date(date);
       return !isNaN(d.getTime());
     });
-    return validDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    return validDates.sort(
+      (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+    );
   }, [datesData]);
 
   // Create a map of date -> summary stats for quick lookup
@@ -105,7 +116,7 @@ export default function AttendanceBulkPage({
     const map = new Map();
     summaryData.data.forEach((item) => {
       // Normalize date to YYYY-MM-DD format for consistent lookup
-      const normalizedDate = item.date.split('T')[0];
+      const normalizedDate = item.date.split("T")[0];
       map.set(normalizedDate, item);
       // Also set with original date format for compatibility
       map.set(item.date, item);
@@ -117,10 +128,12 @@ export default function AttendanceBulkPage({
   const displayDates = useMemo(() => {
     if (summaryData?.data && summaryData.data.length > 0) {
       // Extract dates from summary data and normalize to YYYY-MM-DD
-      return summaryData.data.map(item => {
-        const date = item.date.split('T')[0];
-        return date;
-      }).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+      return summaryData.data
+        .map((item) => {
+          const date = item.date.split("T")[0];
+          return date;
+        })
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
     }
     return availableDates;
   }, [summaryData, availableDates]);
@@ -129,7 +142,7 @@ export default function AttendanceBulkPage({
   const latestDate = displayDates.length > 0 ? displayDates[0] : todayStr;
 
   const [selectedDate, setSelectedDate] = useState<string>(
-    searchParams.get("date") || (isHistoryMode ? latestDate : todayStr)
+    searchParams.get("date") || (isHistoryMode ? latestDate : todayStr),
   );
 
   // Reset page when class changes or mode changes
@@ -146,17 +159,13 @@ export default function AttendanceBulkPage({
 
   // Update selected date to latest when in history mode and dates are loaded
   useEffect(() => {
-    if (
-      isHistoryMode &&
-      displayDates.length > 0 &&
-      !searchParams.get("date")
-    ) {
+    if (isHistoryMode && displayDates.length > 0 && !searchParams.get("date")) {
       const latest = displayDates[0];
       if (latest && latest !== selectedDate) {
         setSelectedDate(latest);
         router.push(
           `/dashboard/attendance/${classId}?date=${latest}&history=true`,
-          { scroll: false }
+          { scroll: false },
         );
       }
     }
@@ -169,16 +178,30 @@ export default function AttendanceBulkPage({
     selectedDate,
   ]);
 
-  // Sync selectedDate with URL params
+  // Sync selectedDate with URL params and update pagination page
   useEffect(() => {
     const urlDate = searchParams.get("date");
     if (urlDate && urlDate !== selectedDate) {
       setSelectedDate(urlDate);
     }
-  }, [searchParams, selectedDate]);
 
-  const { data: attendanceData, isLoading: attendanceLoading, refetch: refetchAttendance } =
-    useAttendanceByClass(classId, selectedDate);
+    // Auto-navigate to the page containing the selected date in history
+    if (isHistoryMode && displayDates.length > 0 && selectedDate) {
+      const dateIndex = displayDates.indexOf(selectedDate);
+      if (dateIndex !== -1) {
+        const targetPage = Math.floor(dateIndex / limit) + 1;
+        if (targetPage !== page) {
+          setPage(targetPage);
+        }
+      }
+    }
+  }, [searchParams, selectedDate, isHistoryMode, displayDates, limit, page]);
+
+  const {
+    data: attendanceData,
+    isLoading: attendanceLoading,
+    refetch: refetchAttendance,
+  } = useAttendanceByClass(classId, selectedDate);
 
   // Force refetch when selectedDate changes
   useEffect(() => {
@@ -189,16 +212,30 @@ export default function AttendanceBulkPage({
   const bulkAttendance = useBulkAttendance();
   const updateAttendance = useUpdateAttendance();
 
-  // Prepare students data for memoization
+  // Prepare students data for memoization - date-aware for history mode
   const students = useMemo(() => {
+    // If in history mode, favor the student list from the attendance response
+    // (which only includes students assigned on that specific date)
+    if (isHistoryMode && attendanceData?.data?.students) {
+      return attendanceData.data.students.map((item: any) => ({
+        ...item.student,
+        // Carry over any relevant data if needed
+      }));
+    }
+    // Fallback to the general students pool for the current date
     return Array.isArray(studentsData?.data) ? studentsData.data : [];
-  }, [studentsData?.data]);
+  }, [studentsData?.data, isHistoryMode, attendanceData?.data]);
 
   // Calculate attendance statistics for the currently selected date
   const currentDateStats = useMemo(() => {
-    if (!attendanceData?.data || !studentsData?.data) {
-      return { present: 0, absent: 0, late: 0, total: students.length };
-    }
+    const stats = {
+      present: 0,
+      absent: 0,
+      late: 0,
+      total: students.length,
+    };
+
+    if (!attendanceData?.data) return stats;
 
     let attendanceRecords: any[] = [];
     if (Array.isArray(attendanceData.data)) {
@@ -212,13 +249,6 @@ export default function AttendanceBulkPage({
         .filter((item: any) => item && item.id);
     }
 
-    const stats = {
-      present: 0,
-      absent: 0,
-      late: 0,
-      total: students.length,
-    };
-
     attendanceRecords.forEach((record: any) => {
       if (record.status === "present") stats.present++;
       else if (record.status === "absent") stats.absent++;
@@ -226,18 +256,19 @@ export default function AttendanceBulkPage({
     });
 
     return stats;
-  }, [attendanceData, studentsData, students]);
+  }, [attendanceData, students]);
 
   const [attendanceStates, setAttendanceStates] = useState<
     Record<string, AttendanceStatus>
   >({});
   const [attendanceIds, setAttendanceIds] = useState<Record<string, string>>(
-    {}
+    {},
   );
   const [attendanceNotes, setAttendanceNotes] = useState<
     Record<string, string>
   >({});
   const [hasChanges, setHasChanges] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | AttendanceStatus>("all");
 
   // Update URL when date changes
   const handleDateChange = (newDate: string) => {
@@ -247,7 +278,7 @@ export default function AttendanceBulkPage({
     const historyParam = isHistoryMode ? "&history=true" : "";
     router.push(
       `/dashboard/attendance/${classId}?date=${newDate}${historyParam}`,
-      { scroll: false }
+      { scroll: false },
     );
   };
 
@@ -303,7 +334,7 @@ export default function AttendanceBulkPage({
         const existing = attendanceRecords.find(
           (a: any) =>
             a.studentId === student.id ||
-            (a.student && a.student.id === student.id)
+            (a.student && a.student.id === student.id),
         );
 
         if (existing && existing.id) {
@@ -380,6 +411,10 @@ export default function AttendanceBulkPage({
       attendanceData,
     });
 
+    // Refresh history summary to show the new record dynamically
+    refetchDates();
+    refetchSummary();
+
     // After saving, move to the next date
     const currentDate = new Date(selectedDate);
     currentDate.setDate(currentDate.getDate() + 1);
@@ -429,7 +464,7 @@ export default function AttendanceBulkPage({
           (a: any) =>
             a.studentId === student.id ||
             (a.student && a.student.id === student.id) ||
-            a.id === attendanceId
+            a.id === attendanceId,
         );
 
         if (existing) {
@@ -462,12 +497,22 @@ export default function AttendanceBulkPage({
   const canMarkAttendance = hasRole(["TEACHER"]);
   const canViewHistory = hasRole(["TEACHER", "OWNER"]);
 
-  // Sort students alphabetically by first name (A, B, C...) - must be called before early returns
+  // Sort and Filter students - alphabetical by first name, then by selected status filter
   const sortedStudents = useMemo(() => {
-    return [...students].sort((a, b) => {
+    let filtered = [...students];
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(student => {
+        const status = attendanceStates[student.id] || "present";
+        return status === statusFilter;
+      });
+    }
+
+    return filtered.sort((a, b) => {
       return (a.firstName || "").localeCompare(b.firstName || "");
     });
-  }, [students]);
+  }, [students, statusFilter, attendanceStates]);
 
   // In history mode, show all recorded dates without restrictions
   const isHistory = isHistoryMode;
@@ -506,7 +551,8 @@ export default function AttendanceBulkPage({
                 {isHistory ? "Attendance History" : "Mark Attendance"}
               </h1>
               <p className="text-sm text-slate-600 mt-1">
-                {classData.data.name} • {formatDateForUI(selectedDate, calendarSystem)}
+                {classData.data.name} •{" "}
+                {formatDateForUI(selectedDate, calendarSystem)}
               </p>
             </div>
           </div>
@@ -517,7 +563,7 @@ export default function AttendanceBulkPage({
               onClick={() => {
                 // Navigate to history mode with current date
                 router.push(
-                  `/dashboard/attendance/${classId}?date=${selectedDate}&history=true`
+                  `/dashboard/attendance/${classId}?date=${selectedDate}&history=true`,
                 );
               }}
               variant="outline"
@@ -544,433 +590,203 @@ export default function AttendanceBulkPage({
         <CardHeader className="border-b bg-slate-50 border-slate-200">
           <div className="flex items-center gap-3">
             <Calendar className="h-5 w-5 text-slate-600" />
-            <CardTitle className="text-slate-900">
-              Date Selection
-            </CardTitle>
+            <CardTitle className="text-slate-900">Date Selection</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="p-6">
           <div className="space-y-4">
             {isHistory ? (
-              /* History Mode: Show table with attendance statistics */
               <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <Label className="text-slate-800 font-semibold text-base">
-                        Daily Attendance Summary
-                      </Label>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Click on any date to view detailed student records
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          refetchDates();
-                          refetchSummary();
-                        }}
-                        disabled={datesLoading || summaryLoading}
-                        className="text-xs"
-                      >
-                        {datesLoading || summaryLoading ? (
-                          <>
-                            <div className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600 mr-2" />
-                            Loading...
-                          </>
-                        ) : (
-                          <>
-                            <HistoryIcon className="h-3 w-3 mr-1" />
-                            Refresh
-                          </>
-                        )}
-                      </Button>
-                      {summaryData?.data && summaryData.data.length > 0 && (
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <Label className="text-slate-800 font-semibold text-base">
+                      Daily Attendance Summary
+                    </Label>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Click on any date to view detailed student records
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        refetchDates();
+                        refetchSummary();
+                      }}
+                      disabled={datesLoading || summaryLoading}
+                      className="text-xs"
+                    >
+                      {datesLoading || summaryLoading ? (
                         <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              // Export to CSV
-                              const headers = ['Date', 'Present', 'Absent', 'Late', 'Total'];
-                              const rows = summaryData.data.map((item) => [
-                                format(new Date(item.date), 'MMM dd, yyyy'),
-                                item.present.toString(),
-                                item.absent.toString(),
-                                item.late.toString(),
-                                item.total.toString(),
-                              ]);
-                              const csvContent = [
-                                headers.join(','),
-                                ...rows.map(row => row.join(',')),
-                              ].join('\n');
-                              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                              const link = document.createElement('a');
-                              const url = URL.createObjectURL(blob);
-                              link.setAttribute('href', url);
-                              link.setAttribute('download', `attendance-summary-${classData?.data?.name || 'class'}-${format(new Date(), 'yyyy-MM-dd')}.csv`);
-                              link.style.visibility = 'hidden';
-                              document.body.appendChild(link);
-                              link.click();
-                              document.body.removeChild(link);
-                            }}
-                            className="text-xs"
-                          >
-                            <Download className="h-3 w-3 mr-1" />
-                            Export
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              // Print
-                              if (!summaryData?.data || !classData?.data) return;
-                              const printWindow = window.open('', '_blank');
-                              if (!printWindow) return;
-                              const dateRows = summaryData.data.map((item) => {
-                                const date = new Date(item.date);
-                                return `
-                                  <tr>
-                                    <td style="padding: 10px; border: 1px solid #e5e7eb;">${format(date, 'MMM dd, yyyy')}</td>
-                                    <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #16a34a; font-weight: 600;">${item.present}</td>
-                                    <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #dc2626; font-weight: 600;">${item.absent}</td>
-                                    <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #ca8a04; font-weight: 600;">${item.late}</td>
-                                    <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${item.total}</td>
-                                  </tr>
-                                `;
-                              }).join('');
-                              const totalPresent = summaryData.data.reduce((sum, item) => sum + item.present, 0);
-                              const totalAbsent = summaryData.data.reduce((sum, item) => sum + item.absent, 0);
-                              const totalLate = summaryData.data.reduce((sum, item) => sum + item.late, 0);
-                              const totalDays = summaryData.data.length;
-                              const avgTotal = summaryData.data.length > 0 ? Math.round(summaryData.data.reduce((sum, item) => sum + item.total, 0) / summaryData.data.length) : 0;
-                              const htmlContent = `
-                                <!DOCTYPE html>
-                                <html>
-                                  <head>
-                                    <title>Daily Attendance Summary - ${classData.data.name}</title>
-                                    <style>
-                                      body {
-                                        font-family: Arial, sans-serif;
-                                        margin: 20px;
-                                        color: #000;
-                                      }
-                                      h1 {
-                                        color: #1f2937;
-                                        border-bottom: 2px solid #3b82f6;
-                                        padding-bottom: 10px;
-                                        margin-bottom: 20px;
-                                      }
-                                      table {
-                                        width: 100%;
-                                        border-collapse: collapse;
-                                        margin-top: 20px;
-                                      }
-                                      th {
-                                        background-color: #f3f4f6;
-                                        padding: 12px;
-                                        text-align: left;
-                                        border: 1px solid #ddd;
-                                        font-weight: bold;
-                                      }
-                                      td {
-                                        padding: 8px;
-                                        border: 1px solid #ddd;
-                                      }
-                                      .summary {
-                                        margin-top: 30px;
-                                        padding: 15px;
-                                        background-color: #f9fafb;
-                                        border: 1px solid #ddd;
-                                      }
-                                      .summary h2 {
-                                        margin-top: 0;
-                                        color: #1f2937;
-                                      }
-                                      .summary-row {
-                                        display: flex;
-                                        justify-content: space-between;
-                                        padding: 8px 0;
-                                        border-bottom: 1px solid #e5e7eb;
-                                      }
-                                      @media print {
-                                        body { margin: 0; }
-                                        .no-print { display: none; }
-                                      }
-                                    </style>
-                                  </head>
-                                  <body>
-                                    <h1>Daily Attendance Summary - ${classData.data.name}</h1>
-                                    <p><strong>Generated:</strong> ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
-                                    <table>
-                                      <thead>
-                                        <tr>
-                                          <th>Date</th>
-                                          <th style="text-align: right;">Present</th>
-                                          <th style="text-align: right;">Absent</th>
-                                          <th style="text-align: right;">Late</th>
-                                          <th style="text-align: right;">Total</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        ${dateRows}
-                                        <tr style="background-color: #f3f4f6; font-weight: bold;">
-                                          <td style="padding: 10px; border: 1px solid #e5e7eb;">Total</td>
-                                          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #16a34a;">${totalPresent}</td>
-                                          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #dc2626;">${totalAbsent}</td>
-                                          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; color: #ca8a04;">${totalLate}</td>
-                                          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">${avgTotal * totalDays}</td>
-                                        </tr>
-                                      </tbody>
-                                    </table>
-                                    <div class="summary">
-                                      <h2>Summary</h2>
-                                      <div class="summary-row">
-                                        <span><strong>Total Days Recorded:</strong></span>
-                                        <span>${totalDays}</span>
-                                      </div>
-                                      <div class="summary-row">
-                                        <span><strong>Total Present:</strong></span>
-                                        <span>${totalPresent}</span>
-                                      </div>
-                                      <div class="summary-row">
-                                        <span><strong>Total Absent:</strong></span>
-                                        <span>${totalAbsent}</span>
-                                      </div>
-                                      <div class="summary-row">
-                                        <span><strong>Total Late:</strong></span>
-                                        <span>${totalLate}</span>
-                                      </div>
-                                      <div class="summary-row">
-                                        <span><strong>Average Students per Day:</strong></span>
-                                        <span>${avgTotal}</span>
-                                      </div>
-                                    </div>
-                                  </body>
-                                </html>
-                              `;
-                              printWindow.document.write(htmlContent);
-                              printWindow.document.close();
-                              printWindow.focus();
-                              setTimeout(() => {
-                                printWindow.print();
-                              }, 250);
-                            }}
-                            className="text-xs"
-                          >
-                            <Printer className="h-3 w-3 mr-1" />
-                            Print
-                          </Button>
+                          <div className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600 mr-2" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <HistoryIcon className="h-3 w-3 mr-1" />
+                          Refresh
                         </>
                       )}
-                    </div>
+                    </Button>
+                    {summaryData?.data && summaryData.data.length > 0 && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            // Export logic remains same
+                            const headers = ["Date", "Present", "Absent", "Late", "Total"];
+                            const rows = summaryData.data.map((item) => [
+                              format(new Date(item.date), "MMM dd, yyyy"),
+                              item.present.toString(),
+                              item.absent.toString(),
+                              item.late.toString(),
+                              item.total.toString(),
+                            ]);
+                            const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+                            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                            const link = document.createElement("a");
+                            link.href = URL.createObjectURL(blob);
+                            link.setAttribute("download", `attendance-summary.csv`);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                          className="text-xs"
+                        >
+                          <Download className="h-3 w-3 mr-1" />
+                          Export
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  {datesLoading ? (
-                    <div className="p-8 border border-slate-200 rounded-md bg-slate-50 text-center">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-600 border-t-transparent mx-auto mb-2" />
-                      <p className="text-sm text-slate-600">Loading attendance dates...</p>
-                    </div>
-                  ) : datesError ? (
-                    <div className="p-4 border border-red-200 rounded-md bg-red-50">
-                      <p className="text-sm text-red-600">
-                        Failed to load attendance dates. Please try refreshing.
-                      </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          refetchDates();
-                          refetchSummary();
-                        }}
-                        className="mt-2"
-                      >
-                        Retry
-                      </Button>
-                    </div>
-                  ) : (summaryLoading || datesLoading) ? (
-                    <div className="p-8 border border-slate-200 rounded-md bg-slate-50 text-center">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-600 border-t-transparent mx-auto mb-2" />
-                      <p className="text-sm text-slate-600">Loading attendance summary...</p>
-                    </div>
-                  ) : (displayDates.length > 0 || (summaryData?.data && summaryData.data.length > 0)) ? (
-                    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+                </div>
+
+                {datesLoading ? (
+                  <div className="p-12 text-center">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600 mx-auto mb-4" />
+                    <p className="text-sm font-medium text-slate-500">Synchronizing history...</p>
+                  </div>
+                ) : datesError ? (
+                  <div className="p-6 border border-red-100 rounded-xl bg-red-50/50 text-center">
+                    <p className="text-sm text-red-600 mb-3">Failed to retrieve attendance history.</p>
+                    <Button variant="outline" size="sm" onClick={() => { refetchDates(); refetchSummary(); }}>Try Again</Button>
+                  </div>
+                ) : displayDates.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
                       <Table>
-                        <TableHeader>
-                          <TableRow className="bg-slate-50 hover:bg-slate-50">
-                            <TableHead className="font-semibold text-slate-700">Date</TableHead>
-                            <TableHead className="font-semibold text-slate-700 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <Check className="h-4 w-4 text-green-600" />
-                                <span>Present</span>
-                              </div>
-                            </TableHead>
-                            <TableHead className="font-semibold text-slate-700 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <X className="h-4 w-4 text-red-600" />
-                                <span>Absent</span>
-                              </div>
-                            </TableHead>
-                            <TableHead className="font-semibold text-slate-700 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <Clock className="h-4 w-4 text-yellow-600" />
-                                <span>Late</span>
-                              </div>
-                            </TableHead>
-                            <TableHead className="font-semibold text-slate-700 text-center">Total</TableHead>
+                        <TableHeader className="bg-slate-50/50">
+                          <TableRow className="hover:bg-transparent border-slate-200">
+                            <TableHead className="w-12 h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center">#</TableHead>
+                            <TableHead className="h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500">Recorded Date</TableHead>
+                            <TableHead className="h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center">Summary</TableHead>
+                            <TableHead className="h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-right pr-6">Action</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {displayDates
                             .slice((page - 1) * limit, page * limit)
-                            .map((date) => {
+                            .map((date, idx) => {
                               const isSelected = date === selectedDate;
-                              // Normalize date for lookup (ensure YYYY-MM-DD format)
-                              const normalizedDate = date.split('T')[0];
-                              const summary = summaryMap.get(normalizedDate) || summaryMap.get(date);
-                              const stats = summary || { present: 0, absent: 0, late: 0, total: students.length };
+                              const stats = summaryMap.get(date.split("T")[0]) || summaryMap.get(date) || { present: 0, absent: 0, late: 0, total: students.length };
 
                               return (
-                                <TableRow
-                                  key={date}
-                                  className={cn(
-                                    "cursor-pointer hover:bg-slate-50 transition-colors",
-                                    isSelected && "bg-blue-50 border-l-4 border-l-blue-600"
-                                  )}
-                                  onClick={() => handleDateChange(date)}
-                                >
-                                  <TableCell className="font-medium">
-                                    <div className="flex items-center gap-2">
-                                      <Calendar className="h-4 w-4 text-slate-500" />
-                                      <span>{formatDateForUI(date, calendarSystem)}</span>
-                                      {isSelected && (
-                                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs border-blue-200">
-                                          Viewing
-                                        </Badge>
-                                      )}
+                                <TableRow key={date} className={cn("group transition-colors border-slate-100", isSelected ? "bg-blue-50/50" : "hover:bg-slate-50/30")}>
+                                  <TableCell className="text-center py-3 font-mono text-[10px] text-slate-400">
+                                    {String((page - 1) * limit + idx + 1).padStart(2, '0')}
+                                  </TableCell>
+                                  <TableCell className="py-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className={cn("p-1.5 rounded-md", isSelected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")}>
+                                        <Calendar className="h-3.5 w-3.5" />
+                                      </div>
+                                      <div>
+                                        <p className={cn("text-xs font-bold", isSelected ? "text-blue-700" : "text-slate-900")}>
+                                          {formatDateForUI(date, calendarSystem)}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 font-medium">{stats.total} Students</p>
+                                      </div>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="text-center">
-                                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-green-50 text-green-700 font-semibold text-sm border border-green-200">
-                                      {stats.present}
-                                    </span>
+                                  <TableCell className="py-3">
+                                    <div className="flex items-center justify-center gap-4">
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                        <span className="text-[11px] font-bold text-slate-700">{stats.present}</span>
+                                        <span className="text-[9px] text-slate-400 uppercase font-medium">Pres</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                        <span className="text-[11px] font-bold text-slate-700">{stats.absent}</span>
+                                        <span className="text-[9px] text-slate-400 uppercase font-medium">Abs</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                                        <span className="text-[11px] font-bold text-slate-700">{stats.late}</span>
+                                        <span className="text-[9px] text-slate-400 uppercase font-medium">Lat</span>
+                                      </div>
+                                    </div>
                                   </TableCell>
-                                  <TableCell className="text-center">
-                                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-red-50 text-red-700 font-semibold text-sm border border-red-200">
-                                      {stats.absent}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-yellow-50 text-yellow-700 font-semibold text-sm border border-yellow-200">
-                                      {stats.late}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell className="text-center font-semibold text-slate-700">
-                                    {stats.total}
+                                  <TableCell className="py-3 text-right pr-6">
+                                    <Button
+                                      variant={isSelected ? "default" : "outline"}
+                                      size="sm"
+                                      onClick={() => handleDateChange(date)}
+                                      className={cn("h-7 text-[10px] font-bold px-3 transition-all", isSelected ? "bg-blue-600 hover:bg-blue-700" : "text-slate-600")}
+                                    >
+                                      {isSelected ? "Active" : "View"}
+                                    </Button>
                                   </TableCell>
                                 </TableRow>
                               );
                             })}
                         </TableBody>
                       </Table>
-                      <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
-                        <p className="text-sm text-slate-600">
-                          Showing {(page - 1) * limit + 1} to {Math.min(page * limit, displayDates.length)} of {displayDates.length} dates
-                        </p>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                          >
-                            Previous
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage((p) => Math.min(Math.ceil(displayDates.length / limit), p + 1))}
-                            disabled={page === Math.ceil(displayDates.length / limit)}
-                          >
-                            Next
-                          </Button>
-                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between px-2 pt-2">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        Page <span className="text-slate-900">{page}</span> / {Math.ceil(displayDates.length / limit)}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="h-8 px-3 text-xs font-bold text-slate-600"><ChevronLeft className="h-3.5 w-3.5 mr-1" />Prev</Button>
+                        <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.min(Math.ceil(displayDates.length / limit), p + 1))} disabled={page === Math.ceil(displayDates.length / limit)} className="h-8 px-3 text-xs font-bold text-slate-600">Next<ChevronRight className="ml-1 h-3.5 w-3.5" /></Button>
                       </div>
                     </div>
-                  ) : (
-                    <div className="p-4 border border-slate-200 rounded-md bg-slate-50">
-                      <p className="text-sm text-slate-600">
-                        No attendance records found for this class.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="p-12 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 text-center">
+                    <HistoryIcon className="h-6 w-6 text-slate-400 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-slate-900">No History Found</p>
+                  </div>
+                )}
               </div>
             ) : (
-              /* Current Mode: Show date input and navigation */
-              <>
+              <div className="space-y-4">
                 <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigateDate(-1)}
-                      className="flex items-center gap-2"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </Button>
-
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => handleDateChange(e.target.value)}
-                        className="w-auto"
-                      />
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigateDate(1)}
-                      className="flex items-center gap-2"
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => navigateDate(-1)}><ChevronLeft className="h-4 w-4 mr-2" />Previous</Button>
+                    <Input type="date" value={selectedDate} onChange={(e) => handleDateChange(e.target.value)} className="w-auto" />
+                    <Button variant="outline" size="sm" onClick={() => navigateDate(1)}>Next<ChevronRight className="h-4 w-4 ml-2" /></Button>
                   </div>
-
-                  <div className="flex gap-2 flex-wrap">
-                    <Button variant="outline" size="sm" onClick={goToToday}>
-                      Today
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={goToYesterday}>
-                      Yesterday
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={goToLastMonth}>
-                      1 Month Ago
-                    </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={goToToday}>Today</Button>
+                    <Button variant="outline" size="sm" onClick={goToYesterday}>Yesterday</Button>
                   </div>
                 </div>
-
                 <div className="pt-2 border-t border-slate-200">
-                  <p className="text-sm text-muted-foreground">
-                    Selected Date:{" "}
-                    <span className="font-semibold text-slate-900">
-                      {formatDateForUI(selectedDate, calendarSystem)}
-                    </span>
-                  </p>
+                  <p className="text-sm text-muted-foreground">Selected Date: <span className="font-semibold text-slate-900">{formatDateForUI(selectedDate, calendarSystem)}</span></p>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Students Attendance Table */}
-      <Card className="border shadow-sm border-slate-200">
+      < Card className="border shadow-sm border-slate-200" >
         <CardHeader className="border-b bg-slate-50 border-slate-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -992,37 +808,59 @@ export default function AttendanceBulkPage({
                 size="sm"
                 onClick={() => {
                   // Export student list to CSV (alphabetically sorted)
-                  const headers = ['No', 'Student Name', 'Class', 'Present', 'Absent', 'Late', 'Reason'];
+                  const headers = [
+                    "No",
+                    "Student Name",
+                    "Class",
+                    "Present",
+                    "Absent",
+                    "Late",
+                    "Reason",
+                  ];
                   const rows = sortedStudents.map((student, index) => {
-                    const status = attendanceStates[student.id] || 'present';
-                    const notes = attendanceNotes[student.id] || '';
+                    const status = attendanceStates[student.id] || "present";
+                    const notes = attendanceNotes[student.id] || "";
                     const getClassName = (student: any): string => {
-                      if ('classHistory' in student && Array.isArray(student.classHistory)) {
-                        const activeClass = student.classHistory.find((ch: any) => !ch.endDate);
-                        if (activeClass?.class?.name) return activeClass.class.name;
+                      if (
+                        "classHistory" in student &&
+                        Array.isArray(student.classHistory)
+                      ) {
+                        const activeClass = student.classHistory.find(
+                          (ch: any) => !ch.endDate,
+                        );
+                        if (activeClass?.class?.name)
+                          return activeClass.class.name;
                       }
-                      return classData?.data?.name || 'Not Assigned';
+                      return classData?.data?.name || "Not Assigned";
                     };
                     return [
                       (index + 1).toString(),
-                      formatFullName(student.firstName, student.lastName).replace(/,/g, ' '),
-                      getClassName(student).replace(/,/g, ' '),
-                      status === 'present' ? 'Yes' : 'No',
-                      status === 'absent' ? 'Yes' : 'No',
-                      status === 'late' ? 'Yes' : 'No',
-                      notes.replace(/,/g, ' ') || '-'
+                      formatFullName(
+                        student.firstName,
+                        student.lastName,
+                      ).replace(/,/g, " "),
+                      getClassName(student).replace(/,/g, " "),
+                      status === "present" ? "Yes" : "No",
+                      status === "absent" ? "Yes" : "No",
+                      status === "late" ? "Yes" : "No",
+                      notes.replace(/,/g, " ") || "-",
                     ];
                   });
                   const csvContent = [
-                    headers.join(','),
-                    ...rows.map(row => row.join(','))
-                  ].join('\n');
-                  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                  const link = document.createElement('a');
+                    headers.join(","),
+                    ...rows.map((row) => row.join(",")),
+                  ].join("\n");
+                  const blob = new Blob([csvContent], {
+                    type: "text/csv;charset=utf-8;",
+                  });
+                  const link = document.createElement("a");
                   const url = URL.createObjectURL(blob);
-                  link.setAttribute('href', url);
-                  link.setAttribute('download', `attendance-students-${classData?.data?.name || 'class'}-${selectedDate}.csv`);
-                  link.style.visibility = 'hidden';
+                  link.setAttribute("href", url);
+                  link.setAttribute(
+                    "download",
+                    `attendance-students-${classData?.data?.name || "class"}-${selectedDate}.csv`,
+                  );
+                  link.style.visibility = "hidden";
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
@@ -1038,35 +876,53 @@ export default function AttendanceBulkPage({
                 size="sm"
                 onClick={() => {
                   // Print student list (alphabetically sorted)
-                  const printWindow = window.open('', '_blank');
+                  const printWindow = window.open("", "_blank");
                   if (!printWindow) return;
-                  const studentRows = sortedStudents.map((student, index) => {
-                    const status = attendanceStates[student.id] || 'present';
-                    const notes = attendanceNotes[student.id] || '';
-                    const getClassName = (student: any): string => {
-                      if ('classHistory' in student && Array.isArray(student.classHistory)) {
-                        const activeClass = student.classHistory.find((ch: any) => !ch.endDate);
-                        if (activeClass?.class?.name) return activeClass.class.name;
-                      }
-                      return classData?.data?.name || 'Not Assigned';
-                    };
-                    const statusColor = status === 'present' ? '#16a34a' : status === 'absent' ? '#dc2626' : '#ca8a04';
-                    const statusText = status === 'present' ? 'Present' : status === 'absent' ? 'Absent' : 'Late';
-                    return `
+                  const studentRows = sortedStudents
+                    .map((student, index) => {
+                      const status = attendanceStates[student.id] || "present";
+                      const notes = attendanceNotes[student.id] || "";
+                      const getClassName = (student: any): string => {
+                        if (
+                          "classHistory" in student &&
+                          Array.isArray(student.classHistory)
+                        ) {
+                          const activeClass = student.classHistory.find(
+                            (ch: any) => !ch.endDate,
+                          );
+                          if (activeClass?.class?.name)
+                            return activeClass.class.name;
+                        }
+                        return classData?.data?.name || "Not Assigned";
+                      };
+                      const statusColor =
+                        status === "present"
+                          ? "#16a34a"
+                          : status === "absent"
+                            ? "#dc2626"
+                            : "#ca8a04";
+                      const statusText =
+                        status === "present"
+                          ? "Present"
+                          : status === "absent"
+                            ? "Absent"
+                            : "Late";
+                      return `
                       <tr>
                         <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: center;">${index + 1}</td>
                         <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: 600;">${formatFullName(student.firstName, student.lastName)}</td>
                         <td style="padding: 10px; border: 1px solid #e5e7eb;">${getClassName(student)}</td>
                         <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: center; color: ${statusColor}; font-weight: 600;">${statusText}</td>
-                        <td style="padding: 10px; border: 1px solid #e5e7eb;">${notes || '-'}</td>
+                        <td style="padding: 10px; border: 1px solid #e5e7eb;">${notes || "-"}</td>
                       </tr>
                     `;
-                  }).join('');
+                    })
+                    .join("");
                   const htmlContent = `
                     <!DOCTYPE html>
                     <html>
                       <head>
-                        <title>Attendance - ${classData?.data?.name || 'Class'} - ${formatDateForUI(selectedDate, calendarSystem)}</title>
+                        <title>Attendance - ${classData?.data?.name || "Class"} - ${formatDateForUI(selectedDate, calendarSystem)}</title>
                         <style>
                           body { font-family: Arial, sans-serif; margin: 20px; color: #000; }
                           h1 { color: #1f2937; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; margin-bottom: 20px; }
@@ -1078,7 +934,7 @@ export default function AttendanceBulkPage({
                         </style>
                       </head>
                       <body>
-                        <h1>Student Attendance - ${classData?.data?.name || 'Class'}</h1>
+                        <h1>Student Attendance - ${classData?.data?.name || "Class"}</h1>
                         <p><strong>Date:</strong> ${formatDateForUI(selectedDate, calendarSystem)}</p>
                         <p><strong>Total Students:</strong> ${sortedStudents.length}</p>
                         <div class="summary">
@@ -1123,250 +979,205 @@ export default function AttendanceBulkPage({
           {studentsLoading || attendanceLoading ? (
             <LoadingState rows={5} columns={4} />
           ) : (
-            <div className="rounded-lg border border-slate-200 bg-white">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">NO</TableHead>
-                    <TableHead>Student Name</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-600" />
-                        <span>Present</span>
-                      </div>
-                    </TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        <X className="h-4 w-4 text-red-600" />
-                        <span>Absent</span>
-                      </div>
-                    </TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-yellow-600" />
-                        <span>Late</span>
-                      </div>
-                    </TableHead>
-                    <TableHead>Reason</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedStudents.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-center py-12 text-gray-500 text-sm"
-                      >
-                        No students found in this class
-                      </TableCell>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-2 bg-slate-100/50 p-1 rounded-xl border border-slate-200/60 w-fit">
+                  <Button
+                    variant={statusFilter === "all" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setStatusFilter("all")}
+                    className={cn(
+                      "h-8 text-[11px] font-bold px-3 transition-all",
+                      statusFilter === "all" ? "bg-slate-700 shadow-sm" : "text-slate-500 hover:bg-white hover:text-slate-900"
+                    )}
+                  >
+                    All ({students.length})
+                  </Button>
+                  <Button
+                    variant={statusFilter === "present" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setStatusFilter("present")}
+                    className={cn(
+                      "h-8 text-[11px] font-bold px-3 transition-all",
+                      statusFilter === "present" ? "bg-green-600 shadow-sm" : "text-slate-500 hover:bg-white hover:text-green-600"
+                    )}
+                  >
+                    Present ({currentDateStats.present})
+                  </Button>
+                  <Button
+                    variant={statusFilter === "absent" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setStatusFilter("absent")}
+                    className={cn(
+                      "h-8 text-[11px] font-bold px-3 transition-all",
+                      statusFilter === "absent" ? "bg-red-600 shadow-sm" : "text-slate-500 hover:bg-white hover:text-red-600"
+                    )}
+                  >
+                    Absent ({currentDateStats.absent})
+                  </Button>
+                  <Button
+                    variant={statusFilter === "late" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setStatusFilter("late")}
+                    className={cn(
+                      "h-8 text-[11px] font-bold px-3 transition-all",
+                      statusFilter === "late" ? "bg-yellow-600 shadow-sm" : "text-slate-500 hover:bg-white hover:text-yellow-600"
+                    )}
+                  >
+                    Late ({currentDateStats.late})
+                  </Button>
+                </div>
+
+                {statusFilter !== "all" && (
+                  <p className="text-[10px] text-slate-400 font-medium italic">
+                    Showing {sortedStudents.length} {statusFilter} students
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-slate-50/50">
+                    <TableRow className="hover:bg-transparent border-slate-200">
+                      <TableHead className="w-16 h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center">NO</TableHead>
+                      <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500">Student Name</TableHead>
+                      <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500">Class Info</TableHead>
+                      <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center">Status Control</TableHead>
+                      <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500">Reason / Notes</TableHead>
                     </TableRow>
-                  ) : (
-                    sortedStudents
-                      .slice((page - 1) * limit, page * limit)
-                      .map((student, displayIndex) => {
-                        // Calculate the actual index in the full list
-                        const actualIndex = (page - 1) * limit + displayIndex;
+                  </TableHeader>
+                  <TableBody>
+                    {sortedStudents.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="text-center py-24 text-slate-400"
+                        >
+                          <div className="flex flex-col items-center gap-2">
+                            <Users className="h-10 w-10 opacity-20" />
+                            <p className="font-medium text-slate-500">No students assigned on this date</p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedStudents.map((student, actualIndex) => {
                         const status = attendanceStates[student.id] || "present";
                         const notes = attendanceNotes[student.id] || "";
                         const showReason =
                           status === "late" || status === "absent";
-                        // Get class name from student data
+
                         const getClassName = (student: any): string => {
                           if (
                             "classHistory" in student &&
                             Array.isArray(student.classHistory)
                           ) {
                             const activeClass = student.classHistory.find(
-                              (ch: any) => !ch.endDate
+                              (ch: any) => !ch.endDate,
                             );
-                            if (activeClass?.class?.name) {
-                              return activeClass.class.name;
-                            }
+                            if (activeClass?.class?.name) return activeClass.class.name;
                           }
                           return classData?.data?.name || "Not Assigned";
                         };
                         const className = getClassName(student);
 
                         return (
-                          <TableRow key={student.id}>
-                            <TableCell className="text-center font-medium">
-                              {actualIndex + 1}
+                          <TableRow
+                            key={student.id}
+                            className="group hover:bg-slate-50/50 transition-colors border-slate-100"
+                          >
+                            <TableCell className="text-center py-4 font-mono text-xs text-slate-400">
+                              {String(actualIndex + 1).padStart(2, '0')}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="py-4">
                               <div className="flex flex-col">
-                                <h3 className="font-semibold">
-                                  {formatFullName(
-                                    student.firstName,
-                                    student.lastName
-                                  )}
-                                </h3>
-                                <p className="text-xs text-gray-500">
-                                  {className}
-                                </p>
+                                <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                                  {formatFullName(student.firstName, student.lastName)}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-medium">#{student.id.slice(0, 8)}</span>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="py-4">
                               <Badge
-                                variant="default"
-                                className="bg-blue-100 text-blue-800 border border-blue-300 font-medium"
+                                variant="outline"
+                                className="bg-slate-50 text-slate-600 border-slate-200 font-bold text-[10px] px-2"
                               >
                                 {className}
                               </Badge>
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-center">
-                                <Checkbox
-                                  checked={status === "present"}
-                                  disabled={isHistory || !canMarkAttendance}
-                                  onCheckedChange={(checked) => {
-                                    if (
-                                      checked &&
-                                      !isHistory &&
-                                      canMarkAttendance
-                                    ) {
-                                      handleStatusChange(student.id, "present");
-                                    }
-                                  }}
-                                  className={cn(
-                                    "h-5 w-5 border-green-600",
-                                    status === "present" &&
-                                    "bg-green-600 border-green-600",
-                                    (isHistory || !canMarkAttendance) &&
-                                    "opacity-50 cursor-not-allowed"
-                                  )}
-                                />
+                            <TableCell className="py-4">
+                              <div className="flex items-center justify-center gap-2">
+                                {["present", "absent", "late"].map((s) => (
+                                  <button
+                                    key={s}
+                                    onClick={() => !isHistory && canMarkAttendance && handleStatusChange(student.id, s as AttendanceStatus)}
+                                    disabled={isHistory && !canMarkAttendance}
+                                    className={cn(
+                                      "flex items-center justify-center w-8 h-8 rounded-lg transition-all border",
+                                      status === s
+                                        ? s === "present" ? "bg-green-600 border-green-600 text-white shadow-sm"
+                                          : s === "absent" ? "bg-red-600 border-red-600 text-white shadow-sm"
+                                            : "bg-yellow-600 border-yellow-600 text-white shadow-sm"
+                                        : "bg-white border-slate-200 text-slate-400 hover:border-slate-300",
+                                      (isHistory && !canMarkAttendance) && "opacity-50 cursor-not-allowed"
+                                    )}
+                                    title={s.charAt(0).toUpperCase() + s.slice(1)}
+                                  >
+                                    {s === "present" ? <Check className="h-4 w-4" />
+                                      : s === "absent" ? <X className="h-4 w-4" />
+                                        : <Clock className="h-4 w-4" />}
+                                  </button>
+                                ))}
                               </div>
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-center">
-                                <Checkbox
-                                  checked={status === "absent"}
-                                  disabled={isHistory || !canMarkAttendance}
-                                  onCheckedChange={(checked) => {
-                                    if (
-                                      checked &&
-                                      !isHistory &&
-                                      canMarkAttendance
-                                    ) {
-                                      handleStatusChange(student.id, "absent");
-                                    }
-                                  }}
-                                  className={cn(
-                                    "h-5 w-5 border-red-600",
-                                    status === "absent" &&
-                                    "bg-red-600 border-red-600",
-                                    (isHistory || !canMarkAttendance) &&
-                                    "opacity-50 cursor-not-allowed"
-                                  )}
-                                />
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-center">
-                                <Checkbox
-                                  checked={status === "late"}
-                                  disabled={isHistory || !canMarkAttendance}
-                                  onCheckedChange={(checked) => {
-                                    if (
-                                      checked &&
-                                      !isHistory &&
-                                      canMarkAttendance
-                                    ) {
-                                      handleStatusChange(student.id, "late");
-                                    }
-                                  }}
-                                  className={cn(
-                                    "h-5 w-5 border-yellow-600",
-                                    status === "late" &&
-                                    "bg-yellow-600 border-yellow-600",
-                                    (isHistory || !canMarkAttendance) &&
-                                    "opacity-50 cursor-not-allowed"
-                                  )}
-                                />
-                              </div>
-                            </TableCell>
-                            <TableCell>
+                            <TableCell className="py-4 pr-6">
                               {showReason ? (
-                                <Input
-                                  type="text"
-                                  placeholder={
-                                    status === "late"
-                                      ? "Reason for being late..."
-                                      : "Reason for absence..."
-                                  }
-                                  value={notes}
-                                  onChange={(e) =>
-                                    handleNotesChange(student.id, e.target.value)
-                                  }
-                                  disabled={isHistory && !canMarkAttendance}
-                                  className="w-full min-w-[200px] text-sm"
-                                  maxLength={200}
-                                />
+                                <div className="relative">
+                                  <Input
+                                    type="text"
+                                    placeholder="Type reason here..."
+                                    value={notes}
+                                    onChange={(e) => handleNotesChange(student.id, e.target.value)}
+                                    disabled={isHistory && !canMarkAttendance}
+                                    className="h-9 bg-slate-50/50 border-slate-200 text-xs focus:bg-white transition-all pl-8"
+                                    maxLength={200}
+                                  />
+                                  <MessageSquare className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                </div>
                               ) : (
-                                <span className="text-xs text-gray-400">-</span>
+                                <div className="h-9 flex items-center bg-slate-50/30 border border-dashed border-slate-200 rounded-md px-3">
+                                  <span className="text-[10px] text-slate-400 italic">No notes required for Present</span>
+                                </div>
                               )}
                             </TableCell>
                           </TableRow>
                         );
                       })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-          {sortedStudents.length > limit && (
-            <div className="flex items-center justify-between mt-4">
-              <p className="text-sm text-slate-600">
-                Showing {(page - 1) * limit + 1} to{" "}
-                {Math.min(page * limit, sortedStudents.length)} of{" "}
-                {sortedStudents.length} students
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setPage((p) => Math.max(1, p - 1));
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  disabled={page === 1}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setPage((p) =>
-                      Math.min(Math.ceil(sortedStudents.length / limit), p + 1)
-                    );
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  disabled={page === Math.ceil(sortedStudents.length / limit)}
-                >
-                  Next
-                </Button>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
             </div>
           )}
+          {/* Student Pagination Removed */}
         </CardContent>
       </Card>
 
       {/* Save Button - Only show for current date and TEACHER role */}
-      {!isHistory && canMarkAttendance && (
-        <div className="flex justify-end gap-2">
-          <Button
-            onClick={handleSave}
-            disabled={bulkAttendance.isPending}
-            size="lg"
-            className="bg-slate-700 hover:bg-slate-800"
-          >
-            <Save className="mr-2 h-5 w-5" />
-            {bulkAttendance.isPending ? "Saving..." : "Save Attendance"}
-          </Button>
-        </div>
-      )}
-    </div>
+      {
+        !isHistory && canMarkAttendance && (
+          <div className="flex justify-end gap-2">
+            <Button
+              onClick={handleSave}
+              disabled={bulkAttendance.isPending}
+              size="lg"
+              className="bg-slate-700 hover:bg-slate-800"
+            >
+              <Save className="mr-2 h-5 w-5" />
+              {bulkAttendance.isPending ? "Saving..." : "Save Attendance"}
+            </Button>
+          </div>
+        )
+      }
+    </div >
   );
 }

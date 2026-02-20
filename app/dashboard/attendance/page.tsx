@@ -70,20 +70,19 @@ export default function AttendancePage() {
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
-  const [page, setPage] = useState(1);
-  const [limit] = useState(50);
   const [attendanceStates, setAttendanceStates] = useState<
     Record<string, AttendanceStatus>
   >({});
   const [attendanceNotes, setAttendanceNotes] = useState<Record<string, string>>({});
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   const { data: classesData } = useClasses();
   const { data: studentsData, isLoading: studentsLoading, error: studentsError } = useStudents({
     classId: selectedClassId || undefined,
     classStatus: "assigned",
-    page,
-    limit,
+    page: 1,
+    limit: 1000,
   });
   const { data: attendanceData, isLoading: attendanceLoading, error: attendanceError } =
     useAttendanceByClass(selectedClassId || "", selectedDate);
@@ -96,9 +95,7 @@ export default function AttendancePage() {
   const activeYear = activeYearData?.data;
 
   // Reset page when class changes
-  useEffect(() => {
-    setPage(1);
-  }, [selectedClassId]);
+  // No-op - pagination removed
 
   // If user doesn't have permission to view, show error
   if (!canViewAttendance) {
@@ -195,6 +192,7 @@ export default function AttendancePage() {
     const currentDate = new Date(selectedDate);
     currentDate.setDate(currentDate.getDate() - 1);
     setSelectedDate(currentDate.toISOString().split("T")[0]);
+    setIsDirty(false); // Reset dirty flag when date changes
   };
 
   const handleNextDate = () => {
@@ -204,6 +202,7 @@ export default function AttendancePage() {
     today.setHours(23, 59, 59, 999);
     if (currentDate <= today) {
       setSelectedDate(currentDate.toISOString().split("T")[0]);
+      setIsDirty(false); // Reset dirty flag when date changes
     }
   };
 
@@ -223,7 +222,10 @@ export default function AttendancePage() {
 
   // Initialize attendance states from API data
   useEffect(() => {
-    if (attendanceData?.data && studentsData?.data) {
+    // ONLY initialize if not dirty OR if we don't have local states yet
+    const hasLocalStates = Object.keys(attendanceStates).length > 0;
+
+    if (attendanceData?.data && studentsData?.data && (!isDirty || !hasLocalStates)) {
       const states: Record<string, AttendanceStatus> = {};
       const notes: Record<string, string> = {};
 
@@ -254,7 +256,8 @@ export default function AttendancePage() {
       });
       setAttendanceStates(states);
       setAttendanceNotes(notes);
-    } else if (studentsData?.data && !isReadOnly) {
+      setIsDirty(false); // Data is now in sync with server
+    } else if (studentsData?.data && !isReadOnly && (!isDirty || !hasLocalStates)) {
       // Only set default "present" if not in read-only mode (to avoid overwriting recorded data)
       const states: Record<string, AttendanceStatus> = {};
       const notes: Record<string, string> = {};
@@ -264,10 +267,12 @@ export default function AttendancePage() {
       });
       setAttendanceStates(states);
       setAttendanceNotes(notes);
+      setIsDirty(false);
     }
-  }, [attendanceData, studentsData, isReadOnly]);
+  }, [attendanceData, studentsData, isReadOnly, isDirty, selectedClassId, selectedDate]);
 
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
+    setIsDirty(true);
     setAttendanceStates((prev) => ({ ...prev, [studentId]: status }));
     // Clear notes if status changes to present
     if (status === 'present') {
@@ -276,16 +281,18 @@ export default function AttendancePage() {
   };
 
   const handleNotesChange = (studentId: string, notes: string) => {
+    setIsDirty(true);
     setAttendanceNotes((prev) => ({ ...prev, [studentId]: notes }));
   };
 
   const handleMarkAll = (status: AttendanceStatus) => {
     if (studentsData?.data) {
+      setIsDirty(true);
       const states: Record<string, AttendanceStatus> = {};
       const notes: Record<string, string> = {};
       studentsData.data.forEach((student) => {
         states[student.id] = status;
-        notes[student.id] = status === 'present' ? '' : '';
+        notes[student.id] = '';
       });
       setAttendanceStates(states);
       setAttendanceNotes(notes);
@@ -295,23 +302,11 @@ export default function AttendancePage() {
   const handleSave = async () => {
     if (!studentsData?.data || !selectedClassId) return;
 
-    // Check if attendance already exists before saving
-    let attendanceArray: any[] = [];
-    if (attendanceData?.data) {
-      if (Array.isArray(attendanceData.data)) {
-        attendanceArray = attendanceData.data;
-      } else if (attendanceData.data.students) {
-        attendanceArray = attendanceData.data.students.map((item: any) => ({
-          ...item.attendance,
-          studentId: item.student?.id || item.attendance?.studentId,
-        })).filter((item: any) => item && item.id);
-      }
-    }
-
-    if (attendanceArray.length > 0) {
-      toast.warning("Attendance Already Recorded", {
-        description: `Attendance for ${formatDateForUI(selectedDate, calendarSystem)} has already been recorded.`,
-        duration: 4000,
+    // We allow updates now, so we don't block if attendance is already recorded.
+    // However, if it is recorded and isReadOnly (past date), it's blocked.
+    if (isReadOnly) {
+      toast.error("Cannot Update Past Attendance", {
+        description: "Viewing recorded attendance for a past date is read-only.",
       });
       return;
     }
@@ -337,27 +332,19 @@ export default function AttendancePage() {
       const absentCount = attendanceDataToSave.filter(a => a.status === 'absent').length;
       const lateCount = attendanceDataToSave.filter(a => a.status === 'late').length;
 
-      toast.success("Attendance Saved Successfully", {
+      toast.success(isAttendanceRecorded ? "Attendance Updated" : "Attendance Saved Successfully", {
         description: `Attendance for ${formatDateForUI(selectedDate, calendarSystem)} has been recorded. Present: ${presentCount}, Absent: ${absentCount}, Late: ${lateCount}`,
         duration: 5000,
       });
 
-      // After saving, move to the next date
-      const currentDate = new Date(selectedDate);
-      currentDate.setDate(currentDate.getDate() + 1);
-      const nextDateStr = currentDate.toISOString().split("T")[0];
-      setSelectedDate(nextDateStr);
+      setIsDirty(false); // Reset dirty flag after successful save
 
-      // Reset attendance states for the new date
-      if (studentsData.data) {
-        const states: Record<string, AttendanceStatus> = {};
-        const notes: Record<string, string> = {};
-        studentsData.data.forEach((student) => {
-          states[student.id] = "present";
-          notes[student.id] = "";
-        });
-        setAttendanceStates(states);
-        setAttendanceNotes(notes);
+      // After saving, move to the next date if it was a NEW record (not an update)
+      if (!isAttendanceRecorded) {
+        const currentDate = new Date(selectedDate);
+        currentDate.setDate(currentDate.getDate() + 1);
+        const nextDateStr = currentDate.toISOString().split("T")[0];
+        setSelectedDate(nextDateStr);
       }
     } catch (error) {
       // Error handling is done by the mutation hook
@@ -392,7 +379,20 @@ export default function AttendancePage() {
   const hasStudents = sortedStudents.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* Loading Overlay for Bulk Actions */}
+      {bulkAttendance.isPending && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/20 backdrop-blur-[1px]">
+          <div className="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center gap-4 border border-blue-100">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
+            <div className="text-center">
+              <p className="font-bold text-slate-800 text-lg">Recording Attendance...</p>
+              <p className="text-sm text-slate-500">Please wait while we sync with the server.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Combined Card: Select Class/Date and Students Attendance */}
       <Card className="border border-slate-200 shadow-sm">
         <CardHeader className="bg-slate-50 border-b border-slate-200 py-3">
@@ -679,7 +679,7 @@ export default function AttendancePage() {
                                 key={student.id}
                               >
                                 <TableCell className="text-center font-medium">
-                                  {(page - 1) * limit + index + 1}
+                                  {index + 1}
                                 </TableCell>
                                 <TableCell>
                                   <div className="flex flex-col">
@@ -701,11 +701,13 @@ export default function AttendancePage() {
                                       checked={status === "present"}
                                       disabled={!canMarkAttendance || isReadOnly}
                                       onCheckedChange={(checked) => {
-                                        if (checked && canMarkAttendance && !isReadOnly) {
-                                          handleStatusChange(
-                                            student.id,
-                                            "present"
-                                          );
+                                        if (canMarkAttendance && !isReadOnly) {
+                                          if (checked) {
+                                            handleStatusChange(student.id, "present");
+                                          } else if (status === "present") {
+                                            // Ensure at least one is checked, default back to present if "unchecking" present
+                                            handleStatusChange(student.id, "present");
+                                          }
                                         }
                                       }}
                                       className={cn(
@@ -723,11 +725,13 @@ export default function AttendancePage() {
                                       checked={status === "absent"}
                                       disabled={!canMarkAttendance || isReadOnly}
                                       onCheckedChange={(checked) => {
-                                        if (checked && canMarkAttendance && !isReadOnly) {
-                                          handleStatusChange(
-                                            student.id,
-                                            "absent"
-                                          );
+                                        if (canMarkAttendance && !isReadOnly) {
+                                          if (checked) {
+                                            handleStatusChange(student.id, "absent");
+                                          } else if (status === "absent") {
+                                            // Handle unchecking by resetting to present
+                                            handleStatusChange(student.id, "present");
+                                          }
                                         }
                                       }}
                                       className={cn(
@@ -745,11 +749,13 @@ export default function AttendancePage() {
                                       checked={status === "late"}
                                       disabled={!canMarkAttendance || isReadOnly}
                                       onCheckedChange={(checked) => {
-                                        if (checked && canMarkAttendance && !isReadOnly) {
-                                          handleStatusChange(
-                                            student.id,
-                                            "late"
-                                          );
+                                        if (canMarkAttendance && !isReadOnly) {
+                                          if (checked) {
+                                            handleStatusChange(student.id, "late");
+                                          } else if (status === "late") {
+                                            // Handle unchecking by resetting to present
+                                            handleStatusChange(student.id, "present");
+                                          }
                                         }
                                       }}
                                       className={cn(
@@ -788,36 +794,7 @@ export default function AttendancePage() {
                   </div>
                 )}
 
-                {/* Pagination */}
-                {studentsData?.pagination && studentsData.pagination.totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4 px-4 pb-4">
-                    <p className="text-sm text-muted-foreground">
-                      Showing {(page - 1) * limit + 1} to{" "}
-                      {Math.min(page * limit, studentsData.pagination.total)} of{" "}
-                      {studentsData.pagination.total} students
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setPage((p) => Math.min(studentsData.pagination!.totalPages, p + 1))
-                        }
-                        disabled={page === studentsData.pagination!.totalPages}
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                {/* Student Pagination Removed */}
               </div>
             )}
           </div>
