@@ -5,30 +5,29 @@ import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { Badge } from "@/components/ui/badge";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import { useCalendarSystem } from "@/lib/context/calendar-context";
-import {
-  useClassHomeworkDates,
-  useClassHomeworkSummary,
-} from "@/lib/hooks/use-homework";
 import { useClass } from "@/lib/hooks/use-classes";
+import {
+    useClassHomeworkDates,
+    useClassHomeworkSummary,
+} from "@/lib/hooks/use-homework";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { cn } from "@/lib/utils";
 import { formatDateForUI } from "@/lib/utils/date";
-import { format } from "date-fns";
 import { useSearchParams } from "next/navigation";
 import { use, useMemo } from "react";
 
@@ -46,21 +45,20 @@ export default function HomeworkHistoryPage({
 
   const { data: classData, isLoading: classLoading } = useClass(classId);
 
-  const {
-    data: datesData,
-    isLoading: datesLoading,
-  } = useClassHomeworkDates(classId);
-  const {
-    data: summaryData,
-    isLoading: summaryLoading,
-  } = useClassHomeworkSummary(classId);
+  const { data: datesData, isLoading: datesLoading } =
+    useClassHomeworkDates(classId);
+  const { data: summaryData, isLoading: summaryLoading } =
+    useClassHomeworkSummary(classId);
 
   const availableDates = useMemo(() => {
     return datesData?.data || [];
   }, [datesData]);
 
   const summaryMap = useMemo(() => {
-    const map = new Map<string, { done: number; not_done: number; total: number }>();
+    const map = new Map<
+      string,
+      { done: number; not_done: number; total: number }
+    >();
     if (summaryData?.data) {
       summaryData.data.forEach((item) => {
         map.set(item.date, {
@@ -96,7 +94,7 @@ export default function HomeworkHistoryPage({
   }
 
   if (!classData?.data) {
-    return <ErrorState error="Class not found" />;
+    return <ErrorState title="Class not found" />;
   }
 
   return (
@@ -172,8 +170,8 @@ export default function HomeworkHistoryPage({
                                   completionRate >= 80
                                     ? "bg-green-500"
                                     : completionRate >= 50
-                                    ? "bg-yellow-500"
-                                    : "bg-red-500"
+                                      ? "bg-yellow-500"
+                                      : "bg-red-500",
                                 )}
                                 style={{ width: `${completionRate}%` }}
                               />
