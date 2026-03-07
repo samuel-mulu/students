@@ -250,6 +250,57 @@ export interface UpdateAttendanceRequest {
   notes?: string;
 }
 
+// Homework Types
+export type HomeworkStatus = "done" | "not_done";
+
+export interface Homework {
+  id: string;
+  studentId: string;
+  classId: string;
+  subjectId: string;
+  title: string;
+  description?: string;
+  date: string;
+  status: HomeworkStatus;
+  notes?: string;
+  student?: Student;
+  class?: Class;
+  subject?: Subject;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateHomeworkRequest {
+  studentId: string;
+  classId: string;
+  subjectId: string;
+  title: string;
+  description?: string;
+  date: string;
+  status: HomeworkStatus;
+  notes?: string;
+}
+
+export interface BulkHomeworkRequest {
+  classId: string;
+  subjectId: string;
+  title: string;
+  description?: string;
+  date: string;
+  homeworkData: {
+    studentId: string;
+    status: HomeworkStatus;
+    notes?: string;
+  }[];
+}
+
+export interface UpdateHomeworkRequest {
+  status?: HomeworkStatus;
+  notes?: string;
+  title?: string;
+  description?: string;
+}
+
 // Term Types
 export interface Term {
   id: string;

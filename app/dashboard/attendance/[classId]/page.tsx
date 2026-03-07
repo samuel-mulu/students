@@ -681,7 +681,9 @@ export default function AttendanceBulkPage({
                           <TableRow className="hover:bg-transparent border-slate-200">
                             <TableHead className="w-12 h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center">#</TableHead>
                             <TableHead className="h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500">Recorded Date</TableHead>
-                            <TableHead className="h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center">Summary</TableHead>
+                            <TableHead className="h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center w-20">Present</TableHead>
+                            <TableHead className="h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center w-20">Absent</TableHead>
+                            <TableHead className="h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center w-20">Late</TableHead>
                             <TableHead className="h-10 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-right pr-6">Action</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -710,23 +712,22 @@ export default function AttendanceBulkPage({
                                       </div>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="py-3">
-                                    <div className="flex items-center justify-center gap-4">
-                                      <div className="flex items-center gap-1.5">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                        <span className="text-[11px] font-bold text-slate-700">{stats.present}</span>
-                                        <span className="text-[9px] text-slate-400 uppercase font-medium">Pres</span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                                        <span className="text-[11px] font-bold text-slate-700">{stats.absent}</span>
-                                        <span className="text-[9px] text-slate-400 uppercase font-medium">Abs</span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
-                                        <span className="text-[11px] font-bold text-slate-700">{stats.late}</span>
-                                        <span className="text-[9px] text-slate-400 uppercase font-medium">Lat</span>
-                                      </div>
+                                  <TableCell className="py-3 text-center">
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="text-xs font-bold text-green-600">{stats.present}</span>
+                                      <div className="w-8 h-1 rounded-full bg-green-100" />
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-3 text-center">
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="text-xs font-bold text-red-600">{stats.absent}</span>
+                                      <div className="w-8 h-1 rounded-full bg-red-100" />
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-3 text-center">
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="text-xs font-bold text-yellow-600">{stats.late}</span>
+                                      <div className="w-8 h-1 rounded-full bg-yellow-100" />
                                     </div>
                                   </TableCell>
                                   <TableCell className="py-3 text-right pr-6">
@@ -1042,7 +1043,9 @@ export default function AttendanceBulkPage({
                       <TableHead className="w-16 h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center">NO</TableHead>
                       <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500">Student Name</TableHead>
                       <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500">Class Info</TableHead>
-                      <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center">Status Control</TableHead>
+                      <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center w-24">Present</TableHead>
+                      <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center w-24">Absent</TableHead>
+                      <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500 text-center w-24">Late</TableHead>
                       <TableHead className="h-12 text-[10px] uppercase font-bold tracking-wider text-slate-500">Reason / Notes</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1050,7 +1053,7 @@ export default function AttendanceBulkPage({
                     {sortedStudents.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={5}
+                          colSpan={7}
                           className="text-center py-24 text-slate-400"
                         >
                           <div className="flex flex-col items-center gap-2">
@@ -1104,30 +1107,53 @@ export default function AttendanceBulkPage({
                                 {className}
                               </Badge>
                             </TableCell>
-                            <TableCell className="py-4">
-                              <div className="flex items-center justify-center gap-2">
-                                {["present", "absent", "late"].map((s) => (
-                                  <button
-                                    key={s}
-                                    onClick={() => !isHistory && canMarkAttendance && handleStatusChange(student.id, s as AttendanceStatus)}
-                                    disabled={isHistory && !canMarkAttendance}
-                                    className={cn(
-                                      "flex items-center justify-center w-8 h-8 rounded-lg transition-all border",
-                                      status === s
-                                        ? s === "present" ? "bg-green-600 border-green-600 text-white shadow-sm"
-                                          : s === "absent" ? "bg-red-600 border-red-600 text-white shadow-sm"
-                                            : "bg-yellow-600 border-yellow-600 text-white shadow-sm"
-                                        : "bg-white border-slate-200 text-slate-400 hover:border-slate-300",
-                                      (isHistory && !canMarkAttendance) && "opacity-50 cursor-not-allowed"
-                                    )}
-                                    title={s.charAt(0).toUpperCase() + s.slice(1)}
-                                  >
-                                    {s === "present" ? <Check className="h-4 w-4" />
-                                      : s === "absent" ? <X className="h-4 w-4" />
-                                        : <Clock className="h-4 w-4" />}
-                                  </button>
-                                ))}
-                              </div>
+                            <TableCell className="py-4 text-center">
+                              <button
+                                onClick={() => !isHistory && canMarkAttendance && handleStatusChange(student.id, "present")}
+                                disabled={isHistory && !canMarkAttendance}
+                                className={cn(
+                                  "mx-auto flex items-center justify-center w-8 h-8 rounded-lg transition-all border",
+                                  status === "present"
+                                    ? "bg-green-600 border-green-600 text-white shadow-sm"
+                                    : "bg-white border-slate-200 text-slate-400 hover:border-slate-300",
+                                  (isHistory && !canMarkAttendance) && "opacity-50 cursor-not-allowed"
+                                )}
+                                title="Present"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                            </TableCell>
+                            <TableCell className="py-4 text-center">
+                              <button
+                                onClick={() => !isHistory && canMarkAttendance && handleStatusChange(student.id, "absent")}
+                                disabled={isHistory && !canMarkAttendance}
+                                className={cn(
+                                  "mx-auto flex items-center justify-center w-8 h-8 rounded-lg transition-all border",
+                                  status === "absent"
+                                    ? "bg-red-600 border-red-600 text-white shadow-sm"
+                                    : "bg-white border-slate-200 text-slate-400 hover:border-slate-300",
+                                  (isHistory && !canMarkAttendance) && "opacity-50 cursor-not-allowed"
+                                )}
+                                title="Absent"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </TableCell>
+                            <TableCell className="py-4 text-center">
+                              <button
+                                onClick={() => !isHistory && canMarkAttendance && handleStatusChange(student.id, "late")}
+                                disabled={isHistory && !canMarkAttendance}
+                                className={cn(
+                                  "mx-auto flex items-center justify-center w-8 h-8 rounded-lg transition-all border",
+                                  status === "late"
+                                    ? "bg-yellow-600 border-yellow-600 text-white shadow-sm"
+                                    : "bg-white border-slate-200 text-slate-400 hover:border-slate-300",
+                                  (isHistory && !canMarkAttendance) && "opacity-50 cursor-not-allowed"
+                                )}
+                                title="Late"
+                              >
+                                <Clock className="h-4 w-4" />
+                              </button>
                             </TableCell>
                             <TableCell className="py-4 pr-6">
                               {showReason ? (

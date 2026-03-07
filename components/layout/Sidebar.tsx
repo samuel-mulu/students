@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import {
     ArrowUpCircle,
     BarChart3,
+    BookOpen,
     Calendar,
     ChevronLeft,
     ChevronRight,
@@ -51,6 +52,12 @@ const menuItems: MenuItem[] = [
     label: "Attendance",
     href: "/dashboard/attendance",
     icon: Calendar,
+    roles: ["OWNER", "TEACHER"],
+  },
+  {
+    label: "Homework",
+    href: "/dashboard/homework",
+    icon: BookOpen,
     roles: ["OWNER", "TEACHER"],
   },
   {
