@@ -229,8 +229,8 @@ export const generateAllMonths = (year?: number, calendarSystem?: CalendarSystem
 
 /**
  * Calendar year used for the 12-month fee picker (independent of academic year DB dates).
- * Prefers years from existing payment months in the bucket, then the end year from the
- * academic year name (e.g. "2018 - 2019" → 2019), then the current calendar year.
+ * Prefers years from existing payment months in the bucket, then the start year from the
+ * academic year name (e.g. "2019 - 2020" → 2019), then the current calendar year.
  */
 export const getFeeCalendarYear = (
   academicYearName?: string | null,
@@ -249,7 +249,7 @@ export const getFeeCalendarYear = (
     const normalized = academicYearName.replace(/\s/g, "");
     const range = normalized.match(/(\d{4})-(\d{4})/);
     if (range) {
-      return parseInt(range[2], 10);
+      return parseInt(range[1], 10);
     }
     const single = normalized.match(/^(\d{4})$/);
     if (single) {
