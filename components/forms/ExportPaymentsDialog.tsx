@@ -22,9 +22,9 @@ import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
 import { useClassesByGradeAndYear } from '@/lib/hooks/use-classes';
 import { useGrades } from '@/lib/hooks/use-grades';
-import { formatDate, generateFeeCalendarMonthOptions, getFeeCalendarYear, getAcademicYearStartYear, resolveStudentClassEntry } from '@/lib/utils/format';
+import { formatDate, generateFeeCalendarMonthOptions, getFeeCalendarYear, getAcademicYearStartYear, getDefaultFeeMonthValue, resolveStudentClassEntry } from '@/lib/utils/format';
 import { Download, Loader2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 interface ExportPaymentsDialogProps {
@@ -44,7 +44,7 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
   const [gradeId, setGradeId] = useState<string>('');
   const [classId, setClassId] = useState<string>('all');
   const [paymentStatus, setPaymentStatus] = useState<string>('all');
-  const [month, setMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState<string>('');
   const [exportType, setExportType] = useState<'csv' | 'pdf'>('csv');
   const [isExporting, setIsExporting] = useState(false);
 
@@ -55,6 +55,11 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
     () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem, academicYearDisplayYear),
     [feeCalendarYear, calendarSystem, academicYearDisplayYear],
   );
+
+  useEffect(() => {
+    if (months.length === 0) return;
+    setMonth(getDefaultFeeMonthValue(feeCalendarYear, months, calendarSystem));
+  }, [feeCalendarYear, months, calendarSystem]);
 
   const handleExport = async () => {
     if (!gradeId) {

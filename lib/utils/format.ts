@@ -7,6 +7,7 @@ import {
     startOfMonth,
 } from "date-fns";
 import { formatDateForUI, getEthiopianMonthNameAmharic, gregorianMonthToEthiopianMonth } from "./date";
+import Kenat from "kenat";
 
 /**
  * Format date for display
@@ -302,6 +303,40 @@ export const generateFeeCalendarMonthOptions = (
       label: formatMonthYear(m.value, y, calendarSystem, true, labelYear),
     };
   });
+};
+
+/**
+ * Default fee month for pickers: current Gregorian or Ethiopian month mapped to the
+ * fee calendar storage year (e.g. September → 2026-09), not always January / Meskerem-first slot.
+ */
+export const getDefaultFeeMonthValue = (
+  storageYear: number,
+  monthOptions: Array<{ value: string; label: string }>,
+  calendarSystem?: CalendarSystem,
+): string => {
+  if (monthOptions.length === 0) {
+    const monthNum = new Date().getMonth() + 1;
+    return `${storageYear}-${String(monthNum).padStart(2, "0")}`;
+  }
+
+  if (calendarSystem === "ethiopian") {
+    try {
+      const ecMonth = new Kenat().getEthiopian().month;
+      const match = monthOptions.find(
+        (m) => gregorianMonthToEthiopianMonth(m.value) === ecMonth,
+      );
+      if (match) return match.value;
+    } catch {
+      // fall through to first option
+    }
+  } else {
+    const monthNum = new Date().getMonth() + 1;
+    const value = `${storageYear}-${String(monthNum).padStart(2, "0")}`;
+    const match = monthOptions.find((m) => m.value === value);
+    if (match) return match.value;
+  }
+
+  return monthOptions[0].value;
 };
 
 /**

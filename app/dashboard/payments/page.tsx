@@ -57,7 +57,7 @@ import {
   Payment,
   Student,
 } from "@/lib/types";
-import { generateFeeCalendarMonthOptions, getFeeCalendarYear, getAcademicYearStartYear, hasPaymentForMonth, formatClassDisplayName, getStudentClassDisplayName } from "@/lib/utils/format";
+import { generateFeeCalendarMonthOptions, getFeeCalendarYear, getAcademicYearStartYear, getDefaultFeeMonthValue, hasPaymentForMonth, formatClassDisplayName, getStudentClassDisplayName } from "@/lib/utils/format";
 import {
   isRegisterFeePaymentTypeName,
   isRegisterFeeSentinelMonth,
@@ -321,18 +321,14 @@ export default function PaymentsPage() {
     [feeCalendarYear, calendarSystem, academicYearDisplayYear],
   );
 
-  // Default month: first month with payments in this bucket, else first in fee calendar
+  // Default month: current Gregorian/Ethiopian month in fee calendar (not first month with data)
   useEffect(() => {
     if (monthOptions.length > 0 && academicYearFilter) {
-      const paidMonths = new Set(
-        payments
-          .filter((p) => p.academicYearId === academicYearFilter)
-          .map((p) => p.month),
+      setMonthFilter(
+        getDefaultFeeMonthValue(feeCalendarYear, monthOptions, calendarSystem),
       );
-      const firstWithData = monthOptions.find((m) => paidMonths.has(m.value));
-      setMonthFilter(firstWithData?.value ?? monthOptions[0].value);
     }
-  }, [academicYearFilter, feeCalendarYear, monthOptions, payments]);
+  }, [academicYearFilter, feeCalendarYear, monthOptions, calendarSystem]);
 
   // Backend already handles search, grade, class, classStatus, and paymentStatus filtering.
   const filteredStudents = students;

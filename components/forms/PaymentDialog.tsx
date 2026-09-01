@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { CreatePaymentRequest, CreateBulkPaymentRequest, Student } from '@/lib/types';
 import { useCalendarSystem } from '@/lib/context/calendar-context';
-import { generateFeeCalendarMonthOptions, formatCurrency } from '@/lib/utils/format';
+import { generateFeeCalendarMonthOptions, formatCurrency, getDefaultFeeMonthValue } from '@/lib/utils/format';
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
 import { usePayments } from '@/lib/hooks/use-payments';
 import { useEffect, useState, useMemo } from 'react';
@@ -95,7 +95,15 @@ export function PaymentDialog({
   );
   const existingPayments = Array.isArray(paymentsData?.data) ? paymentsData.data : [];
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const monthOptions = useMemo(
+    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem, academicYearDisplayYear),
+    [feeCalendarYear, calendarSystem, academicYearDisplayYear],
+  );
+
+  const defaultFeeMonth = useMemo(
+    () => getDefaultFeeMonthValue(feeCalendarYear, monthOptions, calendarSystem),
+    [feeCalendarYear, monthOptions, calendarSystem],
+  );
 
   const {
     register,
@@ -109,7 +117,7 @@ export function PaymentDialog({
     defaultValues: {
       studentId: student?.id || '',
       paymentTypeId: '',
-      months: defaultMonth ? [defaultMonth] : [currentMonth],
+      months: defaultMonth ? [defaultMonth] : [defaultFeeMonth],
       paymentMethod: 'cash',
       notes: '',
       proofImageUrl: '',
@@ -117,12 +125,6 @@ export function PaymentDialog({
       payerName: '',
     },
   });
-
-  // 12 fee months — independent of academic year DB dates
-  const monthOptions = useMemo(
-    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem, academicYearDisplayYear),
-    [feeCalendarYear, calendarSystem, academicYearDisplayYear],
-  );
 
   // Create a map of paid months (month value -> payment status)
   const paidMonthsMap = useMemo(() => {
@@ -167,7 +169,7 @@ export function PaymentDialog({
       reset({
         studentId: student.id,
         paymentTypeId: '',
-        months: defaultMonth ? [defaultMonth] : [currentMonth],
+        months: defaultMonth ? [defaultMonth] : [defaultFeeMonth],
         paymentMethod: 'cash',
         notes: '',
         proofImageUrl: '',
@@ -175,7 +177,7 @@ export function PaymentDialog({
         payerName: '',
       });
     }
-  }, [open, student, defaultMonth, reset, currentMonth]);
+  }, [open, student, defaultMonth, defaultFeeMonth, reset]);
 
   const handleMonthToggle = (monthValue: string) => {
     if (isRegisterFeeSelected) return;
