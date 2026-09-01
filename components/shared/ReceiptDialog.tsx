@@ -11,10 +11,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useCalendarSystem } from '@/lib/context/calendar-context';
+import { useAcademicYears } from '@/lib/hooks/use-academicYears';
 import { Payment } from '@/lib/types';
-import { formatCurrency, formatDate, formatMonthYear } from '@/lib/utils/format';
+import { formatCurrency, formatDate, formatMonthYear, getAcademicYearStartYear } from '@/lib/utils/format';
 import { Image as ImageIcon, Printer } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 interface ReceiptDialogProps {
   open: boolean;
@@ -26,6 +27,21 @@ interface ReceiptDialogProps {
 
 export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading }: ReceiptDialogProps) {
   const { calendarSystem } = useCalendarSystem();
+  const { data: academicYearsData } = useAcademicYears();
+  const academicYearNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (academicYearsData?.data ?? []).forEach((ay) => map.set(ay.id, ay.name));
+    return map;
+  }, [academicYearsData?.data]);
+
+  const formatPaymentMonth = (p: Payment) => {
+    const academicYearName = p.academicYearId
+      ? academicYearNameById.get(p.academicYearId)
+      : undefined;
+    const displayYear = getAcademicYearStartYear(academicYearName);
+    return formatMonthYear(p.month, p.year, calendarSystem, true, displayYear);
+  };
+
   const printRef = useRef<HTMLDivElement>(null);
   const [proofImageViewer, setProofImageViewer] = useState<{
     open: boolean;
@@ -118,8 +134,8 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
     : displayPayment.amount;
 
   const paidMonths = isBulkPayment && payments
-    ? payments.map(p => formatMonthYear(p.month, p.year, calendarSystem)).join(', ')
-    : formatMonthYear(displayPayment.month, displayPayment.year, calendarSystem);
+    ? payments.map((p) => formatPaymentMonth(p)).join(', ')
+    : formatPaymentMonth(displayPayment);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -206,7 +222,7 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
                 {!isBulkPayment && (
                   <div className="receipt-row">
                     <span className="font-medium text-muted-foreground">Payment Period:</span>
-                    <span>{formatMonthYear(displayPayment.month, displayPayment.year, calendarSystem)}</span>
+                    <span>{formatPaymentMonth(displayPayment)}</span>
                   </div>
                 )}
 

@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CreatePaymentRequest, CreateBulkPaymentRequest, Student } from '@/lib/types';
+import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { generateFeeCalendarMonthOptions, formatCurrency } from '@/lib/utils/format';
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
 import { usePayments } from '@/lib/hooks/use-payments';
@@ -64,6 +65,7 @@ interface PaymentDialogProps {
   student: Student | null;
   academicYearId: string;
   feeCalendarYear: number;
+  academicYearDisplayYear?: number;
   defaultMonth?: string;
   onSubmit: (data: CreatePaymentRequest | CreateBulkPaymentRequest) => Promise<void>;
   isLoading?: boolean;
@@ -75,10 +77,12 @@ export function PaymentDialog({
   student,
   academicYearId,
   feeCalendarYear,
+  academicYearDisplayYear,
   defaultMonth,
   onSubmit,
   isLoading,
 }: PaymentDialogProps) {
+  const { calendarSystem } = useCalendarSystem();
   // Fetch payment types
   const { data: paymentTypesData, isLoading: paymentTypesLoading } = usePaymentTypes();
   const paymentTypes = Array.isArray(paymentTypesData?.data) ? paymentTypesData.data.filter(pt => pt.isActive) : [];
@@ -116,8 +120,8 @@ export function PaymentDialog({
 
   // 12 fee months — independent of academic year DB dates
   const monthOptions = useMemo(
-    () => generateFeeCalendarMonthOptions(feeCalendarYear),
-    [feeCalendarYear],
+    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem, academicYearDisplayYear),
+    [feeCalendarYear, calendarSystem, academicYearDisplayYear],
   );
 
   // Create a map of paid months (month value -> payment status)

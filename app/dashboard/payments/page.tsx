@@ -57,7 +57,7 @@ import {
   Payment,
   Student,
 } from "@/lib/types";
-import { generateFeeCalendarMonthOptions, getFeeCalendarYear, hasPaymentForMonth, formatClassDisplayName, getStudentClassDisplayName } from "@/lib/utils/format";
+import { generateFeeCalendarMonthOptions, getFeeCalendarYear, getAcademicYearStartYear, hasPaymentForMonth, formatClassDisplayName, getStudentClassDisplayName } from "@/lib/utils/format";
 import {
   isRegisterFeePaymentTypeName,
   isRegisterFeeSentinelMonth,
@@ -311,9 +311,14 @@ export default function PaymentsPage() {
     return getFeeCalendarYear(selectedAcademicYear?.name, paymentMonths);
   }, [selectedAcademicYear?.name, academicYearFilter, payments]);
 
+  const academicYearDisplayYear = useMemo(
+    () => getAcademicYearStartYear(selectedAcademicYear?.name),
+    [selectedAcademicYear?.name],
+  );
+
   const monthOptions = useMemo(
-    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem),
-    [feeCalendarYear, calendarSystem],
+    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem, academicYearDisplayYear),
+    [feeCalendarYear, calendarSystem, academicYearDisplayYear],
   );
 
   // Default month: first month with payments in this bucket, else first in fee calendar
@@ -885,6 +890,7 @@ export default function PaymentsPage() {
         student={paymentDialog.student}
         academicYearId={academicYearFilter || ''}
         feeCalendarYear={feeCalendarYear}
+        academicYearDisplayYear={academicYearDisplayYear}
         defaultMonth={monthFilter}
         onSubmit={handleCreatePayment}
         isLoading={

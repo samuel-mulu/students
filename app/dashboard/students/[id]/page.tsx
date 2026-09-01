@@ -34,7 +34,8 @@ import { useResults } from '@/lib/hooks/use-results';
 import { useAssignClass, useStudent, useTransferClass } from '@/lib/hooks/use-students';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { getOptimizedCloudinaryUrl } from '@/lib/utils/cloudinary';
-import { formatCurrency, formatDate, formatFullName, formatMonthYear } from '@/lib/utils/format';
+import { useAcademicYears } from '@/lib/hooks/use-academicYears';
+import { formatCurrency, formatDate, formatFullName, formatMonthYear, getAcademicYearStartYear } from '@/lib/utils/format';
 import { format } from 'date-fns';
 import { Award, BookOpen, Calendar, CheckCircle2, Clock, DollarSign, FileText, IdCard, Image as ImageIcon, TrendingUp, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -44,6 +45,21 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { hasRole } = useAuthStore();
   const { calendarSystem } = useCalendarSystem();
+  const { data: academicYearsData } = useAcademicYears();
+  const academicYearNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (academicYearsData?.data ?? []).forEach((ay) => map.set(ay.id, ay.name));
+    return map;
+  }, [academicYearsData?.data]);
+
+  const formatPaymentMonth = (month: string, year: number, academicYearId?: string | null) => {
+    const academicYearName = academicYearId
+      ? academicYearNameById.get(academicYearId)
+      : undefined;
+    const displayYear = getAcademicYearStartYear(academicYearName);
+    return formatMonthYear(month, year, calendarSystem, true, displayYear);
+  };
+
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('personal');
   const [assignDialog, setAssignDialog] = useState(false);
@@ -650,7 +666,11 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                                 )}
                               </div>
                               <p className="text-xs text-muted-foreground mt-2 text-center transform -rotate-45 origin-top-left whitespace-nowrap">
-                                {formatMonthYear(monthData.month, parseInt(monthData.month.split('-')[0]), calendarSystem)}
+                                {formatPaymentMonth(
+                                  monthData.month,
+                                  parseInt(monthData.month.split('-')[0]),
+                                  payments.find((p) => p.month === monthData.month)?.academicYearId,
+                                )}
                               </p>
                             </div>
                           );
@@ -700,7 +720,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                           {payments.map((payment) => (
                             <TableRow key={payment.id}>
                               <TableCell>
-                                {formatMonthYear(payment.month, payment.year, calendarSystem)}
+                                {formatPaymentMonth(payment.month, payment.year, payment.academicYearId)}
                               </TableCell>
                               <TableCell>
                                 {payment.paymentType?.name || 'N/A'}

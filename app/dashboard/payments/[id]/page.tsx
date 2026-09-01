@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
-import { formatCurrency, formatMonthYear, formatDate } from '@/lib/utils/format';
+import { formatCurrency, formatMonthYear, formatDate, getAcademicYearStartYear } from '@/lib/utils/format';
+import { useAcademicYears } from '@/lib/hooks/use-academicYears';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -17,6 +18,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { hasRole } = useAuthStore();
   const { calendarSystem } = useCalendarSystem();
+  const { data: academicYearsData } = useAcademicYears();
   const { data, isLoading, error } = usePayment(id);
   const confirmPayment = useConfirmPayment();
   const generateReceipt = useGenerateReceipt();
@@ -40,6 +42,11 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const payment = data.data;
+  const academicYearName = payment.academicYearId
+    ? academicYearsData?.data?.find((ay) => ay.id === payment.academicYearId)?.name
+    : undefined;
+  const displayYear = getAcademicYearStartYear(academicYearName);
+  const monthLabel = formatMonthYear(payment.month, payment.year, calendarSystem, true, displayYear);
 
   return (
     <div className="space-y-6">
@@ -47,7 +54,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
         <div>
           <h1 className="text-xl font-semibold">Payment Details</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {formatMonthYear(payment.month, payment.year, calendarSystem)}
+            {monthLabel}
           </p>
         </div>
         <Badge variant={payment.status === 'confirmed' ? 'default' : 'secondary'}>
@@ -74,7 +81,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">Month/Year</p>
-            <p className="text-sm">{formatMonthYear(payment.month, payment.year, calendarSystem)}</p>
+            <p className="text-sm">{monthLabel}</p>
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">Status</p>

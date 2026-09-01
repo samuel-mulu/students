@@ -22,7 +22,7 @@ import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
 import { useClassesByGradeAndYear } from '@/lib/hooks/use-classes';
 import { useGrades } from '@/lib/hooks/use-grades';
-import { formatDate, generateFeeCalendarMonthOptions, getFeeCalendarYear, resolveStudentClassEntry } from '@/lib/utils/format';
+import { formatDate, generateFeeCalendarMonthOptions, getFeeCalendarYear, getAcademicYearStartYear, resolveStudentClassEntry } from '@/lib/utils/format';
 import { Download, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -39,6 +39,7 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
   const grades = gradesData?.data || [];
   const academicYearId = activeYearData?.data?.id || '';
   const feeCalendarYear = getFeeCalendarYear(activeYearData?.data?.name);
+  const academicYearDisplayYear = getAcademicYearStartYear(activeYearData?.data?.name);
 
   const [gradeId, setGradeId] = useState<string>('');
   const [classId, setClassId] = useState<string>('all');
@@ -51,8 +52,8 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
   const classes = classesData?.data || [];
 
   const months = useMemo(
-    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem),
-    [feeCalendarYear, calendarSystem],
+    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem, academicYearDisplayYear),
+    [feeCalendarYear, calendarSystem, academicYearDisplayYear],
   );
 
   const handleExport = async () => {

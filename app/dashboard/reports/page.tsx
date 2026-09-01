@@ -40,7 +40,7 @@ import { RegistrarPaymentReportsParams } from '@/lib/api/reports';
 import { useUsers } from '@/lib/hooks/use-users';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { formatDateForUI } from '@/lib/utils/date';
-import { formatCurrency, formatDate, formatDateTime, formatFullName, formatMonthYear, generateFeeCalendarMonthOptions, getFeeCalendarYear } from '@/lib/utils/format';
+import { formatCurrency, formatDate, formatDateTime, formatFullName, formatMonthYear, generateFeeCalendarMonthOptions, getFeeCalendarYear, getAcademicYearStartYear } from '@/lib/utils/format';
 import { addDays, format, parseISO, subDays } from 'date-fns';
 import { Calendar, ChevronLeft, ChevronRight, DollarSign, Download, FileText, Printer, RefreshCw, TrendingUp, UserCheck, Users, UserX } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -347,9 +347,14 @@ export default function ReportsPage() {
     return getFeeCalendarYear(selectedAcademicYear?.name, paymentMonths);
   }, [selectedAcademicYear?.name, monthlyReports?.byMonth]);
 
+  const academicYearDisplayYear = useMemo(
+    () => getAcademicYearStartYear(selectedAcademicYear?.name),
+    [selectedAcademicYear?.name],
+  );
+
   const monthOptions = useMemo(
-    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem),
-    [feeCalendarYear, calendarSystem],
+    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem, academicYearDisplayYear),
+    [feeCalendarYear, calendarSystem, academicYearDisplayYear],
   );
 
   const yearScopeLabel = selectedAcademicYear?.name ?? 'Selected Academic Year';
@@ -579,7 +584,7 @@ export default function ReportsPage() {
       const [year, month] = monthData.month.split('-');
 
       return [
-        formatMonthYear(monthData.month, parseInt(year), calendarSystem),
+        formatMonthYear(monthData.month, parseInt(year), calendarSystem, true, academicYearDisplayYear),
         totalStudents.toString(),
         paidStudents.toString(),
         unpaidStudents.toString(),
@@ -632,7 +637,7 @@ export default function ReportsPage() {
       const [year, month] = monthData.month.split('-');
       return `
         <tr>
-          <td style="padding: 8px; border: 1px solid #ddd;">${formatMonthYear(monthData.month, parseInt(year), calendarSystem)}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${formatMonthYear(monthData.month, parseInt(year), calendarSystem, true, academicYearDisplayYear)}</td>
           <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${totalStudents}</td>
           <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: #16a34a; font-weight: bold;">${paidStudents}</td>
           <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: #ea580c; font-weight: bold;">${unpaidStudents}</td>
@@ -1125,7 +1130,7 @@ export default function ReportsPage() {
                           return (
                             <TableRow key={monthData.month}>
                               <TableCell className="font-medium">
-                                {formatMonthYear(monthData.month, parseInt(year), calendarSystem)}
+                                {formatMonthYear(monthData.month, parseInt(year), calendarSystem, true, academicYearDisplayYear)}
                               </TableCell>
                               <TableCell className="text-right">{totalStudents}</TableCell>
                               <TableCell className="text-right text-green-600 font-semibold">
@@ -1784,7 +1789,7 @@ export default function ReportsPage() {
                         return (
                           <TableRow key={monthData.month}>
                             <TableCell className="font-medium">
-                              {formatMonthYear(monthData.month, parseInt(year), calendarSystem)}
+                              {formatMonthYear(monthData.month, parseInt(year), calendarSystem, true, academicYearDisplayYear)}
                             </TableCell>
                             <TableCell className="text-right">{totalStudents}</TableCell>
                             <TableCell className="text-right text-green-600 font-semibold">

@@ -18,7 +18,8 @@ import { useStudents } from '@/lib/hooks/use-students';
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
 import { usePayments } from '@/lib/hooks/use-payments';
 import { useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
-import { formatCurrency, generateFeeCalendarMonthOptions, getFeeCalendarYear } from '@/lib/utils/format';
+import { formatCurrency, generateFeeCalendarMonthOptions, getFeeCalendarYear, getAcademicYearStartYear } from '@/lib/utils/format';
+import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle2, Check, Loader2 } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
@@ -59,6 +60,7 @@ interface PaymentFormProps {
 }
 
 export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps) {
+  const { calendarSystem } = useCalendarSystem();
   const { data: studentsData } = useStudents();
   const students = studentsData?.data || [];
   const { data: paymentTypesData, isLoading: paymentTypesLoading } = usePaymentTypes();
@@ -68,11 +70,12 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
   const { data: activeYearData } = useActiveAcademicYear();
   const academicYearId = activeYearData?.data?.id || '';
   const feeCalendarYear = getFeeCalendarYear(activeYearData?.data?.name);
+  const academicYearDisplayYear = getAcademicYearStartYear(activeYearData?.data?.name);
 
   const currentMonth = new Date().toISOString().slice(0, 7);
   const monthOptions = useMemo(
-    () => generateFeeCalendarMonthOptions(feeCalendarYear),
-    [feeCalendarYear],
+    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem, academicYearDisplayYear),
+    [feeCalendarYear, calendarSystem, academicYearDisplayYear],
   );
 
   const {

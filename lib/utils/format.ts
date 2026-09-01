@@ -55,6 +55,7 @@ export const formatMonthYear = (
   year: number,
   calendarSystem?: CalendarSystem,
   includeYear = false,
+  displayYearOverride?: number,
 ): string => {
   try {
     // Sentinel month for one-time Register Fee (YYYY-13)
@@ -64,7 +65,8 @@ export const formatMonthYear = (
     }
 
     const [yearPart, monthPart] = month.split("-");
-    const displayYear = yearPart ? parseInt(yearPart, 10) : year;
+    const storageYear = yearPart ? parseInt(yearPart, 10) : year;
+    const displayYear = displayYearOverride ?? storageYear;
 
     let monthLabel: string;
     if (calendarSystem === "ethiopian") {
@@ -78,11 +80,12 @@ export const formatMonthYear = (
     return includeYear ? `${monthLabel} ${displayYear}` : monthLabel;
   } catch {
     // Fallback: try to extract month name from month string
+    const displayYear = displayYearOverride ?? year;
     if (calendarSystem === "ethiopian") {
       try {
         const ethiopianMonth = gregorianMonthToEthiopianMonth(month);
         const monthLabel = getEthiopianMonthNameAmharic(ethiopianMonth);
-        return includeYear ? `${monthLabel} ${year}` : monthLabel;
+        return includeYear ? `${monthLabel} ${displayYear}` : monthLabel;
       } catch {
         return month;
       }
@@ -93,10 +96,30 @@ export const formatMonthYear = (
     const monthIndex = parseInt(month.split("-")[1]) - 1;
     if (monthIndex >= 0 && monthIndex < 12) {
       const monthLabel = monthNames[monthIndex];
-      return includeYear ? `${monthLabel} ${year}` : monthLabel;
+      return includeYear ? `${monthLabel} ${displayYear}` : monthLabel;
     }
     return month;
   }
+};
+
+/** First year from academic year name, e.g. "2019-2020" → 2019 */
+export const getAcademicYearStartYear = (
+  academicYearName?: string | null,
+): number | undefined => {
+  if (!academicYearName) return undefined;
+
+  const normalized = academicYearName.replace(/\s/g, "");
+  const range = normalized.match(/(\d{4})-(\d{4})/);
+  if (range) {
+    return parseInt(range[1], 10);
+  }
+
+  const single = normalized.match(/^(\d{4})$/);
+  if (single) {
+    return parseInt(single[1], 10);
+  }
+
+  return undefined;
 };
 
 export const getInitials = (firstName: string, lastName: string): string => {
@@ -229,8 +252,8 @@ export const generateAllMonths = (year?: number, calendarSystem?: CalendarSystem
 
 /**
  * Calendar year used for the 12-month fee picker (independent of academic year DB dates).
- * Prefers years from existing payment months in the bucket, then the start year from the
- * academic year name (e.g. "2019 - 2020" → 2019), then the current calendar year.
+ * Prefers years from existing payment months in the bucket, then the end year from the
+ * academic year name (e.g. "2018 - 2019" → 2019), then the current calendar year.
  */
 export const getFeeCalendarYear = (
   academicYearName?: string | null,
@@ -249,7 +272,7 @@ export const getFeeCalendarYear = (
     const normalized = academicYearName.replace(/\s/g, "");
     const range = normalized.match(/(\d{4})-(\d{4})/);
     if (range) {
-      return parseInt(range[1], 10);
+      return parseInt(range[2], 10);
     }
     const single = normalized.match(/^(\d{4})$/);
     if (single) {
@@ -260,16 +283,23 @@ export const getFeeCalendarYear = (
   return new Date().getFullYear();
 };
 
-/** 12 fee months (Jan–Dec or Meskerem-first) with year in each label. */
+/**
+ * 12 fee months (Jan–Dec or Meskerem-first).
+ * `storageYear` is used for payment month values (e.g. 2026-01).
+ * `displayYear` overrides the year shown in labels (e.g. 2019 for "2019-2020").
+ */
 export const generateFeeCalendarMonthOptions = (
-  year: number,
+  storageYear: number,
   calendarSystem?: CalendarSystem,
+  displayYear?: number,
 ): Array<{ value: string; label: string }> => {
-  return generateAllMonths(year, calendarSystem).map((m) => {
+  const labelYear = displayYear ?? storageYear;
+
+  return generateAllMonths(storageYear, calendarSystem).map((m) => {
     const y = parseInt(m.value.split("-")[0], 10);
     return {
       value: m.value,
-      label: formatMonthYear(m.value, y, calendarSystem, true),
+      label: formatMonthYear(m.value, y, calendarSystem, true, labelYear),
     };
   });
 };
