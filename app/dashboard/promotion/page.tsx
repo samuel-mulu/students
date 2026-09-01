@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { GraduationCap, ArrowRight, RefreshCw, CheckCircle2, XCircle, Users } from 'lucide-react';
+import { GraduationCap, ArrowRight, RefreshCw, CheckCircle2, XCircle, Users, Search } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import {
@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/table';
 import { formatFullName } from '@/lib/utils/format';
 import { PromotionBlocker } from '@/lib/types';
+import { Input } from '@/components/ui/input';
 
 const BLOCKER_MESSAGES: Record<
   PromotionBlocker,
@@ -77,6 +78,7 @@ export default function PromotionPage() {
   const promoteStudents = usePromoteStudents();
   const [classFilter, setClassFilter] = useState<string>(ALL_CLASSES);
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>(ALL_OUTCOMES);
+  const [nameSearch, setNameSearch] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(false);
 
   const preview = data?.data;
@@ -90,8 +92,19 @@ export default function PromotionPage() {
     if (outcomeFilter !== ALL_OUTCOMES) {
       filtered = filtered.filter((s) => s.outcome === outcomeFilter);
     }
+    const query = nameSearch.trim().toLowerCase();
+    if (query) {
+      filtered = filtered.filter((s) => {
+        const fullName = formatFullName(s.firstName, s.lastName).toLowerCase();
+        return (
+          s.firstName.toLowerCase().includes(query) ||
+          s.lastName.toLowerCase().includes(query) ||
+          fullName.includes(query)
+        );
+      });
+    }
     return filtered;
-  }, [preview?.students, classFilter, outcomeFilter]);
+  }, [preview?.students, classFilter, outcomeFilter, nameSearch]);
 
   if (isLoading) {
     return <LoadingState rows={5} columns={4} />;
@@ -252,7 +265,16 @@ export default function PromotionPage() {
             )}
           </div>
           {!hasTermBlockers && preview.students.length > 0 && (
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+              <div className="relative sm:w-[220px]">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name..."
+                  value={nameSearch}
+                  onChange={(e) => setNameSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
               {preview.classes.length > 0 && (
                 <Select value={classFilter} onValueChange={setClassFilter}>
                   <SelectTrigger className="sm:w-[200px]">
@@ -313,7 +335,9 @@ export default function PromotionPage() {
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       {hasTermBlockers
                         ? 'Fix term setup to see student preview'
-                        : 'No students found'}
+                        : nameSearch.trim()
+                          ? 'No students match your search'
+                          : 'No students found'}
                     </TableCell>
                   </TableRow>
                 ) : (
