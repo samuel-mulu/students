@@ -50,7 +50,12 @@ export const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
-export const formatMonthYear = (month: string, year: number, calendarSystem?: CalendarSystem): string => {
+export const formatMonthYear = (
+  month: string,
+  year: number,
+  calendarSystem?: CalendarSystem,
+  includeYear = false,
+): string => {
   try {
     // Sentinel month for one-time Register Fee (YYYY-13)
     const sentinelMonthPart = month.split("-")[1];
@@ -58,33 +63,37 @@ export const formatMonthYear = (month: string, year: number, calendarSystem?: Ca
       return "Register Fee";
     }
 
-    if (calendarSystem === "ethiopian") {
-      // Convert Gregorian month to Ethiopian month and return Amharic name
-      const ethiopianMonth = gregorianMonthToEthiopianMonth(month);
-      return getEthiopianMonthNameAmharic(ethiopianMonth);
-    }
-    
-    // Gregorian calendar - return English month name
     const [yearPart, monthPart] = month.split("-");
-    const date = new Date(parseInt(yearPart), parseInt(monthPart) - 1);
-    return format(date, "MMMM");
+    const displayYear = yearPart ? parseInt(yearPart, 10) : year;
+
+    let monthLabel: string;
+    if (calendarSystem === "ethiopian") {
+      const ethiopianMonth = gregorianMonthToEthiopianMonth(month);
+      monthLabel = getEthiopianMonthNameAmharic(ethiopianMonth);
+    } else {
+      const date = new Date(parseInt(yearPart, 10), parseInt(monthPart, 10) - 1);
+      monthLabel = format(date, "MMMM");
+    }
+
+    return includeYear ? `${monthLabel} ${displayYear}` : monthLabel;
   } catch {
     // Fallback: try to extract month name from month string
     if (calendarSystem === "ethiopian") {
-      // Try to get Ethiopian month even in error case
       try {
         const ethiopianMonth = gregorianMonthToEthiopianMonth(month);
-        return getEthiopianMonthNameAmharic(ethiopianMonth);
+        const monthLabel = getEthiopianMonthNameAmharic(ethiopianMonth);
+        return includeYear ? `${monthLabel} ${year}` : monthLabel;
       } catch {
         return month;
       }
     }
-    
+
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                        'July', 'August', 'September', 'October', 'November', 'December'];
     const monthIndex = parseInt(month.split("-")[1]) - 1;
     if (monthIndex >= 0 && monthIndex < 12) {
-      return monthNames[monthIndex];
+      const monthLabel = monthNames[monthIndex];
+      return includeYear ? `${monthLabel} ${year}` : monthLabel;
     }
     return month;
   }
@@ -97,6 +106,45 @@ export const getInitials = (firstName: string, lastName: string): string => {
 export const formatFullName = (firstName: string, lastName: string): string => {
   return `${firstName} ${lastName}`;
 };
+
+/** Strip academic year suffix from class name for display, e.g. "KG 2 A (2025-2026)" → "KG 2 A" */
+export const stripYearSuffix = (className: string): string =>
+  className.replace(/\s*\(\d{4}-\d{4}\)\s*$/, "").trim();
+
+/** Strip duplicate description suffix, e.g. "KG 1 A - KG 1 A" → "KG 1 A" */
+export const stripClassDisplaySuffix = (className: string): string => {
+  const base = stripYearSuffix(className);
+  const idx = base.indexOf(" - ");
+  return idx >= 0 ? base.slice(0, idx).trim() : base;
+};
+
+export const formatClassDisplayName = (className: string): string =>
+  stripClassDisplaySuffix(className);
+
+/** Active assignment first; in archive mode use year-scoped history from the API. */
+export function resolveStudentClassEntry(
+  classHistory:
+    | Array<{ endDate?: string | null; class?: { name?: string; grade?: { name?: string } } }>
+    | undefined,
+  preferHistorical = false,
+) {
+  if (!classHistory?.length) return null;
+  if (preferHistorical) {
+    return classHistory[0];
+  }
+  return classHistory.find((ch) => !ch.endDate) ?? classHistory[0];
+}
+
+export function getStudentClassDisplayName(
+  student: { classHistory?: Array<{ endDate?: string | null; class?: { name?: string } }>; classStatus?: string },
+  preferHistorical = false,
+): string {
+  const entry = resolveStudentClassEntry(student.classHistory, preferHistorical);
+  if (entry?.class?.name) {
+    return formatClassDisplayName(entry.class.name);
+  }
+  return student.classStatus === "assigned" ? "Not Assigned" : "New";
+}
 
 /**
  * Generate months from academic year start date to end date
@@ -180,19 +228,76 @@ export const generateAllMonths = (year?: number, calendarSystem?: CalendarSystem
 };
 
 /**
- * Check if a student has a payment for a specific month
+ * Calendar year used for the 12-month fee picker (independent of academic year DB dates).
+ * Prefers years from existing payment months in the bucket, then the end year from the
+ * academic year name (e.g. "2018 - 2019" → 2019), then the current calendar year.
+ */
+export const getFeeCalendarYear = (
+  academicYearName?: string | null,
+  paymentMonths?: string[],
+): number => {
+  if (paymentMonths && paymentMonths.length > 0) {
+    const years = paymentMonths
+      .map((m) => parseInt(m.split("-")[0], 10))
+      .filter((y) => !Number.isNaN(y));
+    if (years.length > 0) {
+      return Math.max(...years);
+    }
+  }
+
+  if (academicYearName) {
+    const normalized = academicYearName.replace(/\s/g, "");
+    const range = normalized.match(/(\d{4})-(\d{4})/);
+    if (range) {
+      return parseInt(range[2], 10);
+    }
+    const single = normalized.match(/^(\d{4})$/);
+    if (single) {
+      return parseInt(single[1], 10);
+    }
+  }
+
+  return new Date().getFullYear();
+};
+
+/** 12 fee months (Jan–Dec or Meskerem-first) with year in each label. */
+export const generateFeeCalendarMonthOptions = (
+  year: number,
+  calendarSystem?: CalendarSystem,
+): Array<{ value: string; label: string }> => {
+  return generateAllMonths(year, calendarSystem).map((m) => {
+    const y = parseInt(m.value.split("-")[0], 10);
+    return {
+      value: m.value,
+      label: formatMonthYear(m.value, y, calendarSystem, true),
+    };
+  });
+};
+
+/**
+ * Check if a student has a payment for a specific month within an academic year
  */
 export const hasPaymentForMonth = (
-  payments: Array<{ month: string; year: number; status: string }>,
+  payments: Array<{
+    month: string;
+    year: number;
+    status: string;
+    academicYearId?: string | null;
+  }>,
   month: string,
-  year?: number
+  year?: number,
+  academicYearId?: string,
 ): { exists: boolean; status?: string } => {
-  const [yearPart, monthPart] = month.split("-");
+  const [yearPart] = month.split("-");
   const paymentYear = year || parseInt(yearPart);
 
-  const payment = payments.find(
-    (p) => p.month === month && p.year === paymentYear
-  );
+  const payment = payments.find((p) => {
+    if (p.month !== month || p.year !== paymentYear) return false;
+    if (academicYearId) {
+      return p.academicYearId === academicYearId;
+    }
+    return true;
+  });
 
   if (!payment) {
     return { exists: false };

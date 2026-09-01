@@ -19,61 +19,56 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRouter } from 'next/navigation';
 import { BackButton } from '@/components/shared/BackButton';
+import { ArchiveModeBanner } from '@/components/shared/ArchiveModeBanner';
+import { useAcademicYearContext } from '@/lib/hooks/use-academic-year-context';
+import { formatClassDisplayName } from '@/lib/utils/format';
 
 export default function ResultsPage() {
   const router = useRouter();
   const { hasRole, user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'continuous' | 'roster'>('continuous');
-  const { data: classesData } = useClasses();
+  const { data: activeYearData } = useActiveAcademicYear();
+  const activeYear = activeYearData?.data;
+  const { academicYearIdParam } = useAcademicYearContext();
+  const isTeacher = hasRole(['TEACHER']);
+
+  const yearIdForClasses = academicYearIdParam || activeYear?.id;
+  const { data: classesData } = useClasses(
+    yearIdForClasses ? { academicYearId: yearIdForClasses } : undefined,
+  );
   const allClasses = Array.isArray(classesData?.data) ? classesData.data : [];
   const { data: termsData } = useTerms();
   const allTerms = Array.isArray(termsData?.data) ? termsData.data : [];
   const { data: academicYearsData } = useAcademicYears();
   const allAcademicYears = Array.isArray(academicYearsData?.data) ? academicYearsData.data : [];
-  const { data: activeYearData } = useActiveAcademicYear();
-  const activeYear = activeYearData?.data;
-  const isTeacher = hasRole(['TEACHER']);
 
-  // Filter classes for teachers:
+  // Filter classes for teachers and archive year
   // Step 1: Filter by active academic year first
   // Step 2: Then filter by assigned classes
   const classes = useMemo(() => {
-    // For owners, show all classes
-    if (!isTeacher) {
-      return allClasses;
-    }
-    
-    // For teachers: must have active academic year
-    if (!activeYear || !activeYear.id) {
-      return [];
-    }
-    
-    // Step 1: Get classes from active academic year
-    const activeYearClasses = allClasses.filter((cls) => {
-      // Check both academicYearId and legacy academicYear field
-      if (cls.academicYearId) {
-        return cls.academicYearId === activeYear.id;
-      }
-      // Legacy support: check if academicYear is a string matching the active year name
+    const yearId = academicYearIdParam || activeYear?.id;
+    if (!yearId) return isTeacher ? [] : allClasses;
+
+    const yearClasses = allClasses.filter((cls) => {
+      if (cls.academicYearId) return cls.academicYearId === yearId;
       if (typeof cls.academicYear === 'string') {
-        return cls.academicYear === activeYear.name;
+        return cls.academicYear === activeYear?.name;
       }
-      // If academicYear is an object, check its id
       if (typeof cls.academicYear === 'object' && cls.academicYear?.id) {
-        return cls.academicYear.id === activeYear.id;
+        return cls.academicYear.id === yearId;
       }
       return false;
     });
-    
-    // Step 2: Filter by assigned classes (if teacher has assigned classes)
+
+    if (!isTeacher) return yearClasses;
+
     if (user?.teacherClasses && user.teacherClasses.length > 0) {
       const assignedClassIds = user.teacherClasses.map((tc) => tc.id);
-      return activeYearClasses.filter((cls) => assignedClassIds.includes(cls.id));
+      return yearClasses.filter((cls) => assignedClassIds.includes(cls.id));
     }
-    
-    // If no assigned classes, return empty array
+
     return [];
-  }, [isTeacher, user?.teacherClasses, activeYear, allClasses]);
+  }, [isTeacher, user?.teacherClasses, activeYear, allClasses, academicYearIdParam]);
 
   // Filter academic years for teachers: show only active academic year
   const academicYears = useMemo(() => {
@@ -88,6 +83,12 @@ export default function ResultsPage() {
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [selectedTermId, setSelectedTermId] = useState<string>('');
+
+  useEffect(() => {
+    if (academicYearIdParam) {
+      setSelectedAcademicYearId(academicYearIdParam);
+    }
+  }, [academicYearIdParam]);
 
   // Auto-select active academic year for teachers
   useEffect(() => {
@@ -166,6 +167,7 @@ export default function ResultsPage() {
 
   return (
     <div className="space-y-6">
+      <ArchiveModeBanner />
       <div className="flex items-center gap-4">
         <BackButton href="/dashboard" />
         <div>
@@ -236,7 +238,7 @@ export default function ResultsPage() {
                       ) : (
                         filteredClasses.map((cls) => (
                           <SelectItem key={cls.id} value={cls.id}>
-                            {cls.name}
+                            {formatClassDisplayName(cls.name)}
                           </SelectItem>
                         ))
                       )}
@@ -346,7 +348,7 @@ export default function ResultsPage() {
                       ) : (
                         filteredClasses.map((cls) => (
                           <SelectItem key={cls.id} value={cls.id}>
-                            {cls.name}
+                            {formatClassDisplayName(cls.name)}
                           </SelectItem>
                         ))
                       )}

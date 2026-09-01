@@ -9,8 +9,16 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { AcademicYear } from '@/lib/types';
-import { Users, GraduationCap, FileText, DollarSign, Calendar } from 'lucide-react';
-import Link from 'next/link';
+import {
+  Users,
+  GraduationCap,
+  FileText,
+  DollarSign,
+  Calendar,
+  BookOpen,
+  BarChart3,
+  Award,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ArchivedYearsModalProps {
@@ -25,21 +33,21 @@ export function ArchivedYearsModal({
   archivedYears,
 }: ArchivedYearsModalProps) {
   const handleViewAction = (yearId: string, viewType: string) => {
-    // Close modal first
     onOpenChange(false);
-    
-    // Navigate to appropriate page with academic year filter
-    // The pages will need to handle the academicYearId query param
+
     const basePaths: Record<string, string> = {
-      classes: '/dashboard/classes',
+      grades: '/dashboard/grades',
       students: '/dashboard/students',
       marks: '/dashboard/results',
       payments: '/dashboard/payments',
+      attendance: '/dashboard/attendance',
+      homework: '/dashboard/homework',
+      reports: '/dashboard/reports',
+      graduates: '/dashboard/graduates',
     };
-    
+
     const path = basePaths[viewType];
     if (path) {
-      // Use window.location to add query param
       window.location.href = `${path}?academicYearId=${yearId}`;
     }
   };
@@ -77,7 +85,7 @@ export function ArchivedYearsModal({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleViewAction(year.id, 'classes')}
+                    onClick={() => handleViewAction(year.id, 'grades')}
                     className="justify-start"
                   >
                     <GraduationCap className="mr-2 h-4 w-4" />
@@ -92,6 +100,26 @@ export function ArchivedYearsModal({
                   >
                     <Users className="mr-2 h-4 w-4" />
                     View Students
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewAction(year.id, 'attendance')}
+                    className="justify-start"
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    View Attendance
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewAction(year.id, 'homework')}
+                    className="justify-start"
+                  >
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    View Homework
                   </Button>
 
                   <Button
@@ -112,6 +140,26 @@ export function ArchivedYearsModal({
                   >
                     <DollarSign className="mr-2 h-4 w-4" />
                     View Payments
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewAction(year.id, 'reports')}
+                    className="justify-start"
+                  >
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    View Reports
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewAction(year.id, 'graduates')}
+                    className="justify-start"
+                  >
+                    <Award className="mr-2 h-4 w-4" />
+                    View Graduates
                   </Button>
                 </div>
               </div>

@@ -17,7 +17,8 @@ import { CreatePaymentRequest, CreateBulkPaymentRequest } from '@/lib/types';
 import { useStudents } from '@/lib/hooks/use-students';
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
 import { usePayments } from '@/lib/hooks/use-payments';
-import { formatCurrency, generateAllMonths } from '@/lib/utils/format';
+import { useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
+import { formatCurrency, generateFeeCalendarMonthOptions, getFeeCalendarYear } from '@/lib/utils/format';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle2, Check, Loader2 } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
@@ -28,15 +29,26 @@ import {
   isRegisterFeeSentinelMonth,
 } from '@/lib/utils/paymentType';
 
-const paymentSchema = z.object({
-  studentId: z.string().min(1, 'Student is required'),
-  paymentTypeId: z.string().uuid('Payment type is required'),
-  months: z.array(z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format')).min(1, 'At least one month must be selected'),
-  paymentMethod: z.string().optional(),
-  notes: z.string().optional(),
-  proofImageUrl: z.string().url().optional().or(z.literal('')),
-  transactionNumber: z.string().optional(),
-});
+const paymentSchema = z
+  .object({
+    studentId: z.string().min(1, 'Student is required'),
+    paymentTypeId: z.string().uuid('Payment type is required'),
+    months: z.array(z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format')).min(1, 'At least one month must be selected'),
+    paymentMethod: z.string().optional(),
+    notes: z.string().optional(),
+    proofImageUrl: z.string().url().optional().or(z.literal('')),
+    transactionNumber: z.string().optional(),
+    payerName: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.paymentMethod === 'mobile_banking' && !data.payerName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Payer name is required for mobile banking',
+        path: ['payerName'],
+      });
+    }
+  });
 
 type PaymentFormData = z.infer<typeof paymentSchema>;
 
@@ -53,10 +65,15 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
   const paymentTypes = Array.isArray(paymentTypesData?.data) 
     ? paymentTypesData.data.filter(pt => pt.isActive) 
     : [];
+  const { data: activeYearData } = useActiveAcademicYear();
+  const academicYearId = activeYearData?.data?.id || '';
+  const feeCalendarYear = getFeeCalendarYear(activeYearData?.data?.name);
 
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const currentYear = new Date().getFullYear();
-  const monthOptions = generateAllMonths(currentYear);
+  const monthOptions = useMemo(
+    () => generateFeeCalendarMonthOptions(feeCalendarYear),
+    [feeCalendarYear],
+  );
 
   const {
     register,
@@ -72,6 +89,7 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
       notes: '',
       proofImageUrl: '',
       transactionNumber: '',
+      payerName: '',
     },
   });
 
@@ -79,7 +97,9 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
   
   // Fetch existing payments for the selected student
   const { data: paymentsData } = usePayments(
-    selectedStudentId ? { studentId: selectedStudentId } : undefined
+    selectedStudentId && academicYearId
+      ? { studentId: selectedStudentId, academicYearId }
+      : undefined
   );
   const existingPayments = Array.isArray(paymentsData?.data) ? paymentsData.data : [];
 
@@ -101,6 +121,7 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
   const selectedPaymentMethod = watch('paymentMethod');
   const proofImageUrl = watch('proofImageUrl');
   const transactionNumber = watch('transactionNumber');
+  const payerName = watch('payerName');
 
   const isRegisterFeeSelected = isRegisterFeePaymentTypeName(selectedPaymentType?.name);
   const hasExistingRegisterFee = useMemo(() => {
@@ -116,8 +137,8 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
 
   useEffect(() => {
     if (!isRegisterFeeSelected) return;
-    setValue('months', [getRegisterFeeSentinelMonth(currentYear)], { shouldValidate: true });
-  }, [isRegisterFeeSelected, currentYear, setValue]);
+    setValue('months', [getRegisterFeeSentinelMonth(feeCalendarYear)], { shouldValidate: true });
+  }, [isRegisterFeeSelected, feeCalendarYear, setValue]);
 
   const handleMonthToggle = (monthValue: string) => {
     if (isRegisterFeeSelected) return;
@@ -137,7 +158,8 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
   };
 
   const handleFormSubmit = async (data: PaymentFormData) => {
-    await onSubmit(data as CreateBulkPaymentRequest);
+    if (!academicYearId) return;
+    await onSubmit({ ...data, academicYearId } as CreateBulkPaymentRequest);
   };
 
   const totalAmount = selectedPaymentType && selectedMonths.length > 0
@@ -324,6 +346,7 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
             if (value !== 'mobile_banking') {
               setValue('proofImageUrl', '');
               setValue('transactionNumber', '');
+              setValue('payerName', '');
             }
           }}
         >
@@ -343,8 +366,11 @@ export function PaymentForm({ onSubmit, onCancel, isLoading }: PaymentFormProps)
         <PaymentProofUpload
           imageUrl={proofImageUrl || ''}
           transactionNumber={transactionNumber || ''}
+          payerName={payerName || ''}
           onImageChange={(url) => setValue('proofImageUrl', url)}
           onTransactionNumberChange={(number) => setValue('transactionNumber', number)}
+          onPayerNameChange={(name) => setValue('payerName', name, { shouldValidate: true })}
+          payerNameError={errors.payerName?.message}
           disabled={isLoading}
         />
       )}

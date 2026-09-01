@@ -4,6 +4,7 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import { cn } from "@/lib/utils";
 import {
     ArrowUpCircle,
+    Award,
     BarChart3,
     BookOpen,
     Calendar,
@@ -94,6 +95,12 @@ const menuItems: MenuItem[] = [
     label: "Promotion",
     href: "/dashboard/promotion",
     icon: ArrowUpCircle,
+    roles: ["OWNER", "REGISTRAR"],
+  },
+  {
+    label: "Graduates",
+    href: "/dashboard/graduates",
+    icon: Award,
     roles: ["OWNER", "REGISTRAR"],
   },
   {

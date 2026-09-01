@@ -1,6 +1,7 @@
 "use client";
 
 import { DateField } from "@/components/shared/DateField";
+import { ArchiveModeBanner } from "@/components/shared/ArchiveModeBanner";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import { useCalendarSystem } from "@/lib/context/calendar-context";
 import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
+import { useAcademicYearContext } from "@/lib/hooks/use-academic-year-context";
 import { useClasses, useClassSubjects } from "@/lib/hooks/use-classes";
 import { useBulkHomework, useHomeworkByClass } from "@/lib/hooks/use-homework";
 import { useStudents } from "@/lib/hooks/use-students";
@@ -33,7 +35,7 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import { HomeworkStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatDateForUI } from "@/lib/utils/date";
-import { formatFullName } from "@/lib/utils/format";
+import { formatFullName, formatClassDisplayName } from "@/lib/utils/format";
 import {
   Check,
   ChevronLeft,
@@ -50,6 +52,8 @@ export default function HomeworkPage() {
   const router = useRouter();
   const { hasRole, user } = useAuthStore();
   const { data: activeYearData } = useActiveAcademicYear();
+  const { academicYearId, isReadOnly: isArchiveReadOnly } =
+    useAcademicYearContext();
   const { calendarSystem } = useCalendarSystem();
 
   const [selectedClassId, setSelectedClassId] = useState<string>("");
@@ -67,7 +71,9 @@ export default function HomeworkPage() {
   );
   const [isDirty, setIsDirty] = useState(false);
 
-  const { data: classesData } = useClasses();
+  const { data: classesData } = useClasses(
+    academicYearId ? { academicYearId } : undefined,
+  );
   const {
     data: studentsData,
     isLoading: studentsLoading,
@@ -75,6 +81,7 @@ export default function HomeworkPage() {
   } = useStudents({
     classId: selectedClassId || undefined,
     classStatus: "assigned",
+    academicYearId,
     page: 1,
     limit: 1000,
   });
@@ -106,36 +113,29 @@ export default function HomeworkPage() {
 
   // Filter classes for teachers
   const classes = useMemo(() => {
-    if (!isTeacher) {
-      return allClasses;
-    }
+    const yearId = academicYearId || activeYear?.id;
+    if (!yearId) return isTeacher ? [] : allClasses;
 
-    if (!activeYear || !activeYear.id) {
-      return [];
-    }
-
-    const activeYearClasses = allClasses.filter((cls) => {
-      if (cls.academicYearId) {
-        return cls.academicYearId === activeYear.id;
-      }
+    const yearClasses = allClasses.filter((cls) => {
+      if (cls.academicYearId) return cls.academicYearId === yearId;
       if (typeof cls.academicYear === "string") {
-        return cls.academicYear === activeYear.name;
+        return cls.academicYear === activeYear?.name;
       }
       if (typeof cls.academicYear === "object" && cls.academicYear?.id) {
-        return cls.academicYear.id === activeYear.id;
+        return cls.academicYear.id === yearId;
       }
       return false;
     });
 
+    if (!isTeacher) return yearClasses;
+
     if (user?.teacherClasses && user.teacherClasses.length > 0) {
       const assignedClassIds = user.teacherClasses.map((tc) => tc.id);
-      return activeYearClasses.filter((cls) =>
-        assignedClassIds.includes(cls.id),
-      );
+      return yearClasses.filter((cls) => assignedClassIds.includes(cls.id));
     }
 
     return [];
-  }, [isTeacher, user, activeYear, allClasses]);
+  }, [isTeacher, user, activeYear, allClasses, academicYearId]);
 
   // Check if homework is recorded for the selected date and subject
   const isHomeworkRecorded = useMemo(() => {
@@ -167,7 +167,7 @@ export default function HomeworkPage() {
   }, [homeworkData, selectedClassId, selectedSubjectId]);
 
   // Determine if we're in read-only mode (past date with recorded homework)
-  const isReadOnly = useMemo(() => {
+  const isDateReadOnly = useMemo(() => {
     if (!isHomeworkRecorded) return false;
     const selected = new Date(selectedDate);
     const today = new Date();
@@ -175,6 +175,8 @@ export default function HomeworkPage() {
     selected.setHours(0, 0, 0, 0);
     return selected < today;
   }, [isHomeworkRecorded, selectedDate]);
+
+  const isReadOnly = isArchiveReadOnly || isDateReadOnly;
 
   // Initialize homework states from API data
   useEffect(() => {
@@ -435,6 +437,8 @@ export default function HomeworkPage() {
         </div>
       )}
 
+      <ArchiveModeBanner />
+
       <Card className="border border-slate-200 shadow-sm">
         <CardHeader className="bg-slate-50 border-b border-slate-200 py-3">
           <div className="flex items-center justify-between">
@@ -487,7 +491,7 @@ export default function HomeworkPage() {
                     ) : (
                       classes.map((cls) => (
                         <SelectItem key={cls.id} value={cls.id}>
-                          {cls.name}
+                          {formatClassDisplayName(cls.name)}
                         </SelectItem>
                       ))
                     )}

@@ -43,9 +43,17 @@ export const usePromoteStudents = () => {
         result.termsCreated?.length > 0
           ? ` Terms created: ${result.termsCreated.join(', ')}.`
           : '';
-      toast.success('Promotion completed successfully', {
-        description: `Promoted: ${result.promoted}, Repeated: ${result.repeated}, Graduated: ${result.graduated}. New year: ${result.newAcademicYear?.name}.${termsNote}`,
+      const alreadyNote = result.alreadyProcessed
+        ? `, Already done: ${result.alreadyProcessed}`
+        : '';
+      toast.success(result.message || 'Promotion completed', {
+        description: `Promoted: ${result.promoted}, Repeated: ${result.repeated}, Graduated: ${result.graduated}${result.skipped ? `, Skipped: ${result.skipped}` : ''}${alreadyNote}. New year: ${result.newAcademicYear?.name}.${termsNote}`,
       });
+      if (result.errors && result.errors.length > 0) {
+        toast.warning(`${result.errors.length} student(s) had errors`, {
+          description: result.errors.slice(0, 3).map((e) => e.studentName || e.studentId).join(', '),
+        });
+      }
     },
     onError: (error: any) => {
       toast.error('Failed to promote students', {

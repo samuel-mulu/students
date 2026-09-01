@@ -39,7 +39,11 @@ export default function DashboardPage() {
   const { data: studentsData, isLoading: studentsLoading } = useStudents({
     classStatus: "assigned",
   });
-  const { data: classesData, isLoading: classesLoading } = useClasses();
+  const { data: classesData, isLoading: classesLoading } = useClasses(
+    activeYearData?.data?.id
+      ? { academicYearId: activeYearData.data.id }
+      : undefined,
+  );
   const { data: teachersData, isLoading: teachersLoading } = useTeachers();
 
   const activeYear = activeYearData?.data;

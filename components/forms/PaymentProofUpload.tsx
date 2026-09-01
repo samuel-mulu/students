@@ -11,21 +11,27 @@ import { cn } from '@/lib/utils';
 interface PaymentProofUploadProps {
   imageUrl?: string;
   transactionNumber?: string;
+  payerName?: string;
   onImageChange: (imageUrl: string) => void;
   onTransactionNumberChange: (transactionNumber: string) => void;
+  onPayerNameChange: (payerName: string) => void;
   onRemove?: () => void;
   disabled?: boolean;
   className?: string;
+  payerNameError?: string;
 }
 
 export function PaymentProofUpload({
   imageUrl,
   transactionNumber,
+  payerName,
   onImageChange,
   onTransactionNumberChange,
+  onPayerNameChange,
   onRemove,
   disabled = false,
   className,
+  payerNameError,
 }: PaymentProofUploadProps) {
   const [preview, setPreview] = useState<string | null>(imageUrl || null);
   const [isUploading, setIsUploading] = useState(false);
@@ -83,6 +89,7 @@ export function PaymentProofUpload({
     }
     onImageChange('');
     onTransactionNumberChange('');
+    onPayerNameChange('');
     if (onRemove) {
       onRemove();
     }
@@ -96,6 +103,24 @@ export function PaymentProofUpload({
 
   return (
     <div className={cn('space-y-4', className)}>
+      <div className="space-y-2">
+        <Label htmlFor="payerName">Payer Name *</Label>
+        <Input
+          id="payerName"
+          type="text"
+          value={payerName || ''}
+          onChange={(e) => onPayerNameChange(e.target.value)}
+          placeholder="Name on the mobile banking transfer"
+          disabled={disabled}
+        />
+        {payerNameError && (
+          <p className="text-sm text-destructive">{payerNameError}</p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Enter the name of the person who made the mobile banking payment
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label>Transfer Proof Image (Optional)</Label>
         <div className="flex items-start gap-4">

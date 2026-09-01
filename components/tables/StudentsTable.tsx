@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { Student } from "@/lib/types";
 import { getOptimizedCloudinaryUrl } from "@/lib/utils/cloudinary";
-import { formatFullName } from "@/lib/utils/format";
+import { formatFullName, getStudentClassDisplayName } from "@/lib/utils/format";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ArrowRightLeft,
@@ -48,6 +48,8 @@ interface StudentsTableProps {
   selectedIds?: Set<string>;
   onSelectionChange?: (studentId: string, selected: boolean) => void;
   onSelectAll?: (selected: boolean) => void;
+  /** When viewing a closed/archived academic year, show historical class from API. */
+  preferHistoricalClass?: boolean;
 }
 
 export function StudentsTable({
@@ -63,6 +65,7 @@ export function StudentsTable({
   selectedIds,
   onSelectionChange,
   onSelectAll,
+  preferHistoricalClass = false,
 }: StudentsTableProps) {
   const [imageViewer, setImageViewer] = useState<{
     open: boolean;
@@ -72,18 +75,8 @@ export function StudentsTable({
     student: null,
   });
 
-  // Helper function to get current class name
-  const getCurrentClassName = (student: Student): string => {
-    // Check if student has classHistory with class information
-    if ("classHistory" in student && Array.isArray(student.classHistory)) {
-      const activeClass = student.classHistory.find((ch: any) => !ch.endDate);
-      if (activeClass?.class?.name) {
-        return activeClass.class.name;
-      }
-    }
-    // Fallback to classStatus if no class info available
-    return student.classStatus === "assigned" ? "Not Assigned" : "New";
-  };
+  const getCurrentClassName = (student: Student): string =>
+    getStudentClassDisplayName(student, preferHistoricalClass);
 
   const selectableStudents = students.filter((s) => s.classStatus === "assigned");
   const allSelectableSelected =

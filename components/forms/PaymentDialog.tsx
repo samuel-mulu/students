@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CreatePaymentRequest, CreateBulkPaymentRequest, Student } from '@/lib/types';
-import { generateAllMonths, formatCurrency } from '@/lib/utils/format';
+import { generateFeeCalendarMonthOptions, formatCurrency } from '@/lib/utils/format';
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
 import { usePayments } from '@/lib/hooks/use-payments';
 import { useEffect, useState, useMemo } from 'react';
@@ -35,15 +35,26 @@ import {
   isRegisterFeeSentinelMonth,
 } from '@/lib/utils/paymentType';
 
-const paymentSchema = z.object({
-  studentId: z.string().min(1, 'Student is required'),
-  paymentTypeId: z.string().uuid('Payment type is required'),
-  months: z.array(z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format')).min(1, 'At least one month must be selected'),
-  paymentMethod: z.string().optional(),
-  notes: z.string().optional(),
-  proofImageUrl: z.string().url().optional().or(z.literal('')),
-  transactionNumber: z.string().optional(),
-});
+const paymentSchema = z
+  .object({
+    studentId: z.string().min(1, 'Student is required'),
+    paymentTypeId: z.string().uuid('Payment type is required'),
+    months: z.array(z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format')).min(1, 'At least one month must be selected'),
+    paymentMethod: z.string().optional(),
+    notes: z.string().optional(),
+    proofImageUrl: z.string().url().optional().or(z.literal('')),
+    transactionNumber: z.string().optional(),
+    payerName: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.paymentMethod === 'mobile_banking' && !data.payerName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Payer name is required for mobile banking',
+        path: ['payerName'],
+      });
+    }
+  });
 
 type PaymentFormData = z.infer<typeof paymentSchema>;
 
@@ -51,8 +62,8 @@ interface PaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   student: Student | null;
-  academicYearStartDate: string | Date | null;
-  academicYearEndDate: string | Date | null;
+  academicYearId: string;
+  feeCalendarYear: number;
   defaultMonth?: string;
   onSubmit: (data: CreatePaymentRequest | CreateBulkPaymentRequest) => Promise<void>;
   isLoading?: boolean;
@@ -62,8 +73,8 @@ export function PaymentDialog({
   open,
   onOpenChange,
   student,
-  academicYearStartDate,
-  academicYearEndDate,
+  academicYearId,
+  feeCalendarYear,
   defaultMonth,
   onSubmit,
   isLoading,
@@ -72,14 +83,15 @@ export function PaymentDialog({
   const { data: paymentTypesData, isLoading: paymentTypesLoading } = usePaymentTypes();
   const paymentTypes = Array.isArray(paymentTypesData?.data) ? paymentTypesData.data.filter(pt => pt.isActive) : [];
 
-  // Fetch existing payments for the student
+  // Fetch existing payments for the student scoped to this academic year
   const { data: paymentsData } = usePayments(
-    student?.id ? { studentId: student.id } : undefined
+    student?.id && academicYearId
+      ? { studentId: student.id, academicYearId }
+      : undefined
   );
   const existingPayments = Array.isArray(paymentsData?.data) ? paymentsData.data : [];
 
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const currentYear = new Date().getFullYear();
 
   const {
     register,
@@ -98,11 +110,15 @@ export function PaymentDialog({
       notes: '',
       proofImageUrl: '',
       transactionNumber: '',
+      payerName: '',
     },
   });
 
-  // Generate all 12 months for the current year
-  const monthOptions = generateAllMonths(currentYear);
+  // 12 fee months — independent of academic year DB dates
+  const monthOptions = useMemo(
+    () => generateFeeCalendarMonthOptions(feeCalendarYear),
+    [feeCalendarYear],
+  );
 
   // Create a map of paid months (month value -> payment status)
   const paidMonthsMap = useMemo(() => {
@@ -122,6 +138,7 @@ export function PaymentDialog({
   const selectedPaymentMethod = watch('paymentMethod');
   const proofImageUrl = watch('proofImageUrl');
   const transactionNumber = watch('transactionNumber');
+  const payerName = watch('payerName');
 
   const isRegisterFeeSelected = isRegisterFeePaymentTypeName(selectedPaymentType?.name);
   const hasExistingRegisterFee = useMemo(() => {
@@ -137,8 +154,8 @@ export function PaymentDialog({
   useEffect(() => {
     if (!open) return;
     if (!isRegisterFeeSelected) return;
-    setValue('months', [getRegisterFeeSentinelMonth(currentYear)], { shouldValidate: true });
-  }, [open, isRegisterFeeSelected, currentYear, setValue]);
+    setValue('months', [getRegisterFeeSentinelMonth(feeCalendarYear)], { shouldValidate: true });
+  }, [open, isRegisterFeeSelected, feeCalendarYear, setValue]);
 
   // Reset form when student changes or dialog opens/closes
   useEffect(() => {
@@ -151,6 +168,7 @@ export function PaymentDialog({
         notes: '',
         proofImageUrl: '',
         transactionNumber: '',
+        payerName: '',
       });
     }
   }, [open, student, defaultMonth, reset, currentMonth]);
@@ -173,7 +191,7 @@ export function PaymentDialog({
   };
 
   const handleFormSubmit = async (data: PaymentFormData) => {
-    await onSubmit(data as CreateBulkPaymentRequest);
+    await onSubmit({ ...data, academicYearId } as CreateBulkPaymentRequest);
     if (!isLoading) {
       onOpenChange(false);
     }
@@ -379,6 +397,7 @@ export function PaymentDialog({
                 if (value !== 'mobile_banking') {
                   setValue('proofImageUrl', '');
                   setValue('transactionNumber', '');
+                  setValue('payerName', '');
                 }
               }}
             >
@@ -398,8 +417,11 @@ export function PaymentDialog({
             <PaymentProofUpload
               imageUrl={proofImageUrl || ''}
               transactionNumber={transactionNumber || ''}
+              payerName={payerName || ''}
               onImageChange={(url) => setValue('proofImageUrl', url)}
               onTransactionNumberChange={(number) => setValue('transactionNumber', number)}
+              onPayerNameChange={(name) => setValue('payerName', name, { shouldValidate: true })}
+              payerNameError={errors.payerName?.message}
               disabled={isLoading}
             />
           )}

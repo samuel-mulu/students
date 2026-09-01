@@ -28,6 +28,7 @@ export const studentsApi = {
       paymentStatus?: "pending" | "confirmed";
       classId?: string;
       gradeId?: string;
+      academicYearId?: string;
       search?: string;
       month?: string;
       year?: number;

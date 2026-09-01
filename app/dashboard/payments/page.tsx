@@ -2,6 +2,7 @@
 
 import { ExportPaymentsDialog } from "@/components/forms/ExportPaymentsDialog";
 import { PaymentDialog } from "@/components/forms/PaymentDialog";
+import { ArchiveModeBanner } from "@/components/shared/ArchiveModeBanner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingState } from "@/components/shared/LoadingState";
@@ -37,6 +38,7 @@ import {
   useAcademicYears,
   useActiveAcademicYear,
 } from "@/lib/hooks/use-academicYears";
+import { useAcademicYearContext } from "@/lib/hooks/use-academic-year-context";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { useGrades } from "@/lib/hooks/use-grades";
 import { usePaymentTypes } from "@/lib/hooks/use-payment-types";
@@ -55,7 +57,7 @@ import {
   Payment,
   Student,
 } from "@/lib/types";
-import { generateAllMonths, hasPaymentForMonth } from "@/lib/utils/format";
+import { generateFeeCalendarMonthOptions, getFeeCalendarYear, hasPaymentForMonth, formatClassDisplayName, getStudentClassDisplayName } from "@/lib/utils/format";
 import {
   isRegisterFeePaymentTypeName,
   isRegisterFeeSentinelMonth,
@@ -73,6 +75,7 @@ import { useEffect, useMemo, useState } from "react";
 export default function PaymentsPage() {
   const { user, hasRole } = useAuthStore();
   const { calendarSystem } = useCalendarSystem();
+  const { academicYearIdParam, isReadOnly } = useAcademicYearContext();
   const isOwner = user?.role === "OWNER";
   const isTeacherOrRegistrar =
     user?.role === "TEACHER" || user?.role === "REGISTRAR";
@@ -124,7 +127,9 @@ export default function PaymentsPage() {
   }>({ open: false, imageUrl: null });
 
   // Data hooks
-  const { data: classesData } = useClasses();
+  const { data: classesData } = useClasses(
+    academicYearFilter ? { academicYearId: academicYearFilter } : undefined,
+  );
   const { data: academicYearsData } = useAcademicYears();
   const { data: activeYearData } = useActiveAcademicYear();
   const { data: gradesData } = useGrades();
@@ -176,24 +181,23 @@ export default function PaymentsPage() {
     isTeacherOrRegistrar,
   ]);
 
+  useEffect(() => {
+    if (academicYearIdParam) {
+      setAcademicYearFilter(academicYearIdParam);
+    }
+  }, [academicYearIdParam]);
+
+  // Keep in sync with active year after promotion (unless viewing archive URL)
+  useEffect(() => {
+    if (!academicYearIdParam && activeYearData?.data?.id) {
+      setAcademicYearFilter(activeYearData.data.id);
+    }
+  }, [activeYearData?.data?.id, academicYearIdParam]);
+
   // Get selected academic year
   const selectedAcademicYear = useMemo(() => {
     return academicYears.find((year) => year.id === academicYearFilter) || null;
   }, [academicYears, academicYearFilter]);
-
-  // Generate all 12 months for current year (allow selecting future months)
-  const monthOptions = useMemo(() => {
-    return generateAllMonths(new Date().getFullYear(), calendarSystem);
-  }, [calendarSystem]);
-
-  // Set default month when months are generated
-  useEffect(() => {
-    if (monthOptions.length > 0 && !monthFilter) {
-      // Default to current month
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      setMonthFilter(currentMonth);
-    }
-  }, [monthOptions, monthFilter]);
 
   // Reset page to 1 when filters change
   useEffect(() => {
@@ -255,7 +259,8 @@ export default function PaymentsPage() {
     search: debouncedSearch.trim(),
     gradeId: gradeFilter !== "all" ? gradeFilter : undefined,
     classId: classFilter !== "all" ? classFilter : undefined,
-    classStatus: "assigned", // Only show assigned students
+    classStatus: "assigned",
+    academicYearId: academicYearFilter || undefined,
     paymentStatus:
       statusFilter !== "all"
         ? (statusFilter as "pending" | "confirmed")
@@ -270,6 +275,7 @@ export default function PaymentsPage() {
     gradeId: gradeFilter !== "all" ? gradeFilter : undefined,
     classId: classFilter !== "all" ? classFilter : undefined,
     classStatus: "assigned",
+    academicYearId: academicYearFilter || undefined,
     paymentStatus: "pending",
     month: isRegisterFeeFilter ? "register_fee" : monthFilter,
     year: monthYearObj.year,
@@ -283,7 +289,9 @@ export default function PaymentsPage() {
     data: paymentsData,
     isLoading: paymentsLoading,
     refetch: refetchPayments,
-  } = usePayments();
+  } = usePayments(
+    academicYearFilter ? { academicYearId: academicYearFilter } : undefined,
+  );
 
   const createPayment = useCreatePayment();
   const createBulkPayment = useCreateBulkPayment();
@@ -293,10 +301,33 @@ export default function PaymentsPage() {
   const students = Array.isArray(studentsData?.data) ? studentsData.data : [];
   const payments = Array.isArray(paymentsData?.data) ? paymentsData.data : [];
 
-  // Helper to remove academic year from class name
-  const removeAcademicYearFromClassName = (className: string): string => {
-    return className.replace(/\s*\([^)]*\)\s*$/, "").trim();
-  };
+  const isArchiveYear = selectedAcademicYear?.status === "CLOSED" || isReadOnly;
+
+  // 12 fee months — independent of academic year DB start/end dates
+  const feeCalendarYear = useMemo(() => {
+    const paymentMonths = payments
+      .filter((p) => p.academicYearId === academicYearFilter)
+      .map((p) => p.month);
+    return getFeeCalendarYear(selectedAcademicYear?.name, paymentMonths);
+  }, [selectedAcademicYear?.name, academicYearFilter, payments]);
+
+  const monthOptions = useMemo(
+    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem),
+    [feeCalendarYear, calendarSystem],
+  );
+
+  // Default month: first month with payments in this bucket, else first in fee calendar
+  useEffect(() => {
+    if (monthOptions.length > 0 && academicYearFilter) {
+      const paidMonths = new Set(
+        payments
+          .filter((p) => p.academicYearId === academicYearFilter)
+          .map((p) => p.month),
+      );
+      const firstWithData = monthOptions.find((m) => paidMonths.has(m.value));
+      setMonthFilter(firstWithData?.value ?? monthOptions[0].value);
+    }
+  }, [academicYearFilter, feeCalendarYear, monthOptions, payments]);
 
   // Backend already handles search, grade, class, classStatus, and paymentStatus filtering.
   const filteredStudents = students;
@@ -327,22 +358,25 @@ export default function PaymentsPage() {
     return filteredStudents;
   }, [filteredStudents, search, isFullyFiltered]);
 
-  // Get payment status for a student
+  // Get payment status for a student (scoped to selected academic year)
   const getStudentPaymentStatus = (
     student: Student,
   ): { paid: boolean; payment?: Payment } => {
-    // Priority 1: Use payments attached to the student object (filtered by month/year on backend)
-    if (Array.isArray(student.payments) && student.payments.length > 0) {
-      const confirmed = student.payments.find((p) => p.status === "confirmed");
-      if (confirmed) return { paid: true, payment: confirmed };
+    const yearId = academicYearFilter;
 
-      // If no confirmed but has records, it might be pending
-      return { paid: false, payment: student.payments[0] };
+    const inYear = (p: Payment) => !yearId || p.academicYearId === yearId;
+
+    // Priority 1: payments on student object (backend-scoped to year + month)
+    if (Array.isArray(student.payments) && student.payments.length > 0) {
+      const scoped = student.payments.filter(inYear);
+      const confirmed = scoped.find((p) => p.status === "confirmed");
+      if (confirmed) return { paid: true, payment: confirmed };
+      if (scoped.length > 0) return { paid: false, payment: scoped[0] };
     }
 
-    // Priority 2: Fallback to global payments fetch (limited list)
+    // Priority 2: global payments list (filter by academic year)
     const studentPayments = payments.filter(
-      (p: Payment) => p.studentId === student.id,
+      (p: Payment) => p.studentId === student.id && inYear(p),
     );
 
     if (paymentTypeFilter !== "all") {
@@ -373,7 +407,12 @@ export default function PaymentsPage() {
     if (!monthFilter) return { paid: false };
     const [yearPart] = monthFilter.split("-");
     const year = parseInt(yearPart);
-    const paymentInfo = hasPaymentForMonth(studentPayments, monthFilter, year);
+    const paymentInfo = hasPaymentForMonth(
+      studentPayments,
+      monthFilter,
+      year,
+      yearId,
+    );
     if (paymentInfo.exists && paymentInfo.status === "confirmed") {
       const payment = studentPayments.find(
         (p: Payment) =>
@@ -394,11 +433,17 @@ export default function PaymentsPage() {
   const handleCreatePayment = async (
     data: CreatePaymentRequest | CreateBulkPaymentRequest,
   ) => {
+    if (!academicYearFilter) {
+      return;
+    }
+
+    const withYear = { ...data, academicYearId: academicYearFilter };
+
     try {
       // Check if it's a bulk payment request (has months array)
-      if ("months" in data && Array.isArray(data.months)) {
+      if ("months" in withYear && Array.isArray(withYear.months)) {
         // Handle bulk payment (works for both single and multiple months)
-        const bulkData = data as CreateBulkPaymentRequest;
+        const bulkData = withYear as CreateBulkPaymentRequest;
         const payments = await createBulkPayment.mutateAsync(bulkData);
 
         // Show loading state for receipt
@@ -415,6 +460,9 @@ export default function PaymentsPage() {
           paymentIds,
           paymentDate: new Date().toISOString(),
           paymentMethod: bulkData.paymentMethod || "cash",
+          payerName: bulkData.payerName,
+          proofImageUrl: bulkData.proofImageUrl,
+          transactionNumber: bulkData.transactionNumber,
         });
 
         // Close payment dialog
@@ -439,7 +487,7 @@ export default function PaymentsPage() {
         }
       } else {
         // Handle single payment (backward compatibility for old PaymentForm)
-        const singleData = data as CreatePaymentRequest;
+        const singleData = withYear as CreatePaymentRequest;
         const payment = await createPayment.mutateAsync(singleData);
 
         // Show loading state for receipt
@@ -457,6 +505,9 @@ export default function PaymentsPage() {
             data: {
               paymentDate: new Date().toISOString(),
               paymentMethod: singleData.paymentMethod || "cash",
+              payerName: singleData.payerName,
+              proofImageUrl: singleData.proofImageUrl,
+              transactionNumber: singleData.transactionNumber,
             },
           });
 
@@ -504,6 +555,7 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
+      <ArchiveModeBanner />
       {(monthFilter || isRegisterFeeFilter) && unpaidCount !== null ? (
         <Card className="border-orange-200 bg-orange-50">
           <CardContent className="p-4">
@@ -664,7 +716,7 @@ export default function PaymentsPage() {
                   {gradeClasses.length > 0 ? (
                     gradeClasses.map((cls) => (
                       <SelectItem key={cls.id} value={cls.id}>
-                        {removeAcademicYearFromClassName(cls.name)}
+                        {formatClassDisplayName(cls.name)}
                       </SelectItem>
                     ))
                   ) : (
@@ -700,12 +752,7 @@ export default function PaymentsPage() {
               <TableBody>
                 {finalStudents.map((student: Student, index: number) => {
                   const paymentStatus = getStudentPaymentStatus(student);
-                  const activeClass =
-                    "classHistory" in student &&
-                      Array.isArray(student.classHistory)
-                      ? student.classHistory.find((ch: any) => !ch.endDate)
-                      : null;
-                  const className = activeClass?.class?.name || "Not Assigned";
+                  const className = getStudentClassDisplayName(student, isArchiveYear);
 
                   return (
                     <TableRow key={student.id}>
@@ -716,7 +763,7 @@ export default function PaymentsPage() {
                         {student.firstName} {student.lastName}
                       </TableCell>
                       <TableCell>
-                        {removeAcademicYearFromClassName(className)}
+                        {className}
                       </TableCell>
                       <TableCell>
                         {paymentStatus.paid ? (
@@ -768,7 +815,7 @@ export default function PaymentsPage() {
                               <ImageIcon className="h-4 w-4 text-blue-600" />
                             </Button>
                           )}
-                          {monthFilter && (
+                          {monthFilter && !isReadOnly && (
                             <Button
                               size="sm"
                               variant={paymentStatus.paid ? "outline" : "default"}
@@ -831,13 +878,13 @@ export default function PaymentsPage() {
       }
 
       <PaymentDialog
-        open={paymentDialog.open}
+        open={paymentDialog.open && !!academicYearFilter}
         onOpenChange={(open) =>
           setPaymentDialog({ open, student: paymentDialog.student })
         }
         student={paymentDialog.student}
-        academicYearStartDate={selectedAcademicYear?.startDate || null}
-        academicYearEndDate={selectedAcademicYear?.endDate || null}
+        academicYearId={academicYearFilter || ''}
+        feeCalendarYear={feeCalendarYear}
         defaultMonth={monthFilter}
         onSubmit={handleCreatePayment}
         isLoading={

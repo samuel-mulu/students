@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   useGrades,
   useDeleteGrade,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/hooks/use-grades";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { useAcademicYears } from "@/lib/hooks/use-academicYears";
+import { useAcademicYearContext } from "@/lib/hooks/use-academic-year-context";
 import { useDeleteClass } from "@/lib/hooks/use-classes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,13 +33,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CreateClassDialog } from "@/components/forms/CreateClassDialog";
+import { ArchiveModeBanner } from "@/components/shared/ArchiveModeBanner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { formatClassDisplayName } from "@/lib/utils/format";
 
 export default function GradesPage() {
   const { hasRole } = useAuthStore();
+  const { academicYearIdParam, isArchiveMode } = useAcademicYearContext();
   const { data, isLoading, error, refetch } = useGrades();
-  const { data: classesData } = useClasses();
+  const { data: classesData } = useClasses(
+    academicYearIdParam ? { academicYearId: academicYearIdParam } : undefined,
+  );
   const { data: academicYearsData } = useAcademicYears();
   const createGrade = useCreateGrade();
   const updateGrade = useUpdateGrade();
@@ -150,6 +156,15 @@ export default function GradesPage() {
     return year?.name || academicYearId;
   };
 
+  useEffect(() => {
+    const list = Array.isArray(data?.data) ? data.data : [];
+    if (!academicYearIdParam || list.length === 0) return;
+    setExpandedGrades(new Set(list.map((g) => g.id)));
+    setExpandedAcademicYears(
+      new Set(list.map((g) => `${g.id}-${academicYearIdParam}`)),
+    );
+  }, [academicYearIdParam, data?.data]);
+
   // Get sorted academic years by startDate (newest first)
   const getSortedAcademicYears = (gradeClasses: Record<string, Class[]>) => {
     return Object.entries(gradeClasses).sort(([yearId1], [yearId2]) => {
@@ -213,6 +228,7 @@ export default function GradesPage() {
 
   return (
     <div className="space-y-6">
+      <ArchiveModeBanner />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Grades</h1>
@@ -340,7 +356,7 @@ export default function GradesPage() {
                                               href={`/dashboard/classes/${cls.id}`}
                                               className="text-sm font-medium hover:underline"
                                             >
-                                              {cls.name}
+                                              {formatClassDisplayName(cls.name)}
                                             </Link>
                                             {cls.description && (
                                               <span className="text-xs text-muted-foreground truncate">
@@ -348,7 +364,7 @@ export default function GradesPage() {
                                               </span>
                                             )}
                                           </div>
-                                          {hasRole(["OWNER", "REGISTRAR"]) && (
+                                          {hasRole(["OWNER", "REGISTRAR"]) && !isArchiveMode && (
                                             <div className="flex gap-1">
                                               <Button
                                                 variant="ghost"

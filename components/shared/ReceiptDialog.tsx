@@ -231,10 +231,17 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
                   </div>
                 )}
 
-                {(displayPayment.proofImageUrl || displayPayment.transactionNumber) && (
+                {(displayPayment.proofImageUrl || displayPayment.transactionNumber || displayPayment.payerName) && (
                   <div className="mt-4 pt-4 border-t">
                     <p className="font-medium text-muted-foreground mb-2">Payment Proof:</p>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-2">
+                      {displayPayment.payerName && (
+                        <div className="text-sm">
+                          <span className="font-medium text-muted-foreground">Payer Name: </span>
+                          <span className="font-semibold">{displayPayment.payerName}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-4">
                       {displayPayment.proofImageUrl && (
                         <Button
                           type="button"
@@ -257,6 +264,7 @@ export function ReceiptDialog({ open, onOpenChange, payment, payments, isLoading
                           <span className="font-mono font-semibold">{displayPayment.transactionNumber}</span>
                         </div>
                       )}
+                      </div>
                     </div>
                   </div>
                 )}

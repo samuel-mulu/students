@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatFullName } from '@/lib/utils/format';
+import { formatFullName, formatClassDisplayName } from '@/lib/utils/format';
 import { PromotionBlocker } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 
@@ -151,7 +151,20 @@ export default function PromotionPage() {
       : 'Are you sure you want to execute the promotion? This action cannot be undone.';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {promoteStudents.isPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="w-full max-w-md mx-4">
+            <CardContent className="pt-6 space-y-4 text-center">
+              <RefreshCw className="h-10 w-10 animate-spin mx-auto text-primary" />
+              <p className="font-semibold">Promoting students…</p>
+              <p className="text-sm text-muted-foreground">
+                Processing {preview?.summary.total ?? 0} students. This may take a few minutes.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Student Promotion</h1>
@@ -346,7 +359,7 @@ export default function PromotionPage() {
                       <TableCell className="font-medium">
                         {formatFullName(student.firstName, student.lastName)}
                       </TableCell>
-                      <TableCell>{student.currentClassName}</TableCell>
+                      <TableCell>{formatClassDisplayName(student.currentClassName)}</TableCell>
                       <TableCell>{student.overallAverage.toFixed(2)}%</TableCell>
                       <TableCell>{getOutcomeBadge(student.outcome)}</TableCell>
                       <TableCell>
@@ -354,7 +367,7 @@ export default function PromotionPage() {
                           <span className="text-muted-foreground">Graduated</span>
                         ) : student.nextClassName ? (
                           <div className="flex items-center gap-2">
-                            <span>{student.nextClassName}</span>
+                            <span>{formatClassDisplayName(student.nextClassName)}</span>
                             <ArrowRight className="h-4 w-4 text-muted-foreground" />
                           </div>
                         ) : (

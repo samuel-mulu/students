@@ -20,8 +20,12 @@ interface ClassesBackendResponse {
 }
 
 export const classesApi = {
-  getAll: async (): Promise<Class[]> => {
-    const response = await apiClient.get<ClassesBackendResponse>('/api/classes');
+  getAll: async (params?: {
+    academicYearId?: string;
+    gradeId?: string;
+    search?: string;
+  }): Promise<Class[]> => {
+    const response = await apiClient.get<ClassesBackendResponse>('/api/classes', { params });
     // Response interceptor extracts data, backend returns { classes, pagination }
     const result = response.data;
     return result.classes || [];

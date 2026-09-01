@@ -56,6 +56,7 @@ export function ExportStudentsDialog({ open, onOpenChange }: ExportStudentsDialo
         classStatus: classStatus === 'all' ? undefined : classStatus as 'new' | 'assigned',
         gradeId: gradeId === 'all' ? undefined : gradeId,
         classId: classId === 'all' ? undefined : classId,
+        academicYearId: academicYearId || undefined,
         limit: 1000,
       });
 

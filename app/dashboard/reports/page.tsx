@@ -1,6 +1,7 @@
 'use client';
 
 import { EmptyState } from '@/components/shared/EmptyState';
+import { ArchiveModeBanner } from '@/components/shared/ArchiveModeBanner';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { Button } from '@/components/ui/button';
@@ -31,13 +32,15 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { useAcademicYears, useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
+import { useAcademicYearContext } from '@/lib/hooks/use-academic-year-context';
 import { usePaymentTypes } from '@/lib/hooks/use-payment-types';
 import { usePayments } from '@/lib/hooks/use-payments';
 import { usePaymentReports, useRegistrarPaymentReports } from '@/lib/hooks/use-reports';
+import { RegistrarPaymentReportsParams } from '@/lib/api/reports';
 import { useUsers } from '@/lib/hooks/use-users';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { formatDateForUI } from '@/lib/utils/date';
-import { formatCurrency, formatDate, formatDateTime, formatFullName, formatMonthYear, generateAllMonths } from '@/lib/utils/format';
+import { formatCurrency, formatDate, formatDateTime, formatFullName, formatMonthYear, generateFeeCalendarMonthOptions, getFeeCalendarYear } from '@/lib/utils/format';
 import { addDays, format, parseISO, subDays } from 'date-fns';
 import { Calendar, ChevronLeft, ChevronRight, DollarSign, Download, FileText, Printer, RefreshCw, TrendingUp, UserCheck, Users, UserX } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -46,17 +49,20 @@ function PaymentStudentsModal({
   isOpen,
   onClose,
   date,
-  calendarSystem
+  calendarSystem,
+  academicYearId,
 }: {
   isOpen: boolean;
   onClose: () => void;
   date: string;
   calendarSystem: any;
+  academicYearId?: string;
 }) {
   const { data: paymentsData, isLoading } = usePayments({
     paymentDate: date,
     status: 'confirmed',
-    limit: 1000
+    limit: 1000,
+    ...(academicYearId ? { academicYearId } : {}),
   });
 
   const students = useMemo(() => {
@@ -70,20 +76,21 @@ function PaymentStudentsModal({
   const handleModalExport = () => {
     if (students.length === 0) return;
 
-    const headers = ['No.', 'Student Name', 'Payment Type', 'Amount', 'Method'];
+    const headers = ['No.', 'Student Name', 'Payment Type', 'Amount', 'Method', 'Payer Name'];
     const rows = students.map((p: any, index: number) => [
       (index + 1).toString(),
       formatFullName(p.student?.firstName || '', p.student?.lastName || '').replace(/,/g, ' '),
       (p.paymentType?.name || 'Unknown').replace(/,/g, ' '),
       p.amount.toFixed(2),
-      (p.paymentMethod?.replace('_', ' ') || '-').replace(/,/g, ' ')
+      (p.paymentMethod?.replace('_', ' ') || '-').replace(/,/g, ' '),
+      (p.payerName || '-').replace(/,/g, ' '),
     ]);
 
     const csvContent = [
       headers.join(','),
       ...rows.map((row: string[]) => row.join(',')),
       '', // Empty row
-      `Total,,,${totalAmount.toFixed(2)},`
+      `Total,,,${totalAmount.toFixed(2)},,`
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -110,6 +117,7 @@ function PaymentStudentsModal({
         <td style="padding: 8px; border: 1px solid #ddd;">${p.paymentType?.name || 'Unknown'}</td>
         <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${formatCurrency(p.amount)}</td>
         <td style="padding: 8px; border: 1px solid #ddd; text-transform: capitalize;">${p.paymentMethod?.replace('_', ' ') || '-'}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${p.payerName || '-'}</td>
       </tr>
     `).join('');
 
@@ -146,6 +154,7 @@ function PaymentStudentsModal({
                 <th>Payment Type</th>
                 <th style="text-align: right;">Amount</th>
                 <th>Method</th>
+                <th>Payer Name</th>
               </tr>
             </thead>
             <tbody>
@@ -153,7 +162,7 @@ function PaymentStudentsModal({
               <tr class="total-row">
                 <td colspan="3" style="text-align: right; padding: 8px;">Total</td>
                 <td style="text-align: right; padding: 8px;">${formatCurrency(totalAmount)}</td>
-                <td></td>
+                <td colspan="2"></td>
               </tr>
             </tbody>
           </table>
@@ -218,6 +227,7 @@ function PaymentStudentsModal({
                   <TableHead>Payment Type</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Method</TableHead>
+                  <TableHead>Payer Name</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -234,6 +244,7 @@ function PaymentStudentsModal({
                       {formatCurrency(p.amount)}
                     </TableCell>
                     <TableCell className="capitalize text-muted-foreground">{p.paymentMethod?.replace('_', ' ') || '-'}</TableCell>
+                    <TableCell>{p.payerName || '-'}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow className="bg-muted/50 font-bold border-t-2">
@@ -243,7 +254,7 @@ function PaymentStudentsModal({
                   <TableCell className="text-right text-green-800">
                     {formatCurrency(totalAmount)}
                   </TableCell>
-                  <TableCell />
+                  <TableCell colSpan={2} />
                 </TableRow>
               </TableBody>
             </Table>
@@ -257,6 +268,7 @@ function PaymentStudentsModal({
 export default function ReportsPage() {
   const { user } = useAuthStore();
   const { calendarSystem } = useCalendarSystem();
+  const { academicYearIdParam, isReadOnly } = useAcademicYearContext();
   const isOwner = user?.role === 'OWNER';
   const isRegistrar = user?.role === 'REGISTRAR';
 
@@ -289,10 +301,58 @@ export default function ReportsPage() {
     : [];
   const registrars = Array.isArray(usersData?.data) ? usersData.data : [];
 
-  // Generate month options
-  const monthOptions = useMemo(() => {
-    return generateAllMonths(new Date().getFullYear(), calendarSystem);
-  }, [calendarSystem]);
+  const selectedAcademicYear = useMemo(() => {
+    return academicYears.find((year) => year.id === academicYearFilter) || null;
+  }, [academicYears, academicYearFilter]);
+
+  const isArchiveYear = selectedAcademicYear?.status === 'CLOSED' || isReadOnly;
+
+  const effectiveAcademicYearId =
+    academicYearFilter ||
+    academicYearIdParam ||
+    activeYearData?.data?.id ||
+    '';
+
+  // Build API params for Monthly View (both Owner and Registrar use getPaymentReports)
+  const monthlyReportParams = useMemo(() => {
+    if (!effectiveAcademicYearId) return undefined;
+    const params: Record<string, string> = {
+      academicYearId: effectiveAcademicYearId,
+    };
+    if (paymentTypeFilter && paymentTypeFilter !== 'all') {
+      params.paymentTypeId = paymentTypeFilter;
+    }
+    if (paymentMethodFilter && paymentMethodFilter !== 'all') {
+      params.paymentMethod = paymentMethodFilter;
+    }
+    if (isOwner && registrarFilter && registrarFilter !== 'all') {
+      params.registrarId = registrarFilter;
+    }
+    return params;
+  }, [
+    effectiveAcademicYearId,
+    paymentTypeFilter,
+    paymentMethodFilter,
+    registrarFilter,
+    isOwner,
+  ]);
+
+  const { data: monthlyReportsData, isLoading: monthlyLoading, error: monthlyError, refetch: monthlyRefetch } = usePaymentReports(
+    monthlyReportParams,
+  );
+  const monthlyReports = monthlyReportsData?.data;
+
+  const feeCalendarYear = useMemo(() => {
+    const paymentMonths = monthlyReports?.byMonth?.map((m) => m.month) ?? [];
+    return getFeeCalendarYear(selectedAcademicYear?.name, paymentMonths);
+  }, [selectedAcademicYear?.name, monthlyReports?.byMonth]);
+
+  const monthOptions = useMemo(
+    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem),
+    [feeCalendarYear, calendarSystem],
+  );
+
+  const yearScopeLabel = selectedAcademicYear?.name ?? 'Selected Academic Year';
 
   // Set default academic year
   useEffect(() => {
@@ -314,37 +374,18 @@ export default function ReportsPage() {
     }
   }, [academicYears, activeYearData, academicYearFilter, isOwner, isRegistrar]);
 
-  // Build API params for Monthly View (both Owner and Registrar use getPaymentReports)
-  const monthlyReportParams = useMemo(() => {
-    const params: any = {};
-    if (isRegistrar && activeYearData?.data?.id) {
-      params.academicYearId = activeYearData.data.id;
-    } else if (academicYearFilter) {
-      params.academicYearId = academicYearFilter;
+  useEffect(() => {
+    if (academicYearIdParam) {
+      setAcademicYearFilter(academicYearIdParam);
     }
-    if (paymentTypeFilter && paymentTypeFilter !== 'all') {
-      params.paymentTypeId = paymentTypeFilter;
-    }
-    if (paymentMethodFilter && paymentMethodFilter !== 'all') {
-      params.paymentMethod = paymentMethodFilter;
-    }
-    // Don't filter by month in monthly view - we want all months
-    if (isOwner && registrarFilter && registrarFilter !== 'all') {
-      params.registrarId = registrarFilter;
-    }
-    return params;
-  }, [academicYearFilter, activeYearData?.data?.id, paymentTypeFilter, paymentMethodFilter, registrarFilter, isOwner, isRegistrar]);
+  }, [academicYearIdParam]);
 
   // Build API params for Daily View (both Owner and Registrar use getRegistrarPaymentReports)
-  const dailyReportParams = useMemo(() => {
-    const academicYearId = isRegistrar
-      ? activeYearData?.data?.id
-      : academicYearFilter;
+  const dailyReportParams = useMemo((): RegistrarPaymentReportsParams | null => {
+    if (!effectiveAcademicYearId) return null;
 
-    if (!academicYearId) return null;
-
-    const params: any = {
-      academicYearId,
+    const params: RegistrarPaymentReportsParams = {
+      academicYearId: effectiveAcademicYearId,
     };
     if (paymentTypeFilter && paymentTypeFilter !== 'all') {
       params.paymentTypeId = paymentTypeFilter;
@@ -356,13 +397,12 @@ export default function ReportsPage() {
       params.month = monthFilter;
     }
     return params;
-  }, [academicYearFilter, activeYearData?.data?.id, paymentTypeFilter, paymentMethodFilter, monthFilter, isRegistrar]);
-
-  // Fetch monthly reports data (for Monthly View)
-  const { data: monthlyReportsData, isLoading: monthlyLoading, error: monthlyError, refetch: monthlyRefetch } = usePaymentReports(
-    viewMode === 'monthly' ? monthlyReportParams : undefined
-  );
-  const monthlyReports = monthlyReportsData?.data;
+  }, [
+    effectiveAcademicYearId,
+    paymentTypeFilter,
+    paymentMethodFilter,
+    monthFilter,
+  ]);
 
   // Fetch daily reports data (for Daily View)
   const { data: dailyReportsData, isLoading: dailyLoading, error: dailyError, refetch: dailyRefetch } = useRegistrarPaymentReports(
@@ -928,7 +968,7 @@ export default function ReportsPage() {
                           {formatCurrency(monthlyReports.summary.totalRevenue)}
                         </p>
                         <p className="text-xs text-green-600 mt-1">
-                          Active Academic Year
+                          {yearScopeLabel}
                         </p>
                       </div>
                       <DollarSign className="h-8 w-8 text-green-600" />
@@ -945,7 +985,7 @@ export default function ReportsPage() {
                           {monthlyReports.summary.totalStudents}
                         </p>
                         <p className="text-xs text-indigo-600 mt-1">
-                          Active Academic Year
+                          {yearScopeLabel}
                         </p>
                       </div>
                       <Users className="h-8 w-8 text-indigo-600" />
@@ -1152,7 +1192,7 @@ export default function ReportsPage() {
                           {formatCurrency(dailyReports.summary.totalRevenue)}
                         </p>
                         <p className="text-xs text-green-600 mt-1">
-                          Active Academic Year
+                          {yearScopeLabel}
                         </p>
                       </div>
                       <DollarSign className="h-8 w-8 text-green-600" />
@@ -1427,6 +1467,7 @@ export default function ReportsPage() {
           onClose={() => setIsStudentModalOpen(false)}
           date={modalDate}
           calendarSystem={calendarSystem}
+          academicYearId={effectiveAcademicYearId || undefined}
         />
 
         {/* Print Styles */}
@@ -1460,6 +1501,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
+      <ArchiveModeBanner />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Financial Reports</h1>
@@ -2110,6 +2152,7 @@ export default function ReportsPage() {
         onClose={() => setIsStudentModalOpen(false)}
         date={modalDate}
         calendarSystem={calendarSystem}
+        academicYearId={effectiveAcademicYearId || undefined}
       />
 
       {/* Print Styles */}

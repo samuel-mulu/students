@@ -31,7 +31,7 @@ export interface AuthResponse {
 }
 
 // Student Types
-export type ClassStatus = "new" | "assigned";
+export type ClassStatus = "new" | "assigned" | "graduated";
 export type PaymentStatus = "pending" | "confirmed";
 
 export interface Student {
@@ -483,6 +483,7 @@ export interface UpdatePaymentTypeRequest {
 export interface Payment {
   id: string;
   studentId: string;
+  academicYearId?: string;
   amount: number;
   paymentTypeId?: string;
   month: string;
@@ -493,6 +494,7 @@ export interface Payment {
   notes?: string;
   proofImageUrl?: string;
   transactionNumber?: string;
+  payerName?: string;
   student?: Student;
   paymentType?: PaymentType;
   receipt?: Receipt;
@@ -502,6 +504,7 @@ export interface Payment {
 
 export interface CreatePaymentRequest {
   studentId: string;
+  academicYearId: string;
   paymentTypeId: string; // Required: payment type ID instead of amount
   month: string;
   year: number;
@@ -509,17 +512,20 @@ export interface CreatePaymentRequest {
   notes?: string;
   proofImageUrl?: string;
   transactionNumber?: string;
+  payerName?: string;
   amount?: number; // Optional for backward compatibility
 }
 
 export interface CreateBulkPaymentRequest {
   studentId: string;
+  academicYearId: string;
   paymentTypeId: string;
   months: string[]; // Array of YYYY-MM format
   paymentMethod?: string;
   notes?: string;
   proofImageUrl?: string;
   transactionNumber?: string;
+  payerName?: string;
 }
 
 export interface ConfirmPaymentRequest {
@@ -527,6 +533,7 @@ export interface ConfirmPaymentRequest {
   paymentMethod?: string;
   proofImageUrl?: string;
   transactionNumber?: string;
+  payerName?: string;
 }
 
 export interface ConfirmBulkPaymentsRequest {
@@ -535,6 +542,7 @@ export interface ConfirmBulkPaymentsRequest {
   paymentMethod?: string;
   proofImageUrl?: string;
   transactionNumber?: string;
+  payerName?: string;
 }
 
 export interface Receipt {
@@ -737,6 +745,9 @@ export interface PromotionResult {
   promoted: number;
   repeated: number;
   graduated: number;
+  skipped?: number;
+  alreadyProcessed?: number;
+  errors?: Array<{ studentId: string; studentName?: string; error: string }>;
   previousAcademicYear: { id: string; name: string };
   newAcademicYear: { id: string; name: string };
   termsCreated: string[];

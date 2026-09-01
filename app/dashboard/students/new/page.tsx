@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCreateStudent } from '@/lib/hooks/use-students';
 import { useCreateBulkPayment, useConfirmBulkPayments } from '@/lib/hooks/use-payments';
+import { useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
 import { StudentForm } from '@/components/forms/StudentForm';
 import { CreateStudentRequest, UpdateStudentRequest, CreateBulkPaymentRequest } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +17,8 @@ export default function NewStudentPage() {
   const createStudent = useCreateStudent();
   const createBulkPayment = useCreateBulkPayment();
   const confirmBulkPayments = useConfirmBulkPayments();
+  const { data: activeYearData } = useActiveAcademicYear();
+  const activeAcademicYearId = activeYearData?.data?.id;
   const [receiptDialog, setReceiptDialog] = useState<{
     open: boolean;
     payment: Payment | null;
@@ -37,6 +40,11 @@ export default function NewStudentPage() {
 
     // If payment fields are provided, process payment
     if (paymentTypeId && months && Array.isArray(months) && months.length > 0) {
+      if (!activeAcademicYearId) {
+        router.push(`/dashboard/students/${result.id}`);
+        return;
+      }
+
       try {
         // Show loading state for receipt
         setReceiptDialog({ 
@@ -49,6 +57,7 @@ export default function NewStudentPage() {
         // Create bulk payment
         const payments = await createBulkPayment.mutateAsync({
           studentId: result.id,
+          academicYearId: activeAcademicYearId,
           paymentTypeId,
           months,
           paymentMethod: paymentMethod || 'cash',

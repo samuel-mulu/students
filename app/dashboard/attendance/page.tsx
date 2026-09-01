@@ -2,6 +2,7 @@
 
 import { ExportAttendanceDialog } from "@/components/forms/ExportAttendanceDialog";
 
+import { ArchiveModeBanner } from "@/components/shared/ArchiveModeBanner";
 import { DateField } from "@/components/shared/DateField";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingState } from "@/components/shared/LoadingState";
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/table";
 import { useCalendarSystem } from "@/lib/context/calendar-context";
 import { useActiveAcademicYear } from "@/lib/hooks/use-academicYears";
+import { useAcademicYearContext } from "@/lib/hooks/use-academic-year-context";
 import {
   useAttendanceByClass,
   useBulkAttendance,
@@ -43,7 +45,7 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import { AttendanceStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatDateForUI } from "@/lib/utils/date";
-import { formatFullName } from "@/lib/utils/format";
+import { formatFullName, formatClassDisplayName } from "@/lib/utils/format";
 import { isNoClassDay } from "@/lib/utils/schoolCalendar";
 import {
   Check,
@@ -64,6 +66,8 @@ export default function AttendancePage() {
   const router = useRouter();
   const { hasRole, user } = useAuthStore();
   const { data: activeYearData } = useActiveAcademicYear();
+  const { academicYearId, isReadOnly: isArchiveReadOnly } =
+    useAcademicYearContext();
   const { calendarSystem } = useCalendarSystem();
 
   const [selectedClassId, setSelectedClassId] = useState<string>("");
@@ -77,10 +81,13 @@ export default function AttendancePage() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
-  const { data: classesData } = useClasses();
+  const { data: classesData } = useClasses(
+    academicYearId ? { academicYearId } : undefined,
+  );
   const { data: studentsData, isLoading: studentsLoading, error: studentsError } = useStudents({
     classId: selectedClassId || undefined,
     classStatus: "assigned",
+    academicYearId,
     page: 1,
     limit: 1000,
   });
@@ -120,42 +127,29 @@ export default function AttendancePage() {
   // Step 1: Filter by active academic year first
   // Step 2: Then filter by assigned classes
   const classes = useMemo(() => {
-    // For owners, show all classes
-    if (!isTeacher) {
-      return allClasses;
-    }
+    const yearId = academicYearId || activeYear?.id;
+    if (!yearId) return isTeacher ? [] : allClasses;
 
-    // For teachers: must have active academic year
-    if (!activeYear || !activeYear.id) {
-      return [];
-    }
-
-    // Step 1: Get classes from active academic year
-    const activeYearClasses = allClasses.filter((cls) => {
-      // Check both academicYearId and legacy academicYear field
-      if (cls.academicYearId) {
-        return cls.academicYearId === activeYear.id;
+    const yearClasses = allClasses.filter((cls) => {
+      if (cls.academicYearId) return cls.academicYearId === yearId;
+      if (typeof cls.academicYear === "string") {
+        return cls.academicYear === activeYear?.name;
       }
-      // Legacy support: check if academicYear is a string matching the active year name
-      if (typeof cls.academicYear === 'string') {
-        return cls.academicYear === activeYear.name;
-      }
-      // If academicYear is an object, check its id
-      if (typeof cls.academicYear === 'object' && cls.academicYear?.id) {
-        return cls.academicYear.id === activeYear.id;
+      if (typeof cls.academicYear === "object" && cls.academicYear?.id) {
+        return cls.academicYear.id === yearId;
       }
       return false;
     });
 
-    // Step 2: Filter by assigned classes (if teacher has assigned classes)
+    if (!isTeacher) return yearClasses;
+
     if (user?.teacherClasses && user.teacherClasses.length > 0) {
       const assignedClassIds = user.teacherClasses.map((tc) => tc.id);
-      return activeYearClasses.filter((cls) => assignedClassIds.includes(cls.id));
+      return yearClasses.filter((cls) => assignedClassIds.includes(cls.id));
     }
 
-    // If no assigned classes, return empty array
     return [];
-  }, [isTeacher, user?.teacherClasses, activeYear, allClasses]);
+  }, [isTeacher, user?.teacherClasses, activeYear, allClasses, academicYearId]);
 
   // Check if attendance is recorded for the selected date
   const isAttendanceRecorded = useMemo(() => {
@@ -178,7 +172,7 @@ export default function AttendancePage() {
   }, [attendanceData, selectedClassId]);
 
   // Determine if we're in read-only mode (past date with recorded attendance)
-  const isReadOnly = useMemo(() => {
+  const isDateReadOnly = useMemo(() => {
     if (!isAttendanceRecorded) return false;
     const selected = new Date(selectedDate);
     const today = new Date();
@@ -186,6 +180,8 @@ export default function AttendancePage() {
     selected.setHours(0, 0, 0, 0);
     return selected < today;
   }, [isAttendanceRecorded, selectedDate]);
+
+  const isReadOnly = isArchiveReadOnly || isDateReadOnly;
 
   // Date navigation functions
   const handlePreviousDate = () => {
@@ -393,6 +389,8 @@ export default function AttendancePage() {
         </div>
       )}
 
+      <ArchiveModeBanner />
+
       {/* Combined Card: Select Class/Date and Students Attendance */}
       <Card className="border border-slate-200 shadow-sm">
         <CardHeader className="bg-slate-50 border-b border-slate-200 py-3">
@@ -452,7 +450,7 @@ export default function AttendancePage() {
                     ) : (
                       classes.map((cls) => (
                         <SelectItem key={cls.id} value={cls.id}>
-                          {cls.name}
+                          {formatClassDisplayName(cls.name)}
                         </SelectItem>
                       ))
                     )}

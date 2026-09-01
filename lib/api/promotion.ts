@@ -19,7 +19,7 @@ export const promotionApi = {
 
   execute: async (): Promise<PromotionResult> => {
     const response = await apiClient.post<PromotionResult>('/api/promotion/execute', undefined, {
-      timeout: 120000,
+      timeout: 300000,
     });
     return response.data;
   },

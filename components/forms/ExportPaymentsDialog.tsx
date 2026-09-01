@@ -22,7 +22,7 @@ import { useCalendarSystem } from '@/lib/context/calendar-context';
 import { useActiveAcademicYear } from '@/lib/hooks/use-academicYears';
 import { useClassesByGradeAndYear } from '@/lib/hooks/use-classes';
 import { useGrades } from '@/lib/hooks/use-grades';
-import { formatDate, generateAllMonths } from '@/lib/utils/format';
+import { formatDate, generateFeeCalendarMonthOptions, getFeeCalendarYear, resolveStudentClassEntry } from '@/lib/utils/format';
 import { Download, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -38,6 +38,7 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
   const { data: gradesData } = useGrades();
   const grades = gradesData?.data || [];
   const academicYearId = activeYearData?.data?.id || '';
+  const feeCalendarYear = getFeeCalendarYear(activeYearData?.data?.name);
 
   const [gradeId, setGradeId] = useState<string>('');
   const [classId, setClassId] = useState<string>('all');
@@ -49,7 +50,10 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
   const { data: classesData } = useClassesByGradeAndYear(gradeId, academicYearId);
   const classes = classesData?.data || [];
 
-  const months = useMemo(() => generateAllMonths(new Date().getFullYear(), calendarSystem), [calendarSystem]);
+  const months = useMemo(
+    () => generateFeeCalendarMonthOptions(feeCalendarYear, calendarSystem),
+    [feeCalendarYear, calendarSystem],
+  );
 
   const handleExport = async () => {
     if (!gradeId) {
@@ -66,6 +70,7 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
       const response = await studentsApi.getAll({
         gradeId,
         classId: classId === 'all' ? undefined : classId,
+        academicYearId: academicYearId || undefined,
         month,
         year: parseInt(month.split('-')[0]),
         paymentStatus: apiPaymentStatus,
@@ -107,7 +112,7 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
       const receiptNo = payment?.receipt?.receiptNumber || '-';
       const paymentDate = payment?.paymentDate ? formatDate(payment.paymentDate, calendarSystem) : '-';
 
-      const currentClass = student.classHistory?.find((ch: any) => !ch.endDate);
+      const currentClass = resolveStudentClassEntry(student.classHistory);
       const className = currentClass?.class?.name || 'Not Assigned';
       const gradeName = currentClass?.class?.grade?.name || '-';
 
@@ -156,7 +161,7 @@ export function ExportPaymentsDialog({ open, onOpenChange }: ExportPaymentsDialo
       const receiptNo = payment?.receipt?.receiptNumber || '-';
       const paymentDate = payment?.paymentDate ? formatDate(payment.paymentDate, calendarSystem) : '-';
 
-      const currentClass = student.classHistory?.find((ch: any) => !ch.endDate);
+      const currentClass = resolveStudentClassEntry(student.classHistory);
       const actualClassName = currentClass?.class?.name || 'Not Assigned';
 
       return `

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 export function usePayments(params?: {
   studentId?: string;
+  academicYearId?: string;
   status?: 'pending' | 'confirmed';
   month?: string;
   year?: number;
@@ -124,6 +125,9 @@ export function useConfirmBulkPayments() {
       paymentsApi.confirmBulk(data.paymentIds, {
         paymentDate: data.paymentDate,
         paymentMethod: data.paymentMethod,
+        proofImageUrl: data.proofImageUrl,
+        transactionNumber: data.transactionNumber,
+        payerName: data.payerName,
       }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['payments'] });

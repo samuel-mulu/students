@@ -5,6 +5,7 @@ import { EditStudentDialog } from "@/components/forms/EditStudentDialog";
 import { ExportStudentsDialog } from "@/components/forms/ExportStudentsDialog";
 import { TransferClassDialog } from "@/components/forms/TransferClassDialog";
 import { BulkTransferClassDialog } from "@/components/forms/BulkTransferClassDialog";
+import { ArchiveModeBanner } from "@/components/shared/ArchiveModeBanner";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
@@ -25,6 +26,7 @@ import {
   useAcademicYears,
   useActiveAcademicYear,
 } from "@/lib/hooks/use-academicYears";
+import { useAcademicYearContext } from "@/lib/hooks/use-academic-year-context";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { useGrades } from "@/lib/hooks/use-grades";
 import {
@@ -41,15 +43,11 @@ import { Download, Plus, Search, ArrowRightLeft, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { BulkTransferResult } from "@/lib/types";
+import { formatClassDisplayName } from "@/lib/utils/format";
 
 export default function StudentsPage() {
   const { hasRole } = useAuthStore();
-
-  // Helper function to remove academic year from class name (e.g., "Grade 1A (2024-2025)" -> "Grade 1A")
-  const removeAcademicYearFromClassName = (className: string): string => {
-    // Remove anything in parentheses at the end of the string
-    return className.replace(/\s*\([^)]*\)\s*$/, "").trim();
-  };
+  const { academicYearIdParam, isReadOnly } = useAcademicYearContext();
   const [page, setPage] = useState(1);
   const [limit] = useState(40);
   const [search, setSearch] = useState("");
@@ -104,7 +102,9 @@ export default function StudentsPage() {
   const [bulkTransferOpen, setBulkTransferOpen] = useState(false);
   const [bulkTransferResult, setBulkTransferResult] = useState<BulkTransferResult | null>(null);
 
-  const { data: classesData } = useClasses();
+  const { data: classesData } = useClasses(
+    academicYearFilter ? { academicYearId: academicYearFilter } : undefined,
+  );
   const { data: academicYearsData } = useAcademicYears();
   const { data: activeYearData } = useActiveAcademicYear();
   const { data: gradesData } = useGrades();
@@ -138,6 +138,12 @@ export default function StudentsPage() {
       }
     }
   }, [academicYears, activeYearData, academicYearFilter, classStatusFilter]);
+
+  useEffect(() => {
+    if (academicYearIdParam) {
+      setAcademicYearFilter(academicYearIdParam);
+    }
+  }, [academicYearIdParam]);
 
   // Filter classes by academic year only (for general filtering)
   const classesByAcademicYear = useMemo(() => {
@@ -183,6 +189,10 @@ export default function StudentsPage() {
     // If "All Classes in Grade" is selected, fetch all students and filter client-side
     classId: classFilter !== "all" ? classFilter : undefined,
     gradeId: gradeFilter !== "all" ? gradeFilter : undefined,
+    academicYearId:
+      classStatusFilter !== "new" && academicYearFilter
+        ? academicYearFilter
+        : undefined,
   });
 
   const deleteStudent = useDeleteStudent();
@@ -190,7 +200,7 @@ export default function StudentsPage() {
   const transferClass = useTransferClass();
   const bulkTransferClass = useBulkTransferClass();
   const toggleParentsPortal = useToggleParentsPortal();
-  const canBulkTransfer = hasRole(["OWNER"]);
+  const canBulkTransfer = hasRole(["OWNER"]) && !isReadOnly;
 
   const handleDelete = async () => {
     if (deleteDialog.student) {
@@ -404,7 +414,7 @@ export default function StudentsPage() {
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
-          {hasRole(["OWNER", "REGISTRAR"]) && (
+          {hasRole(["OWNER", "REGISTRAR"]) && !isReadOnly && (
             <Link href="/dashboard/students/new">
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -414,6 +424,8 @@ export default function StudentsPage() {
           )}
         </div>
       </div>
+
+      <ArchiveModeBanner />
 
       <Card>
         <CardHeader>
@@ -515,7 +527,7 @@ export default function StudentsPage() {
                     {gradeClasses.length > 0 ? (
                       gradeClasses.map((cls) => (
                         <SelectItem key={cls.id} value={cls.id}>
-                          {removeAcademicYearFromClassName(cls.name)}
+                          {formatClassDisplayName(cls.name)}
                         </SelectItem>
                       ))
                     ) : (
@@ -549,28 +561,33 @@ export default function StudentsPage() {
           <StudentsTable
             students={finalStudents}
             offset={(page - 1) * limit}
+            preferHistoricalClass={isReadOnly}
             selectable={canBulkTransfer}
             selectedIds={selectedIds}
             onSelectionChange={handleSelectionChange}
             onSelectAll={handleSelectAllOnPage}
-            onEdit={(student) => setEditDialog({ open: true, student })}
+            onEdit={
+              !isReadOnly
+                ? (student) => setEditDialog({ open: true, student })
+                : undefined
+            }
             onDelete={
-              hasRole(["OWNER"])
+              hasRole(["OWNER"]) && !isReadOnly
                 ? (student) => setDeleteDialog({ open: true, student })
                 : undefined
             }
             onAssignClass={
-              hasRole(["OWNER", "REGISTRAR"])
+              hasRole(["OWNER", "REGISTRAR"]) && !isReadOnly
                 ? (student) => setAssignDialog({ open: true, student })
                 : undefined
             }
             onTransferClass={
-              hasRole(["OWNER"])
+              hasRole(["OWNER"]) && !isReadOnly
                 ? (student) => setTransferDialog({ open: true, student })
                 : undefined
             }
-            onToggleParentsPortal={handleToggleParentsPortal}
-            showActions={hasRole(["OWNER", "REGISTRAR"])}
+            onToggleParentsPortal={!isReadOnly ? handleToggleParentsPortal : undefined}
+            showActions={hasRole(["OWNER", "REGISTRAR"]) && !isReadOnly}
           />
 
           {data?.pagination && data.pagination.totalPages > 1 && (

@@ -9,11 +9,11 @@ import {
 } from "@/lib/types";
 import { toast } from "sonner";
 
-export function useClasses() {
+export function useClasses(params?: { academicYearId?: string; gradeId?: string }) {
   return useQuery({
-    queryKey: ["classes"],
+    queryKey: ["classes", params],
     queryFn: async () => {
-      const classes = await classesApi.getAll();
+      const classes = await classesApi.getAll(params);
       return { data: classes };
     },
   });

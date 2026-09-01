@@ -56,6 +56,7 @@ export const paymentsApi = {
 
   getAll: async (params?: {
     studentId?: string;
+    academicYearId?: string;
     status?: 'pending' | 'confirmed';
     month?: string;
     year?: number;
