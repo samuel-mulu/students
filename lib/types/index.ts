@@ -146,6 +146,26 @@ export interface TransferClassRequest {
   reason: string;
 }
 
+export interface BulkTransferClassRequest {
+  studentIds: string[];
+  newClassId: string;
+  reason: string;
+}
+
+export interface BulkTransferItemResult {
+  studentId: string;
+  success: boolean;
+  studentName?: string;
+  error?: string;
+}
+
+export interface BulkTransferResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: BulkTransferItemResult[];
+}
+
 export interface StudentsResponse {
   data: Student[];
   pagination?: {

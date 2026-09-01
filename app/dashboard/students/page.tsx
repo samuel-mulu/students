@@ -4,6 +4,7 @@ import { AssignClassDialog } from "@/components/forms/AssignClassDialog";
 import { EditStudentDialog } from "@/components/forms/EditStudentDialog";
 import { ExportStudentsDialog } from "@/components/forms/ExportStudentsDialog";
 import { TransferClassDialog } from "@/components/forms/TransferClassDialog";
+import { BulkTransferClassDialog } from "@/components/forms/BulkTransferClassDialog";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
@@ -32,12 +33,14 @@ import {
   useStudents,
   useToggleParentsPortal,
   useTransferClass,
+  useBulkTransferClass,
 } from "@/lib/hooks/use-students";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Student } from "@/lib/types";
-import { Download, Plus, Search } from "lucide-react";
+import { Download, Plus, Search, ArrowRightLeft, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { BulkTransferResult } from "@/lib/types";
 
 export default function StudentsPage() {
   const { hasRole } = useAuthStore();
@@ -94,6 +97,12 @@ export default function StudentsPage() {
     student: null,
   });
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedStudentsMap, setSelectedStudentsMap] = useState<Map<string, Student>>(
+    new Map(),
+  );
+  const [bulkTransferOpen, setBulkTransferOpen] = useState(false);
+  const [bulkTransferResult, setBulkTransferResult] = useState<BulkTransferResult | null>(null);
 
   const { data: classesData } = useClasses();
   const { data: academicYearsData } = useAcademicYears();
@@ -179,7 +188,9 @@ export default function StudentsPage() {
   const deleteStudent = useDeleteStudent();
   const assignClass = useAssignClass();
   const transferClass = useTransferClass();
+  const bulkTransferClass = useBulkTransferClass();
   const toggleParentsPortal = useToggleParentsPortal();
+  const canBulkTransfer = hasRole(["OWNER"]);
 
   const handleDelete = async () => {
     if (deleteDialog.student) {
@@ -254,6 +265,120 @@ export default function StudentsPage() {
 
     return sortedStudents;
   }, [sortedStudents, search, isFullyFiltered]);
+
+  const selectedStudents = useMemo(() => {
+    return Array.from(selectedStudentsMap.values());
+  }, [selectedStudentsMap]);
+
+  const handleSelectionChange = useCallback(
+    (studentId: string, selected: boolean) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (selected) next.add(studentId);
+        else next.delete(studentId);
+        return next;
+      });
+      setSelectedStudentsMap((prev) => {
+        const next = new Map(prev);
+        if (selected) {
+          const student = finalStudents.find((s) => s.id === studentId);
+          if (student) next.set(studentId, student);
+        } else {
+          next.delete(studentId);
+        }
+        return next;
+      });
+    },
+    [finalStudents],
+  );
+
+  const handleSelectAllOnPage = useCallback(
+    (selected: boolean) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const student of finalStudents) {
+          if (student.classStatus !== "assigned") continue;
+          if (selected) next.add(student.id);
+          else next.delete(student.id);
+        }
+        return next;
+      });
+      setSelectedStudentsMap((prev) => {
+        const next = new Map(prev);
+        for (const student of finalStudents) {
+          if (student.classStatus !== "assigned") continue;
+          if (selected) next.set(student.id, student);
+          else next.delete(student.id);
+        }
+        return next;
+      });
+    },
+    [finalStudents],
+  );
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setSelectedStudentsMap(new Map());
+  };
+
+  const handleBulkTransfer = async (newClassId: string, reason: string) => {
+    const result = await bulkTransferClass.mutateAsync({
+      studentIds: Array.from(selectedIds),
+      newClassId,
+      reason,
+    });
+    setBulkTransferResult(result);
+    if (result.failed === 0) {
+      clearSelection();
+    } else {
+      const failedIds = new Set(
+        result.results.filter((r) => !r.success).map((r) => r.studentId),
+      );
+      setSelectedIds(failedIds);
+      setSelectedStudentsMap((prev) => {
+        const next = new Map<string, Student>();
+        for (const [id, student] of prev) {
+          if (failedIds.has(id)) next.set(id, student);
+        }
+        return next;
+      });
+    }
+    return result;
+  };
+
+  const handleRetryFailedBulkTransfer = async (
+    studentIds: string[],
+    newClassId: string,
+    reason: string,
+  ) => {
+    const result = await bulkTransferClass.mutateAsync({
+      studentIds,
+      newClassId,
+      reason,
+    });
+    setBulkTransferResult(result);
+    if (result.failed === 0) {
+      clearSelection();
+    } else {
+      const failedIds = new Set(
+        result.results.filter((r) => !r.success).map((r) => r.studentId),
+      );
+      setSelectedIds(failedIds);
+      setSelectedStudentsMap((prev) => {
+        const next = new Map<string, Student>();
+        for (const [id, student] of prev) {
+          if (failedIds.has(id)) next.set(id, student);
+        }
+        return next;
+      });
+    }
+  };
+
+  const openBulkTransferDialog = () => {
+    bulkTransferClass.resetProgress();
+    setBulkTransferResult(null);
+    setBulkTransferOpen(true);
+  };
 
   if (isLoading) {
     return <LoadingState rows={5} columns={6} />;
@@ -424,6 +549,10 @@ export default function StudentsPage() {
           <StudentsTable
             students={finalStudents}
             offset={(page - 1) * limit}
+            selectable={canBulkTransfer}
+            selectedIds={selectedIds}
+            onSelectionChange={handleSelectionChange}
+            onSelectAll={handleSelectAllOnPage}
             onEdit={(student) => setEditDialog({ open: true, student })}
             onDelete={
               hasRole(["OWNER"])
@@ -522,6 +651,40 @@ export default function StudentsPage() {
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
       />
+
+      <BulkTransferClassDialog
+        open={bulkTransferOpen}
+        onOpenChange={(open) => {
+          if (bulkTransferClass.progress.phase === "transferring") return;
+          setBulkTransferOpen(open);
+          if (!open) {
+            bulkTransferClass.resetProgress();
+            setBulkTransferResult(null);
+          }
+        }}
+        students={selectedStudents}
+        onConfirm={handleBulkTransfer}
+        isLoading={bulkTransferClass.isPending}
+        progress={bulkTransferClass.progress}
+        lastResult={bulkTransferResult}
+        onRetryFailed={handleRetryFailedBulkTransfer}
+      />
+
+      {canBulkTransfer && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg border bg-background px-4 py-3 shadow-lg">
+          <span className="text-sm font-medium">
+            {selectedIds.size} student{selectedIds.size !== 1 ? "s" : ""} selected
+          </span>
+          <Button variant="outline" size="sm" onClick={clearSelection}>
+            <X className="mr-1 h-4 w-4" />
+            Clear
+          </Button>
+          <Button size="sm" onClick={openBulkTransferDialog}>
+            <ArrowRightLeft className="mr-1 h-4 w-4" />
+            Transfer to Class
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,12 +1,15 @@
 import { studentsApi } from "@/lib/api/students";
 import {
   AssignClassRequest,
+  BulkTransferClassRequest,
+  BulkTransferResult,
   CreateStudentRequest,
   PaginationParams,
   TransferClassRequest,
   UpdateStudentRequest,
 } from "@/lib/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
 
 export function useStudents(
@@ -160,6 +163,99 @@ export function useTransferClass() {
       });
     },
   });
+}
+
+const BULK_TRANSFER_CHUNK_SIZE = 20;
+
+export type BulkTransferProgress = {
+  current: number;
+  total: number;
+  phase: "idle" | "transferring" | "done";
+};
+
+export function useBulkTransferClass() {
+  const queryClient = useQueryClient();
+  const [progress, setProgress] = useState<BulkTransferProgress>({
+    current: 0,
+    total: 0,
+    phase: "idle",
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (
+      data: BulkTransferClassRequest,
+    ): Promise<BulkTransferResult> => {
+      const { studentIds, newClassId, reason } = data;
+      const total = studentIds.length;
+      setProgress({ current: 0, total, phase: "transferring" });
+
+      const aggregated: BulkTransferResult = {
+        total,
+        succeeded: 0,
+        failed: 0,
+        results: [],
+      };
+
+      for (let i = 0; i < studentIds.length; i += BULK_TRANSFER_CHUNK_SIZE) {
+        const chunk = studentIds.slice(i, i + BULK_TRANSFER_CHUNK_SIZE);
+        const chunkResult = await studentsApi.transferBulk({
+          studentIds: chunk,
+          newClassId,
+          reason,
+        });
+
+        aggregated.results.push(...chunkResult.results);
+        aggregated.succeeded += chunkResult.succeeded;
+        aggregated.failed += chunkResult.failed;
+        setProgress({
+          current: Math.min(i + chunk.length, total),
+          total,
+          phase: "transferring",
+        });
+      }
+
+      setProgress({ current: total, total, phase: "done" });
+      return aggregated;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      if (result.failed === 0) {
+        toast.success("Bulk Transfer Complete", {
+          description: `${result.succeeded} student${result.succeeded !== 1 ? "s" : ""} transferred successfully.`,
+          duration: 4000,
+        });
+      } else if (result.succeeded > 0) {
+        toast.warning("Bulk Transfer Partially Complete", {
+          description: `${result.succeeded} succeeded, ${result.failed} failed.`,
+          duration: 5000,
+        });
+      } else {
+        toast.error("Bulk Transfer Failed", {
+          description: "No students were transferred.",
+          duration: 5000,
+        });
+      }
+    },
+    onError: (error: any) => {
+      setProgress({ current: 0, total: 0, phase: "idle" });
+      const errorMessage =
+        error.errorMessage ||
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to transfer students. Please try again.";
+      toast.error("Bulk Transfer Failed", {
+        description: errorMessage,
+        duration: 5000,
+      });
+    },
+  });
+
+  const resetProgress = () => {
+    setProgress({ current: 0, total: 0, phase: "idle" });
+  };
+
+  return { ...mutation, progress, resetProgress };
 }
 
 export function useDeleteStudent() {

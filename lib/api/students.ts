@@ -1,5 +1,7 @@
 import {
   AssignClassRequest,
+  BulkTransferClassRequest,
+  BulkTransferResult,
   CreateStudentRequest,
   PaginationParams,
   Student,
@@ -75,6 +77,17 @@ export const studentsApi = {
     const response = await apiClient.post<Student>(
       `/api/students/${id}/transfer`,
       data,
+    );
+    return response.data;
+  },
+
+  transferBulk: async (
+    data: BulkTransferClassRequest,
+  ): Promise<BulkTransferResult> => {
+    const response = await apiClient.post<BulkTransferResult>(
+      "/api/students/transfer/bulk",
+      data,
+      { timeout: 120000 },
     );
     return response.data;
   },

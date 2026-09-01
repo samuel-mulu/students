@@ -22,6 +22,7 @@ import {
 import { Student } from "@/lib/types";
 import { getOptimizedCloudinaryUrl } from "@/lib/utils/cloudinary";
 import { formatFullName } from "@/lib/utils/format";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   ArrowRightLeft,
   Edit,
@@ -43,6 +44,10 @@ interface StudentsTableProps {
   onToggleParentsPortal?: (student: Student, enabled: boolean) => void;
   showActions?: boolean;
   offset?: number;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onSelectionChange?: (studentId: string, selected: boolean) => void;
+  onSelectAll?: (selected: boolean) => void;
 }
 
 export function StudentsTable({
@@ -54,6 +59,10 @@ export function StudentsTable({
   onToggleParentsPortal,
   showActions = true,
   offset = 0,
+  selectable = false,
+  selectedIds,
+  onSelectionChange,
+  onSelectAll,
 }: StudentsTableProps) {
   const [imageViewer, setImageViewer] = useState<{
     open: boolean;
@@ -76,11 +85,28 @@ export function StudentsTable({
     return student.classStatus === "assigned" ? "Not Assigned" : "New";
   };
 
+  const selectableStudents = students.filter((s) => s.classStatus === "assigned");
+  const allSelectableSelected =
+    selectableStudents.length > 0 &&
+    selectableStudents.every((s) => selectedIds?.has(s.id));
+  const someSelectableSelected =
+    selectableStudents.some((s) => selectedIds?.has(s.id)) && !allSelectableSelected;
+
   return (
     <div className="bg-white p-4 rounded-md flex-1">
       <Table>
         <TableHeader>
           <TableRow>
+            {selectable && (
+              <TableHead className="w-12">
+                <Checkbox
+                  checked={allSelectableSelected}
+                  onCheckedChange={(checked) => onSelectAll?.(!!checked)}
+                  aria-label="Select all on page"
+                  className={someSelectableSelected ? "opacity-70" : undefined}
+                />
+              </TableHead>
+            )}
             <TableHead className="w-20">Photo</TableHead>
             <TableHead className="w-16">NO</TableHead>
             <TableHead>Student Name</TableHead>
@@ -93,7 +119,7 @@ export function StudentsTable({
           {students.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={showActions ? 6 : 5}
+                colSpan={(showActions ? 6 : 5) + (selectable ? 1 : 0)}
                 className="text-center py-12 text-gray-500 text-sm"
               >
                 No students found
@@ -107,6 +133,19 @@ export function StudentsTable({
 
               return (
                 <TableRow key={student.id}>
+                  {selectable && (
+                    <TableCell>
+                      {student.classStatus === "assigned" ? (
+                        <Checkbox
+                          checked={selectedIds?.has(student.id) ?? false}
+                          onCheckedChange={(checked) =>
+                            onSelectionChange?.(student.id, !!checked)
+                          }
+                          aria-label={`Select ${formatFullName(student.firstName, student.lastName)}`}
+                        />
+                      ) : null}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <button
                       onClick={() => setImageViewer({ open: true, student })}
