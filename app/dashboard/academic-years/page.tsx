@@ -9,7 +9,7 @@ import {
   useActivateAcademicYear,
   useCloseAcademicYear,
 } from "@/lib/hooks/use-academicYears";
-import { useTerms } from "@/lib/hooks/use-terms";
+import { useTerms, useCloseTerm, useOpenTerm } from "@/lib/hooks/use-terms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingState } from "@/components/shared/LoadingState";
@@ -30,6 +30,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CreateTermDialog } from "@/components/forms/CreateTermDialog";
+import { EditTermDialog } from "@/components/forms/EditTermDialog";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 export default function AcademicYearsPage() {
   const { hasRole } = useAuthStore();
@@ -40,6 +42,8 @@ export default function AcademicYearsPage() {
   const updateYear = useUpdateAcademicYear();
   const activateYear = useActivateAcademicYear();
   const closeYear = useCloseAcademicYear();
+  const closeTerm = useCloseTerm();
+  const openTerm = useOpenTerm();
 
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
   const [createTermDialog, setCreateTermDialog] = useState<{
@@ -47,6 +51,22 @@ export default function AcademicYearsPage() {
     academicYearId?: string;
   }>({
     open: false,
+  });
+
+  const [closeTermDialog, setCloseTermDialog] = useState<{
+    open: boolean;
+    term: Term | null;
+  }>({
+    open: false,
+    term: null,
+  });
+
+  const [editTermDialog, setEditTermDialog] = useState<{
+    open: boolean;
+    term: Term | null;
+  }>({
+    open: false,
+    term: null,
   });
 
   const [dialog, setDialog] = useState<{
@@ -130,6 +150,12 @@ export default function AcademicYearsPage() {
 
   const handleClose = async (id: string) => {
     await closeYear.mutateAsync(id);
+  };
+
+  const handleCloseTerm = async () => {
+    if (!closeTermDialog.term) return;
+    await closeTerm.mutateAsync(closeTermDialog.term.id);
+    setCloseTermDialog({ open: false, term: null });
   };
 
   if (isLoading) {
@@ -265,9 +291,9 @@ export default function AcademicYearsPage() {
                               key={term.id}
                               className="flex items-center justify-between p-2 rounded-md bg-slate-50 hover:bg-slate-100 transition-colors"
                             >
-                              <div className="flex items-center gap-2 flex-1">
-                                <BookOpen className="h-3 w-3 text-muted-foreground" />
-                                <div className="flex flex-col">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <BookOpen className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <div className="flex flex-col min-w-0">
                                   <span className="text-sm font-medium">{term.name}</span>
                                   {term.startDate && (
                                     <span className="text-xs text-muted-foreground">
@@ -280,11 +306,48 @@ export default function AcademicYearsPage() {
                                 </div>
                                 <Badge
                                   variant={term.status === "OPEN" ? "default" : "secondary"}
-                                  className="text-xs"
+                                  className="text-xs shrink-0"
                                 >
                                   {term.status}
                                 </Badge>
                               </div>
+                              {hasRole(["OWNER", "REGISTRAR"]) && (
+                                <div className="flex gap-1 ml-2 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() =>
+                                      setEditTermDialog({ open: true, term })
+                                    }
+                                  >
+                                    Edit
+                                  </Button>
+                                  {term.name === "Term 2" && term.status === "OPEN" && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      onClick={() =>
+                                        setCloseTermDialog({ open: true, term })
+                                      }
+                                    >
+                                      Close
+                                    </Button>
+                                  )}
+                                  {term.status === "CLOSED" && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      onClick={() => openTerm.mutate(term.id)}
+                                      disabled={openTerm.isPending}
+                                    >
+                                      Reopen
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -405,6 +468,25 @@ export default function AcademicYearsPage() {
         open={createTermDialog.open}
         onOpenChange={(open) => setCreateTermDialog({ ...createTermDialog, open })}
         academicYearId={createTermDialog.academicYearId}
+      />
+
+      <EditTermDialog
+        open={editTermDialog.open}
+        onOpenChange={(open) =>
+          setEditTermDialog({ open, term: open ? editTermDialog.term : null })
+        }
+        term={editTermDialog.term}
+      />
+
+      <ConfirmDialog
+        open={closeTermDialog.open}
+        onOpenChange={(open) =>
+          setCloseTermDialog({ open, term: open ? closeTermDialog.term : null })
+        }
+        onConfirm={handleCloseTerm}
+        title="Close Term 2"
+        description="Closing Term 2 enables end-of-year promotion. Make sure all Term 2 marks are entered before proceeding."
+        confirmText={closeTerm.isPending ? "Closing..." : "Close Term 2"}
       />
     </div>
   );

@@ -94,7 +94,7 @@ const menuItems: MenuItem[] = [
     label: "Promotion",
     href: "/dashboard/promotion",
     icon: ArrowUpCircle,
-    roles: ["OWNER"],
+    roles: ["OWNER", "REGISTRAR"],
   },
   {
     label: "Settings",

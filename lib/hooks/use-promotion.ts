@@ -1,12 +1,27 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { promotionApi } from '@/lib/api/promotion';
+import { PromotionPreviewParams } from '@/lib/types';
 import { toast } from 'sonner';
 
-export const usePromotionPreview = () => {
+export const usePromotionPreview = (
+  params?: PromotionPreviewParams,
+  options?: { enabled?: boolean }
+) => {
   return useQuery({
-    queryKey: ['promotion', 'preview'],
+    queryKey: ['promotion', 'preview', params?.classId ?? 'all', params?.includeStudents ?? true],
     queryFn: async () => {
-      const data = await promotionApi.getPreview();
+      const data = await promotionApi.getPreview(params);
+      return { data };
+    },
+    enabled: options?.enabled ?? true,
+  });
+};
+
+export const usePromotionSummary = () => {
+  return useQuery({
+    queryKey: ['promotion', 'preview', 'summary'],
+    queryFn: async () => {
+      const data = await promotionApi.getPreview({ includeStudents: false });
       return { data };
     },
   });
@@ -23,8 +38,13 @@ export const usePromoteStudents = () => {
       queryClient.invalidateQueries({ queryKey: ['classes'] });
       queryClient.invalidateQueries({ queryKey: ['academicYears'] });
       queryClient.invalidateQueries({ queryKey: ['academicYear', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['terms'] });
+      const termsNote =
+        result.termsCreated?.length > 0
+          ? ` Terms created: ${result.termsCreated.join(', ')}.`
+          : '';
       toast.success('Promotion completed successfully', {
-        description: `Promoted: ${result.promoted}, Repeated: ${result.repeated}, Graduated: ${result.graduated}`,
+        description: `Promoted: ${result.promoted}, Repeated: ${result.repeated}, Graduated: ${result.graduated}. New year: ${result.newAcademicYear?.name}.${termsNote}`,
       });
     },
     onError: (error: any) => {
@@ -34,4 +54,3 @@ export const usePromoteStudents = () => {
     },
   });
 };
-

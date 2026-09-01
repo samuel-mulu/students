@@ -1,12 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { usePromotionPreview, usePromoteStudents } from '@/lib/hooks/use-promotion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { GraduationCap, ArrowRight, RefreshCw, CheckCircle2, XCircle, Users } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -19,26 +27,91 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatFullName } from '@/lib/utils/format';
+import { PromotionBlocker } from '@/lib/types';
+
+const BLOCKER_MESSAGES: Record<
+  PromotionBlocker,
+  { title: string; description: string; linkLabel: string }
+> = {
+  NO_ACTIVE_YEAR: {
+    title: 'No active academic year',
+    description: 'Set an active academic year before reviewing promotion.',
+    linkLabel: 'Go to Academic Years',
+  },
+  TERM1_NOT_FOUND: {
+    title: 'Term 1 not found',
+    description: 'Create Term 1 for the active academic year (name must be exactly "Term 1").',
+    linkLabel: 'Go to Academic Years',
+  },
+  TERM2_NOT_FOUND: {
+    title: 'Term 2 not found',
+    description: 'Create Term 2 for the active academic year (name must be exactly "Term 2").',
+    linkLabel: 'Go to Academic Years',
+  },
+  TERM2_NOT_CLOSED: {
+    title: 'Term 2 must be closed',
+    description:
+      'Close Term 2 after all marks are entered. Current status is shown below.',
+    linkLabel: 'Go to Academic Years',
+  },
+  INVALID_YEAR_FORMAT: {
+    title: 'Invalid academic year format',
+    description: 'The active academic year name must be in YYYY-YYYY format (e.g. 2024-2025).',
+    linkLabel: 'Go to Academic Years',
+  },
+  ALREADY_PROMOTED: {
+    title: 'Promotion already executed',
+    description: 'Students already have active records in the next academic year.',
+    linkLabel: 'Go to Academic Years',
+  },
+};
+
+const ALL_CLASSES = '__all__';
+const ALL_OUTCOMES = '__all__';
+
+type OutcomeFilter = typeof ALL_OUTCOMES | 'PASS' | 'REPEAT' | 'GRADUATE';
 
 export default function PromotionPage() {
   const { hasRole } = useAuthStore();
-  const { data, isLoading, error, refetch } = usePromotionPreview();
+  const { data, isLoading, error, refetch } = usePromotionPreview({ includeStudents: true });
   const promoteStudents = usePromoteStudents();
+  const [classFilter, setClassFilter] = useState<string>(ALL_CLASSES);
+  const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>(ALL_OUTCOMES);
   const [confirmDialog, setConfirmDialog] = useState(false);
+
+  const preview = data?.data;
+
+  const displayStudents = useMemo(() => {
+    if (!preview?.students) return [];
+    let filtered = preview.students;
+    if (classFilter !== ALL_CLASSES) {
+      filtered = filtered.filter((s) => s.currentClassId === classFilter);
+    }
+    if (outcomeFilter !== ALL_OUTCOMES) {
+      filtered = filtered.filter((s) => s.outcome === outcomeFilter);
+    }
+    return filtered;
+  }, [preview?.students, classFilter, outcomeFilter]);
 
   if (isLoading) {
     return <LoadingState rows={5} columns={4} />;
   }
 
   if (error) {
-    return <ErrorState message="Failed to load promotion preview" onRetry={() => refetch()} />;
+    const errorMessage =
+      (error as Error & { errorMessage?: string }).errorMessage ||
+      error.message ||
+      'Failed to load promotion preview';
+    return <ErrorState message={errorMessage} onRetry={() => refetch()} />;
   }
-
-  const preview = data?.data;
 
   if (!preview) {
     return <ErrorState message="No promotion data available" onRetry={() => refetch()} />;
   }
+
+  const hasTermBlockers =
+    preview.blockers?.includes('TERM1_NOT_FOUND') ||
+    preview.blockers?.includes('TERM2_NOT_FOUND');
 
   const handlePromote = async () => {
     await promoteStudents.mutateAsync();
@@ -59,6 +132,11 @@ export default function PromotionPage() {
     }
   };
 
+  const confirmDescription =
+    preview.activeAcademicYear && preview.nextAcademicYearName
+      ? `This will promote, repeat, or graduate all ${preview.summary.total} students, close ${preview.activeAcademicYear.name}, activate ${preview.nextAcademicYearName}, and create Term 1 and Term 2 for the new year. This cannot be undone.`
+      : 'Are you sure you want to execute the promotion? This action cannot be undone.';
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -74,21 +152,31 @@ export default function PromotionPage() {
         </Button>
       </div>
 
-      {!preview.canPromote && (
-        <Card className="border-yellow-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-yellow-700">
-              <XCircle className="h-5 w-5" />
-              <p className="font-semibold">
-                Term 2 must be closed before promotion can proceed.
-              </p>
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">
-              Current Term 2 Status: <strong>{preview.term2Status}</strong>
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {preview.blockers?.map((blocker) => {
+        const info = BLOCKER_MESSAGES[blocker];
+        if (!info) return null;
+        return (
+          <Card key={blocker} className="border-yellow-500">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-2 text-yellow-700">
+                <XCircle className="h-5 w-5 mt-0.5 shrink-0" />
+                <div className="space-y-2">
+                  <p className="font-semibold">{info.title}</p>
+                  <p className="text-sm text-muted-foreground">{info.description}</p>
+                  {blocker === 'TERM2_NOT_CLOSED' && preview.term2Status && (
+                    <p className="text-sm text-muted-foreground">
+                      Current Term 2 status: <strong>{preview.term2Status}</strong>
+                    </p>
+                  )}
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/dashboard/academic-years">{info.linkLabel}</Link>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
 
       {preview.activeAcademicYear && (
         <Card>
@@ -96,6 +184,11 @@ export default function PromotionPage() {
             <CardTitle className="flex items-center gap-2">
               <GraduationCap className="h-5 w-5" />
               Active Academic Year: {preview.activeAcademicYear.name}
+              {preview.nextAcademicYearName && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  → Next: {preview.nextAcademicYearName}
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -149,8 +242,58 @@ export default function PromotionPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Promotion Preview</CardTitle>
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between space-y-0">
+          <div>
+            <CardTitle>Promotion Preview</CardTitle>
+            {!hasTermBlockers && preview.students.length > 0 && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Showing {displayStudents.length} of {preview.students.length} students
+              </p>
+            )}
+          </div>
+          {!hasTermBlockers && preview.students.length > 0 && (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              {preview.classes.length > 0 && (
+                <Select value={classFilter} onValueChange={setClassFilter}>
+                  <SelectTrigger className="sm:w-[200px]">
+                    <SelectValue placeholder="Filter by class" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_CLASSES}>
+                      All classes ({preview.summary.total})
+                    </SelectItem>
+                    {preview.classes.map((cls) => (
+                      <SelectItem key={cls.id} value={cls.id}>
+                        {cls.name} ({cls.studentCount})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Select
+                value={outcomeFilter}
+                onValueChange={(v) => setOutcomeFilter(v as OutcomeFilter)}
+              >
+                <SelectTrigger className="sm:w-[180px]">
+                  <SelectValue placeholder="Filter by outcome" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_OUTCOMES}>
+                    All outcomes ({preview.summary.total})
+                  </SelectItem>
+                  <SelectItem value="PASS">
+                    Pass ({preview.summary.passing})
+                  </SelectItem>
+                  <SelectItem value="REPEAT">
+                    Repeat ({preview.summary.repeating})
+                  </SelectItem>
+                  <SelectItem value="GRADUATE">
+                    Graduate ({preview.summary.graduating})
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border">
@@ -165,14 +308,16 @@ export default function PromotionPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {preview.students.length === 0 ? (
+                {displayStudents.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No students found
+                      {hasTermBlockers
+                        ? 'Fix term setup to see student preview'
+                        : 'No students found'}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  preview.students.map((student) => (
+                  displayStudents.map((student) => (
                     <TableRow key={student.studentId}>
                       <TableCell className="font-medium">
                         {formatFullName(student.firstName, student.lastName)}
@@ -218,9 +363,10 @@ export default function PromotionPage() {
         onOpenChange={setConfirmDialog}
         onConfirm={handlePromote}
         title="Confirm Promotion"
-        description="Are you sure you want to execute the promotion? This action will close current student class records and create new ones for the next academic year. This cannot be undone."
+        description={confirmDescription}
+        confirmText="Execute Promotion"
+        variant="destructive"
       />
     </div>
   );
 }
-

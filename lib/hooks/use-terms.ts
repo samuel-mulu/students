@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { termsApi } from '@/lib/api/terms';
-import { CreateTermRequest } from '@/lib/types';
+import { CreateTermRequest, UpdateTermRequest } from '@/lib/types';
 import { toast } from 'sonner';
 
 export function useTerms() {
@@ -45,6 +45,68 @@ export function useCreateTerm() {
       toast.error("Create Term Failed", {
         description: errorMessage,
         duration: 5000,
+      });
+    },
+  });
+}
+
+export function useUpdateTerm() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateTermRequest }) =>
+      termsApi.update(id, data),
+    onSuccess: (term) => {
+      queryClient.invalidateQueries({ queryKey: ['terms'] });
+      queryClient.invalidateQueries({ queryKey: ['promotion'] });
+      toast.success('Term updated successfully', {
+        description: `"${term.name}" has been saved. Existing marks are unchanged.`,
+        duration: 4000,
+      });
+    },
+    onError: (error: any) => {
+      toast.error('Failed to update term', {
+        description: error.errorMessage || error.message,
+      });
+    },
+  });
+}
+
+export function useCloseTerm() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => termsApi.close(id),
+    onSuccess: (term) => {
+      queryClient.invalidateQueries({ queryKey: ['terms'] });
+      queryClient.invalidateQueries({ queryKey: ['promotion'] });
+      toast.success('Term closed successfully', {
+        description: `"${term.name}" is now closed.`,
+      });
+    },
+    onError: (error: any) => {
+      toast.error('Failed to close term', {
+        description: error.errorMessage || error.message,
+      });
+    },
+  });
+}
+
+export function useOpenTerm() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => termsApi.open(id),
+    onSuccess: (term) => {
+      queryClient.invalidateQueries({ queryKey: ['terms'] });
+      queryClient.invalidateQueries({ queryKey: ['promotion'] });
+      toast.success('Term reopened successfully', {
+        description: `"${term.name}" is now open.`,
+      });
+    },
+    onError: (error: any) => {
+      toast.error('Failed to reopen term', {
+        description: error.errorMessage || error.message,
       });
     },
   });

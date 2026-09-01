@@ -321,6 +321,12 @@ export interface CreateTermRequest {
   endDate?: string;
 }
 
+export interface UpdateTermRequest {
+  name?: string;
+  startDate?: string;
+  endDate?: string | null;
+}
+
 // SubExam Types
 export type ExamType = "quiz" | "assignment" | "mid_exam" | "general_test";
 
@@ -667,13 +673,31 @@ export interface PromotionPreviewStudent {
   nextClassName: string | null;
 }
 
+export type PromotionBlocker =
+  | "NO_ACTIVE_YEAR"
+  | "TERM1_NOT_FOUND"
+  | "TERM2_NOT_FOUND"
+  | "TERM2_NOT_CLOSED"
+  | "INVALID_YEAR_FORMAT"
+  | "ALREADY_PROMOTED";
+
+export interface PromotionPreviewClass {
+  id: string;
+  name: string;
+  studentCount: number;
+}
+
 export interface PromotionPreview {
   canPromote: boolean;
-  term2Status: string;
+  blockers: PromotionBlocker[];
+  term1Status?: string;
+  term2Status?: string;
+  nextAcademicYearName?: string;
   activeAcademicYear: {
     id: string;
     name: string;
   } | null;
+  classes: PromotionPreviewClass[];
   students: PromotionPreviewStudent[];
   summary: {
     total: number;
@@ -683,11 +707,19 @@ export interface PromotionPreview {
   };
 }
 
+export interface PromotionPreviewParams {
+  classId?: string;
+  includeStudents?: boolean;
+}
+
 export interface PromotionResult {
   message: string;
   promoted: number;
   repeated: number;
   graduated: number;
+  previousAcademicYear: { id: string; name: string };
+  newAcademicYear: { id: string; name: string };
+  termsCreated: string[];
 }
 
 // Settings Types
